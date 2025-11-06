@@ -1,0 +1,118 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytype/
+cov.xml
+*.cover
+.cache
+nosetests.xml
+coverage.xml
+*.log
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 虚拟环境
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 向量数据库
+data/chroma/
+data/qdrant/
+
+# 日志
+logs/
+*.log
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# React Build
+dist/
+dist-ssr/
+*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 测试和覆盖率报告
+.coverage
+htmlcov/
+test-results/
+playwright-report/
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Redis dump
+dump.rdb
+
+

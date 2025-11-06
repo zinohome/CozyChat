@@ -1,0 +1,1085 @@
+# CozyChat 项目开发规范
+
+你是一个专业的AI编程助手，正在协助开发CozyChat项目。请严格遵循以下规范：
+
+## 项目概述
+
+CozyChat是一个现代化的AI对话平台，具有以下特点：
+- **后端**: Python + FastAPI，模块化AI引擎（OpenAI/Ollama/LM Studio）
+- **前端**: React + TypeScript，支持Web和移动端
+- **核心功能**: 人格系统、记忆管理、工具调用、语音支持
+- **数据库**: PostgreSQL（业务数据）+ ChromaDB/Qdrant（向量数据）+ Redis（缓存）
+
+## 通用规范
+
+### 文件组织
+
+#### 目录结构规范
+- 后端代码放在 `backend/` 目录
+- 前端代码放在 `frontend/` 目录
+- 文档放在 `docs/` 目录
+- 配置文件使用 YAML 格式（人格、工具等）
+- 环境变量使用 `.env` 文件管理（不提交到Git）
+
+#### 文档组织规范 ⚠️ 重要
+**禁止在项目根目录随意创建文档文件！**
+
+- ✅ **允许**：项目根目录只能有 `README.md` 和 `PROGRESS.md`
+- ❌ **禁止**：在根目录创建其他 `.md` 文件
+- ✅ **必须**：所有其他文档文件必须放在 `docs/` 目录下
+- ✅ **建议**：在 `docs/` 下按阶段或功能创建子目录组织文档
+
+**docs 目录结构示例：**
+```
+docs/
+├── setup/              # 配置和安装文档
+│   ├── CONFIG.md      # 环境配置指南
+│   └── FIXES_SUMMARY.md  # 修复记录
+├── troubleshooting/    # 故障排查文档
+│   └── QUICK_FIX.md   # 常见问题修复
+├── 00-实施路线图.md
+├── 01-项目概述.md
+├── 02-后端架构设计.md
+└── ...
+```
+
+### 代码质量
+- 编写代码前先理解项目架构（参考 `docs/` 目录）
+- 新功能必须有对应的测试用例
+- 核心模块测试覆盖率要求 ≥ 80%
+- 提交前自动运行 pre-commit hooks 检查
+- API变更必须更新文档
+
+### Git提交规范
+使用 Conventional Commits 格式：
+```
+feat(chat): 添加流式响应支持
+fix(memory): 修复记忆检索超时问题
+docs(api): 更新人格系统API文档
+```
+
+## Python开发规范（后端）
+
+### 代码风格
+- 遵循 PEP 8，使用 Black 格式化（行长度100）
+- 使用 isort 管理导入顺序
+- 必须通过 flake8 和 mypy 检查
+
+### 导入顺序
+```python
+# 1. 标准库
+import os
+from typing import Dict, List, Optional
+
+# 2. 第三方库
+from fastapi import FastAPI, HTTPException
+from sqlalchemy.orm import Session
+
+# 3. 本地库
+from app.config.config import settings
+from app.utils.logger import logger
+```
+
+### 类型注解（强制）
+```python
+# ✅ 好的写法
+async def get_user(user_id: str) -> Optional[User]:
+    """获取用户信息"""
+    pass
+
+def process_messages(
+    messages: List[Dict[str, str]],
+    options: Optional[Dict[str, Any]] = None
+) -> Tuple[str, int]:
+    pass
+
+# ❌ 避免的写法
+def get_user(user_id):  # 缺少类型注解
+    pass
+```
+
+### 命名规范
+- **类名**: 大驼峰 `UserManager`, `ChatEngine`
+- **函数/方法**: 小写+下划线 `get_user()`, `create_session()`
+- **常量**: 大写+下划线 `MAX_RETRY`, `DEFAULT_TIMEOUT`
+- **变量**: 小写+下划线 `user_id`, `session_data`
+- **私有方法**: 下划线开头 `_validate_token()`
+
+### 异步编程
+```python
+# ✅ 优先使用异步
+async def fetch_data(url: str) -> Dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()
+
+# 并发执行
+results = await asyncio.gather(
+    fetch_user(user_id),
+    fetch_sessions(user_id),
+    fetch_preferences(user_id)
+)
+
+# 超时控制
+try:
+    result = await asyncio.wait_for(
+        slow_operation(),
+        timeout=5.0
+    )
+except asyncio.TimeoutError:
+    logger.warning("Operation timed out")
+```
+
+### 错误处理
+```python
+# 使用自定义异常
+from app.utils.exceptions import CozyError, AuthenticationError
+
+# 具体异常优先
+try:
+    user = get_user(user_id)
+except UserNotFoundError:
+    logger.warning(f"User not found: {user_id}")
+    raise HTTPException(status_code=404, detail="User not found")
+except DatabaseError as e:
+    logger.error(f"Database error: {e}")
+    raise HTTPException(status_code=500, detail="Database error")
+```
+
+### 日志规范
+```python
+from app.utils.logger import logger
+
+# 不同级别
+logger.debug("详细调试信息")
+logger.info("一般信息")
+logger.warning("警告信息")
+logger.error("错误信息", exc_info=True)  # 包含堆栈
+
+# 结构化日志
+logger.info(
+    "User login",
+    extra={
+        "user_id": user_id,
+        "ip": request.client.host
+    }
+)
+```
+
+### Docstring格式
+```python
+class UserManager:
+    """用户管理器
+    
+    负责用户的创建、认证和权限管理。
+    
+    Attributes:
+        db: 数据库会话
+        auth_service: 认证服务实例
+    """
+    
+    async def authenticate(
+        self,
+        username: str,
+        password: str
+    ) -> Optional[Dict[str, Any]]:
+        """用户认证
+        
+        Args:
+            username: 用户名或邮箱
+            password: 明文密码
+        
+        Returns:
+            认证成功返回包含token的字典，失败返回None
+        
+        Raises:
+            DatabaseError: 数据库查询失败时抛出
+        """
+        pass
+```
+
+### 项目结构
+```
+backend/
+  app/
+    main.py              # FastAPI入口
+    config/              # 配置管理
+    core/                # 核心业务逻辑
+      orchestrator.py    # 核心编排器
+      personality/       # 人格系统
+      user/              # 用户管理
+    engines/             # 引擎层
+      ai/                # AI引擎（OpenAI/Ollama/LMStudio）
+      memory/            # 记忆管理
+      tools/             # 工具系统
+      voice/             # 语音引擎（STT/TTS/RealTime）
+    models/              # SQLAlchemy模型
+    schemas/             # Pydantic模型
+    api/v1/              # API路由
+    utils/               # 工具函数
+```
+
+## React开发规范（前端）
+
+### 代码风格
+- 使用 TypeScript，严格模式
+- ESLint + Prettier 自动格式化
+- 单引号、分号、2空格缩进
+
+### 组件规范
+```typescript
+// ✅ 函数组件 + TypeScript接口
+interface ChatMessageProps {
+  /** 消息角色 */
+  role: 'user' | 'assistant';
+  /** 消息内容 */
+  content: string;
+  /** 时间戳 */
+  timestamp: Date;
+  /** 是否加载中 */
+  loading?: boolean;
+}
+
+/**
+ * 聊天消息组件
+ * 
+ * 显示单条聊天消息，支持用户和AI两种角色。
+ */
+const ChatMessage: React.FC<ChatMessageProps> = ({
+  role,
+  content,
+  timestamp,
+  loading = false,
+}) => {
+  // 组件实现
+  return <div>{content}</div>;
+};
+
+export default React.memo(ChatMessage);
+```
+
+### 命名规范
+- **组件文件**: 大驼峰 `ChatMessage.tsx`
+- **组件名**: 大驼峰 `ChatMessage`
+- **Hooks**: use开头 `useChat`, `useAuth`
+- **工具函数**: 小驼峰 `formatDate`, `parseMessage`
+- **常量**: 大写+下划线 `API_BASE_URL`
+- **类型/接口**: 大驼峰 `UserType`, `ChatMessageProps`
+
+### 项目结构
+```
+frontend/src/
+  components/          # 通用组件
+    ui/                # UI基础组件（Button, Input等）
+    layout/            # 布局组件
+    chat/              # 聊天组件
+  features/            # 功能模块
+    auth/              # 认证模块
+      components/
+      hooks/
+      api/
+    chat/              # 聊天模块
+    settings/          # 设置模块
+  hooks/               # 全局Hooks
+  services/            # API服务层
+  store/               # Redux状态管理
+  types/               # TypeScript类型定义
+  utils/               # 工具函数
+```
+
+### 状态管理
+```typescript
+// 使用 Redux Toolkit
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface ChatState {
+  messages: Message[];
+  loading: boolean;
+  error: string | null;
+}
+
+const chatSlice = createSlice({
+  name: 'chat',
+  initialState,
+  reducers: {
+    addMessage: (state, action: PayloadAction<Message>) => {
+      state.messages.push(action.payload);
+    },
+  },
+});
+```
+
+### API调用
+```typescript
+// 使用统一的 API 客户端
+import { apiClient } from '@/services/api';
+
+export const chatApi = {
+  async send(request: ChatRequest): Promise<ChatResponse> {
+    return apiClient.post<ChatResponse>('/v1/chat/completions', request);
+  },
+  
+  // 流式响应
+  async *streamChat(request: ChatRequest): AsyncGenerator<string> {
+    // SSE实现
+  },
+};
+```
+
+### Hooks使用
+```typescript
+// ✅ 性能优化
+import { useMemo, useCallback } from 'react';
+
+const sortedMessages = useMemo(() => {
+  return messages.sort((a, b) => a.timestamp - b.timestamp);
+}, [messages]);
+
+const handleClick = useCallback((id: string) => {
+  onMessageClick(id);
+}, [onMessageClick]);
+```
+
+### 样式规范
+```css
+/* 使用 CSS Modules */
+.message {
+  display: flex;
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius);
+}
+
+.user {
+  background-color: var(--user-message-bg);
+}
+
+/* 使用 CSS 变量 */
+:root {
+  --primary-color: #3b82f6;
+  --spacing-md: 16px;
+  --border-radius: 8px;
+}
+```
+
+## 数据库规范
+
+### 模型定义
+```python
+from sqlalchemy import Column, String, DateTime, JSON
+from app.models.base import Base
+
+class User(Base):
+    """用户表"""
+    __tablename__ = "users"
+    
+    id = Column(String(36), primary_key=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    preferences = Column(JSON, default={})
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+```
+
+### 数据库迁移
+```bash
+# 生成迁移脚本
+alembic revision --autogenerate -m "Add user preferences"
+
+# 应用迁移
+alembic upgrade head
+
+# 回滚
+alembic downgrade -1
+```
+
+## 配置管理
+
+### 环境变量
+```python
+# backend/.env（不提交到Git）
+OPENAI_API_KEY=sk-xxx
+DATABASE_URL=postgresql://user:pass@localhost/cozychat
+REDIS_URL=redis://localhost:6379/0
+
+# 使用Pydantic加载
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    openai_api_key: str
+    database_url: str
+    redis_url: str
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+### YAML配置
+```yaml
+# personalities/assistant.yaml
+id: assistant_001
+name: "AI助手"
+description: "通用AI助手"
+
+ai:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+
+memory:
+  enabled: true
+  save_mode: both
+
+tools:
+  enabled: true
+  allowed_tools:
+    - search
+    - calculator
+```
+
+## API设计规范
+
+### 路由组织
+```python
+# app/api/v1/chat.py
+from fastapi import APIRouter, Depends
+
+router = APIRouter(prefix="/chat", tags=["Chat"])
+
+@router.post("/completions")
+async def create_chat_completion(
+    request: ChatRequest,
+    user: User = Depends(get_current_user)
+) -> ChatResponse:
+    """创建聊天完成"""
+    pass
+```
+
+### 请求/响应模型
+```python
+from pydantic import BaseModel, Field
+
+class ChatRequest(BaseModel):
+    """聊天请求"""
+    messages: List[Dict[str, str]] = Field(..., description="消息列表")
+    personality_id: str = Field(..., description="人格ID")
+    stream: bool = Field(default=False, description="是否流式")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "messages": [{"role": "user", "content": "你好"}],
+                "personality_id": "assistant_001",
+                "stream": False
+            }
+        }
+```
+
+## 测试规范
+
+### 单元测试
+```python
+import pytest
+from app.engines.ai.openai_engine import OpenAIEngine
+
+@pytest.fixture
+def openai_engine():
+    config = {"api_key": "test_key", "model": "gpt-4"}
+    return OpenAIEngine(config)
+
+@pytest.mark.asyncio
+async def test_chat_completion(openai_engine, mocker):
+    """测试聊天完成"""
+    mock_response = {"choices": [{"message": {"content": "Hello!"}}]}
+    mocker.patch.object(
+        openai_engine.client.chat.completions,
+        "create",
+        return_value=mock_response
+    )
+    
+    result = await openai_engine.chat_completion([{"role": "user", "content": "Hi"}])
+    assert result["content"] == "Hello!"
+```
+
+### React组件测试
+```typescript
+import { render, screen } from '@testing-library/react';
+import ChatMessage from './ChatMessage';
+
+describe('ChatMessage', () => {
+  it('renders user message correctly', () => {
+    render(
+      <ChatMessage
+        role="user"
+        content="Hello"
+        timestamp={new Date()}
+      />
+    );
+    expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+});
+```
+
+## 安全规范
+
+### API密钥
+- ❌ 绝对不要在代码中硬编码API密钥
+- ✅ 使用环境变量管理
+- ✅ `.env` 文件添加到 `.gitignore`
+
+### 用户认证
+```python
+# 使用JWT token
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials = Depends(security)
+) -> User:
+    """获取当前用户"""
+    token = credentials.credentials
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return await get_user(payload["user_id"])
+```
+
+## 性能优化
+
+### 后端
+- 使用异步I/O（asyncio）
+- 数据库连接池
+- Redis缓存热点数据
+- 记忆检索设置超时（0.5秒）
+
+### 前端
+- 代码分割（React.lazy）
+- 虚拟滚动（长列表）
+- 使用 useMemo/useCallback 避免重复计算
+- 图片懒加载
+
+## 代码审查清单
+
+提交代码前检查：
+- [ ] 代码通过 pre-commit hooks 检查
+- [ ] 类型注解完整（Python/TypeScript）
+- [ ] 包含必要的测试用例
+- [ ] 日志记录关键操作
+- [ ] 错误处理完善
+- [ ] API变更更新了文档
+- [ ] 环境变量添加到 `.env.example`
+- [ ] 数据库变更生成了迁移脚本
+
+## 测试规范
+
+### 测试策略
+
+**核心原则**：边开发边测试（Test-Driven Development）
+
+```
+开发流程：编写代码 → 编写测试 → 运行测试 → 重构 → 提交
+```
+
+### 测试分层
+
+| 测试类型 | 时机 | 覆盖率 |
+|---------|------|-------|
+| 单元测试 | 编写代码时 | ≥80% |
+| 模块测试 | 模块完成后 | ≥70% |
+| API测试 | 后端完成后 | 100%核心API |
+| 集成测试 | 前后端对接 | ≥60% |
+| E2E测试 | 系统完成后 | 核心流程100% |
+
+### Python单元测试
+
+```python
+# tests/unit/engines/ai/test_openai_engine.py
+import pytest
+from unittest.mock import AsyncMock
+from app.engines.ai.openai_engine import OpenAIEngine
+
+class TestOpenAIEngine:
+    """OpenAI引擎测试"""
+    
+    @pytest.fixture
+    def engine(self):
+        """引擎实例"""
+        config = {"api_key": "test_key", "model": "gpt-4"}
+        return OpenAIEngine(config)
+    
+    @pytest.mark.asyncio
+    async def test_chat_completion_success(self, engine, mocker):
+        """测试：聊天完成成功"""
+        # Arrange - 准备
+        mock_response = {
+            "choices": [{"message": {"content": "Hello!"}}]
+        }
+        mocker.patch.object(
+            engine.client.chat.completions,
+            "create",
+            AsyncMock(return_value=mock_response)
+        )
+        
+        # Act - 执行
+        result = await engine.chat_completion([
+            {"role": "user", "content": "Hi"}
+        ])
+        
+        # Assert - 断言
+        assert result["content"] == "Hello!"
+    
+    @pytest.mark.asyncio
+    async def test_chat_completion_error(self, engine, mocker):
+        """测试：API错误处理"""
+        mocker.patch.object(
+            engine.client.chat.completions,
+            "create",
+            AsyncMock(side_effect=Exception("API Error"))
+        )
+        
+        with pytest.raises(Exception) as exc_info:
+            await engine.chat_completion([{"role": "user", "content": "Hi"}])
+        
+        assert "API Error" in str(exc_info.value)
+```
+
+### React组件测试
+
+```typescript
+// src/components/chat/ChatMessage/ChatMessage.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import ChatMessage from './ChatMessage';
+
+describe('ChatMessage', () => {
+  it('renders user message correctly', () => {
+    render(
+      <ChatMessage
+        role="user"
+        content="Hello"
+        timestamp={new Date()}
+      />
+    );
+    
+    expect(screen.getByText('Hello')).toBeInTheDocument();
+  });
+  
+  it('calls onClick when clicked', () => {
+    const handleClick = vi.fn();
+    render(
+      <ChatMessage
+        role="user"
+        content="Hello"
+        onClick={handleClick}
+        timestamp={new Date()}
+      />
+    );
+    
+    fireEvent.click(screen.getByTestId('user-message'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+### 测试文件组织
+
+```
+backend/tests/
+  unit/              # 单元测试
+    engines/
+      ai/test_openai_engine.py
+      memory/test_retriever.py
+    core/test_orchestrator.py
+  integration/       # 集成测试
+    test_chat_flow.py
+  api/               # API测试
+    test_chat_api.py
+  fixtures/
+    conftest.py      # pytest配置
+
+frontend/tests/
+  components/        # 组件测试
+    ChatMessage.test.tsx
+  hooks/             # Hook测试
+    useChat.test.ts
+  integration/       # 集成测试
+    chat.test.ts
+```
+
+### 测试命名规范
+
+```python
+# 格式：test_<功能>_<场景>_<预期结果>
+def test_retrieve_memories_with_valid_query_returns_results():
+    pass
+
+def test_retrieve_memories_with_timeout_returns_empty():
+    pass
+
+def test_authenticate_with_invalid_password_raises_error():
+    pass
+```
+
+### Mock和Fixture使用
+
+```python
+# conftest.py - 共享fixtures
+import pytest
+
+@pytest.fixture
+def test_db():
+    """测试数据库"""
+    # 创建内存数据库
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = SessionLocal()
+    yield session
+    session.close()
+
+@pytest.fixture
+def test_user(test_db):
+    """测试用户"""
+    user = User(username="testuser", email="test@example.com")
+    test_db.add(user)
+    test_db.commit()
+    return user
+
+@pytest.fixture
+def mock_openai_client(mocker):
+    """Mock OpenAI客户端"""
+    mock = mocker.Mock()
+    mock.chat.completions.create = AsyncMock()
+    return mock
+```
+
+### API测试
+
+```python
+# tests/api/test_chat_api.py
+from fastapi.testclient import TestClient
+from app.main import app
+
+def test_create_chat_completion_success(client, auth_headers):
+    """测试：创建聊天完成"""
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "你好"}],
+            "personality_id": "assistant_001"
+        },
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "content" in data
+    assert data["role"] == "assistant"
+
+def test_create_chat_completion_unauthorized(client):
+    """测试：未授权访问"""
+    response = client.post("/v1/chat/completions", json={...})
+    assert response.status_code == 401
+```
+
+### 测试覆盖率要求
+
+```
+核心模块（AI引擎、记忆管理）: ≥ 85%
+业务逻辑（用户管理、工具系统）: ≥ 80%
+API接口: ≥ 75%
+工具函数: ≥ 90%
+UI组件: ≥ 60%
+```
+
+### 运行测试
+
+```bash
+# Python测试
+cd backend
+pytest tests/ -v --cov=app --cov-report=html
+
+# 运行特定测试
+pytest tests/unit/engines/ai/ -v
+
+# React测试
+cd frontend
+npm run test
+npm run test:coverage
+
+# E2E测试
+npx playwright test
+```
+
+### AAA测试模式
+
+```python
+def test_example():
+    # Arrange - 准备测试数据和环境
+    user = create_test_user()
+    
+    # Act - 执行被测试的操作
+    result = authenticate_user(user.username, "password")
+    
+    # Assert - 验证结果
+    assert result.is_authenticated
+    assert result.token is not None
+```
+
+### 测试最佳实践
+
+1. **每个功能必须有测试** - 编写代码时同时编写测试
+2. **测试应该独立** - 测试之间不应相互依赖
+3. **测试应该快速** - 单元测试应在毫秒级完成
+4. **使用有意义的断言** - 断言失败时能快速定位问题
+5. **Mock外部依赖** - 数据库、API、文件系统等
+6. **测试边界条件** - 空值、极大值、错误输入等
+
+## 开发流程管控
+
+**核心原则：文档驱动开发（Documentation-Driven Development）**
+
+### 开发前必做
+
+```
+开始任何开发前，必须先阅读相关文档：
+
+后端开发：
+☑ docs/02-后端架构设计.md - 理解模块在架构中的位置
+☑ docs/06-开发规范.md - 遵循编码规范
+☑ docs/07-测试规范.md - 了解测试要求
+
+前端开发：
+☑ docs/03-前端架构设计.md - 理解组件设计
+☑ docs/06-开发规范.md (React部分) - 遵循React规范
+☑ docs/07-测试规范.md (前端部分) - 组件测试要求
+
+API开发：
+☑ docs/04-API接口设计.md - 遵循接口规范
+
+数据库变更：
+☑ docs/05-数据库设计.md - 理解数据模型
+```
+
+### 开发过程中
+
+**每写一个类/函数都要对照文档检查：**
+
+```python
+# 检查清单：
+# [ ] 命名符合规范（参考：06-开发规范.md 2.3节）
+# [ ] 类型注解完整（参考：06-开发规范.md 2.4节）
+# [ ] 文档字符串完整（参考：06-开发规范.md 2.1.2节）
+# [ ] 错误处理完善（参考：06-开发规范.md 2.5节）
+# [ ] 日志记录充分（参考：06-开发规范.md 2.7节）
+# [ ] 实现与设计一致（参考：架构设计文档）
+
+class MemoryRetriever:
+    """记忆检索器
+    
+    参考文档: docs/02-后端架构设计-续.md (2.3节)
+    """
+    pass
+```
+
+### 功能完成后必做
+
+**完成检查清单（全部勾选才能提交）：**
+
+```markdown
+代码质量：
+[ ] 所有测试通过（pytest tests/ -v）
+[ ] 代码覆盖率达标（≥85% for 核心模块）
+[ ] Pre-commit hooks通过
+[ ] 对照架构文档验证实现
+
+功能验证：
+[ ] 功能与需求描述一致
+[ ] 与设计文档完全匹配
+[ ] 性能指标达标
+[ ] 错误处理完整
+
+测试覆盖：
+[ ] 单元测试完整
+[ ] 集成测试通过（如需要）
+[ ] API测试通过（如有API）
+[ ] 边界条件测试
+
+文档同步：
+[ ] 代码注释完整
+[ ] API文档更新（如有变更）
+[ ] 架构文档更新（如有变更）
+[ ] .env.example更新（如有新环境变量）
+[ ] 数据库迁移脚本（如有schema变更）
+```
+
+### 提交代码前
+
+**强制性文档验证：**
+
+```python
+# 提交前必须回答以下问题：
+
+1. 我的实现与哪个文档的哪一节相关？
+   答：docs/02-后端架构设计-续.md (2.3节)
+
+2. 我的实现是否完全符合文档描述？
+   答：是 / 否（如否，是否已更新文档？）
+
+3. 如果与文档有偏差，原因是什么？
+   答：（说明原因，并确认已更新文档）
+
+4. 文档是否需要更新？
+   答：是 / 否
+   
+5. 如需更新，哪些文档需要更新？
+   答：[ ] 架构文档 [ ] API文档 [ ] 数据库文档 [ ] README
+```
+
+### Commit Message要求
+
+```bash
+# 必须包含参考文档
+feat(memory): implement memory retriever with cache
+
+实现记忆检索器，包含：
+- 向量数据库检索
+- TTL缓存（5分钟）
+- 超时控制（0.5秒）
+
+参考文档：docs/02-后端架构设计-续.md (2.3节)
+测试覆盖率：88%
+
+Closes #123
+```
+
+### 代码审查要点
+
+```markdown
+审查时必须检查：
+
+[ ] 代码实现与设计文档一致
+[ ] 遵循开发规范（06-开发规范.md）
+[ ] 测试符合测试规范（07-测试规范.md）
+[ ] 文档已同步更新
+[ ] Commit message包含文档引用
+```
+
+### 模块完成标准
+
+一个模块被认为"完成"必须满足：
+
+```markdown
+1. 功能实现 ✓
+   [ ] 核心功能完整
+   [ ] 实现与设计文档100%一致
+
+2. 测试完成 ✓
+   [ ] 单元测试覆盖率≥85%
+   [ ] 所有测试通过
+
+3. 文档完成 ✓
+   [ ] 架构文档更新
+   [ ] API文档更新（如有API）
+   [ ] 代码注释完整
+
+4. 验证通过 ✓
+   [ ] 对照文档验证通过
+   [ ] 代码审查通过
+   [ ] QA测试通过
+```
+
+### 质量门禁
+
+**提交代码必须通过：**
+
+```
+✓ 所有测试通过（100%）
+✓ 代码覆盖率≥80%
+✓ Pre-commit hooks通过
+✓ 对照设计文档验证
+✓ 代码审查Approve
+✓ 文档同步完成
+```
+
+### 文档更新触发条件
+
+以下情况**必须**更新文档：
+
+```markdown
+架构变更 → 更新 02-后端架构设计.md 或 03-前端架构设计.md
+API变更 → 更新 04-API接口设计.md
+数据库变更 → 更新 05-数据库设计.md
+环境变量新增 → 更新 .env.example 和 README.md
+配置变更 → 更新相关配置文档
+```
+
+### AI助手使用要求
+
+**在使用AI助手（如Cursor）时：**
+
+1. **明确告知要开发的功能** - 说明功能在架构中的位置
+2. **指定参考文档** - "参考 docs/02-后端架构设计-续.md (2.3节)"
+3. **要求对照验证** - "请对照文档验证实现是否正确"
+4. **同步更新文档** - "如有偏差，请更新相关文档"
+
+示例对话：
+```
+User: "帮我实现记忆检索器，参考 docs/02-后端架构设计-续.md 
+      的2.3节，要完全符合文档描述"
+
+AI: （生成代码后）"已实现记忆检索器，包含：
+    - ✓ TTL缓存机制（符合文档）
+    - ✓ 超时控制0.5秒（符合文档）
+    - ✓ 区分用户/AI记忆（符合文档）
+    代码完全符合架构设计文档的描述。"
+```
+
+## 特殊注意事项
+
+### 人格系统
+- 人格配置使用YAML文件（`personalities/`目录）
+- 人格ID格式：`{name}_{version}`（如 `assistant_001`）
+- 修改人格配置后需要重启服务或热重载
+
+### 记忆管理
+- 区分用户记忆和AI记忆
+- 使用异步保存，不阻塞主流程
+- 设置TTL缓存（5分钟，100条）
+- 检索超时控制（0.5秒）
+
+### 工具系统
+- 内置工具放在 `app/engines/tools/builtin/`
+- MCP工具自动发现和注册
+- 工具执行设置超时保护
+
+### 语音功能
+- STT/TTS/RealTime三大引擎分离
+- 支持多提供商（OpenAI/腾讯/自定义）
+- 使用工厂模式创建引擎实例
+
+## 文档参考
+
+详细规范请参考：
+- `docs/06-开发规范.md` - 完整开发规范
+- `docs/07-测试规范.md` - 完整测试规范和最佳实践
+- `docs/08-开发流程管控.md` - 开发流程管控和文档驱动开发
+- `docs/02-后端架构设计.md` - 后端架构设计
+- `docs/03-前端架构设计.md` - 前端架构设计
+- `docs/04-API接口设计.md` - API接口规范
+- `docs/05-数据库设计.md` - 数据库设计
+
+---
+
+**重要提醒**:
+
+1. **文档驱动开发**: 开发前必须先阅读相关设计文档，开发过程中对照文档实现，完成后对照文档验证
+2. **严格遵循规范**: 在生成代码时，请严格遵循以上规范，如果对某个规范不确定，请先查阅相关文档
+3. **文档同步**: 代码变更后，如有偏差或新增功能，必须同步更新相关文档
+4. **质量把关**: 每次提交代码前，必须对照检查清单完成所有验证项
+
+**详细流程请参考**: `docs/08-开发流程管控.md`
+

@@ -1,0 +1,22 @@
+-r base.txt
+
+# 代码质量
+black==25.9.0
+isort==7.0.0
+flake8==7.3.0
+mypy==1.18.2
+pylint==4.0.2
+
+# Pre-commit
+pre-commit==3.6.0
+
+# 类型检查
+types-pyyaml==6.0.12.12
+types-redis==4.6.0.20240106
+types-passlib==1.7.7.20240106
+
+# 开发工具
+ipython==8.20.0
+ipdb==0.13.13
+
+
