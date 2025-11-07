@@ -111,9 +111,13 @@ class TestOpenAITTSEngine:
     async def test_synthesize_error(self, tts_engine, mock_openai_client):
         """测试：语音合成错误处理"""
         from openai import APIError
+        from unittest.mock import Mock
         
+        # APIError需要request和body参数
+        mock_request = Mock()
+        mock_body = Mock()
         mock_openai_client.audio.speech.create = AsyncMock(
-            side_effect=APIError(message="API Error")
+            side_effect=APIError(message="API Error", request=mock_request, body=mock_body)
         )
         
         with patch.object(tts_engine, 'client', mock_openai_client):
