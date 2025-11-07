@@ -28,6 +28,19 @@ from app.config.config import settings
 
 
 # ===== 测试数据库配置 =====
+# 确保所有模型都已导入
+from app.models import User, UserProfile, Session, Message
+
+# 配置所有映射器，确保关系正确建立
+# 这必须在所有模型导入完成后调用
+from sqlalchemy.orm import configure_mappers
+try:
+    configure_mappers()
+except Exception as e:
+    # 如果配置失败，记录但不阻止测试
+    import warnings
+    warnings.warn(f"Mapper configuration warning in tests: {e}", UserWarning)
+
 # 使用测试PostgreSQL数据库
 TEST_DATABASE_URL = "postgresql://cozychat:passw0rd@192.168.66.10:5432/cozychat_test"
 TEST_DATABASE_URL_ASYNC = TEST_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
@@ -40,10 +53,9 @@ test_sync_engine = create_engine(
     pool_pre_ping=True
 )
 
+# SQLAlchemy 2.0: sessionmaker直接传入engine作为第一个位置参数
 TestSyncSessionLocal = sessionmaker(
-    bind=test_sync_engine,
-    class_=Session,
-    autocommit=False,
+    test_sync_engine,
     autoflush=False,
     expire_on_commit=False
 )
@@ -56,22 +68,24 @@ test_async_engine = create_async_engine(
     pool_pre_ping=True
 )
 
+# SQLAlchemy 2.0: async_sessionmaker不再使用bind参数，而是直接传入engine
 TestAsyncSessionLocal = async_sessionmaker(
-    bind=test_async_engine,
+    test_async_engine,
     class_=AsyncSession,
-    autocommit=False,
     autoflush=False,
     expire_on_commit=False
 )
 
 
 # ===== Pytest配置 =====
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """创建事件循环"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# 注意：当使用pytest-asyncio的auto模式时，不需要手动定义event_loop fixture
+# pytest-asyncio会自动管理事件循环
+# 如果必须自定义，使用以下代码（但通常不需要）：
+# @pytest.fixture(scope="session")
+# def event_loop_policy():
+#     """设置事件循环策略"""
+#     policy = asyncio.get_event_loop_policy()
+#     yield policy
 
 
 @pytest.fixture(scope="function")

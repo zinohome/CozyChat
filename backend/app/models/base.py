@@ -52,9 +52,9 @@ sync_engine = create_engine(
     }
 )
 
+# SQLAlchemy 2.0: sessionmaker不再使用bind参数，而是直接传入engine
 SyncSessionLocal = sessionmaker(
-    bind=sync_engine,
-    autocommit=False,
+    sync_engine,
     autoflush=False,
     expire_on_commit=False
 )
@@ -85,10 +85,10 @@ async_engine = create_async_engine(
     }
 )
 
+# SQLAlchemy 2.0: async_sessionmaker不再使用bind参数，而是直接传入engine
 AsyncSessionLocal = async_sessionmaker(
-    bind=async_engine,
+    async_engine,
     class_=AsyncSession,
-    autocommit=False,
     autoflush=False,
     expire_on_commit=False
 )

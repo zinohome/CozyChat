@@ -14,7 +14,7 @@ from sqlalchemy import or_, func
 
 # 本地库
 from app.models.user import User
-from app.models.user_profile import UserProfile
+from app.models import UserProfile  # 从__init__导入，确保模型已初始化
 from app.utils.logger import logger
 from .auth import AuthService
 

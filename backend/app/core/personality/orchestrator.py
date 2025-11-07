@@ -360,11 +360,13 @@ class Orchestrator:
                         break
                 
                 if last_user_message:
+                    # response是ChatResponse对象，需要通过message.content获取内容
+                    assistant_content = response.message.content if response.message else ""
                     await self.memory_manager.add_conversation_turn(
                         user_id=user_id,
                         session_id=session_id,
                         user_message=last_user_message,
-                        assistant_message=response.content,
+                        assistant_message=assistant_content,
                         importance=0.5
                     )
             
@@ -377,14 +379,16 @@ class Orchestrator:
                     "user_id": user_id,
                     "session_id": session_id,
                     "elapsed_time": elapsed_time,
-                    "tokens_used": getattr(response, "usage", {}).get("total_tokens", 0)
+                    "tokens_used": getattr(response, "usage", {}).get("total_tokens", 0) if response.usage else 0
                 }
             )
             
+            # response是ChatResponse对象，需要通过message.content获取内容
+            content = response.message.content if response.message else ""
             return {
-                "content": response.content,
+                "content": content,
                 "role": "assistant",
-                "usage": getattr(response, "usage", {}),
+                "usage": response.usage or {},
                 "elapsed_time": elapsed_time
             }
             

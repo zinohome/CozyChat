@@ -21,9 +21,11 @@ from .base import Base
 
 
 # Message模型使用独立的基类，因为id字段类型不同（UUID vs Integer）
+# 使用Base的registry，确保关系可以正确解析
 class MessageBase(DeclarativeBase):
-    """Message模型基类，使用Base的metadata"""
+    """Message模型基类，使用Base的metadata和registry"""
     metadata = Base.metadata
+    registry = Base.registry
 
 
 class Message(MessageBase):

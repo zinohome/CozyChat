@@ -24,9 +24,11 @@ from .base import Base
 
 
 # User模型使用独立的基类，因为id字段类型不同（UUID vs Integer）
+# 使用Base的registry，确保关系可以正确解析
 class UserBase(DeclarativeBase):
-    """User模型基类，使用Base的metadata"""
+    """User模型基类，使用Base的metadata和registry"""
     metadata = Base.metadata
+    registry = Base.registry
 
 
 class User(UserBase):

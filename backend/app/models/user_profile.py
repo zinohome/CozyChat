@@ -7,7 +7,7 @@
 # 标准库
 import json
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 
 # 第三方库
 from sqlalchemy import Column, DateTime, ForeignKey, Text
@@ -17,12 +17,17 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 # 本地库
 from .base import Base
 
+# 类型检查时导入，避免循环导入
+if TYPE_CHECKING:
+    from .user import User
 
-# 创建独立的基类，不包含id字段，但使用Base的metadata
+
+# 创建独立的基类，不包含id字段，但使用Base的metadata和registry
 class ProfileBase(DeclarativeBase):
     """用户画像基类，不包含id字段"""
-    # 使用Base的metadata，确保所有表在同一个metadata中
+    # 使用Base的metadata和registry，确保所有表在同一个metadata中，关系可以正确解析
     metadata = Base.metadata
+    registry = Base.registry
 
 
 class UserProfile(ProfileBase):
@@ -94,8 +99,14 @@ class UserProfile(ProfileBase):
     )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
-    # 关系
-    user = relationship("User", backref="profile")
+    # 关系（延迟配置，在模型导入完成后配置）
+    # 注意：使用字符串引用，SQLAlchemy会在所有模型定义完成后解析
+    user = relationship(
+        "User",
+        backref="profile",
+        lazy="select",
+        uselist=False
+    )
     
     def __repr__(self) -> str:
         return f"<UserProfile(user_id={self.user_id})>"
