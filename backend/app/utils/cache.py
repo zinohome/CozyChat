@@ -46,18 +46,29 @@ class CacheManager:
             self.client = redis.Redis(connection_pool=self.pool)
             
             # 测试连接
-            self.client.ping()
-            
-            logger.info(
-                "Redis cache connected",
-                extra={
-                    "redis_url": settings.redis_url,
-                    "max_connections": settings.redis_max_connections
-                }
-            )
+            try:
+                self.client.ping()
+                logger.info(
+                    "Redis cache connected",
+                    extra={
+                        "redis_url": settings.redis_url,
+                        "max_connections": settings.redis_max_connections
+                    }
+                )
+            except Exception as ping_error:
+                # Redis连接失败不影响应用启动，只记录警告
+                logger.warning(
+                    f"Redis cache connection failed (cache will be disabled): {ping_error}",
+                    exc_info=False
+                )
+                self.client = None
             
         except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}", exc_info=True)
+            # Redis连接失败不影响应用启动，只记录警告
+            logger.warning(
+                f"Failed to initialize Redis cache (cache will be disabled): {e}",
+                exc_info=False
+            )
             self.client = None
     
     def get(self, key: str) -> Optional[Any]:

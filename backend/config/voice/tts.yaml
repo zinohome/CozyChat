@@ -1,0 +1,38 @@
+engines:
+  # TTS引擎配置
+  tts:
+    # 默认引擎
+    default: "openai"
+    
+    # OpenAI TTS配置
+    openai:
+      provider: "openai"
+      model: "tts-1"
+      voice: "alloy"  # alloy, echo, fable, onyx, nova, shimmer
+      speed: 1.0
+      response_format: "mp3"
+      # API配置
+      api:
+        timeout: 60
+        max_retries: 3
+        retry_delay: 1.0
+      # 流式配置
+      streaming:
+        enabled: true
+        chunk_size: 4096
+    
+    # 腾讯TTS配置（待实现）
+    tencent:
+      provider: "tencent"
+      voice_type: 0  # 0-亲和女声, 1-亲和男声, 2-成熟男声, 3-活力男声, 4-温暖女声, 5-温暖男声
+      speed: 0  # -2到2，默认0
+      volume: 0  # -10到10，默认0
+      # API配置
+      api:
+        app_id: null  # 从环境变量获取
+        secret_id: null
+        secret_key: null
+        timeout: 30
+        max_retries: 2
+        retry_delay: 1.0
+

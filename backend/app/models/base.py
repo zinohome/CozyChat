@@ -134,10 +134,16 @@ async def init_db() -> None:
     """初始化数据库
     
     创建所有表（仅用于开发环境，生产环境使用Alembic迁移）
+    
+    注意：此函数会尝试创建所有表，如果表已存在会跳过（不会报错）
     """
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database initialized successfully")
+    try:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        # 如果表已存在或其他错误，记录但不阻止启动
+        logger.warning(f"Database initialization warning: {e}", exc_info=False)
 
 
 async def close_db() -> None:

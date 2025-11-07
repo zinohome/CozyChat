@@ -1,0 +1,57 @@
+memory:
+  # 默认向量数据库引擎
+  default_engine: "chromadb"
+  
+  # ChromaDB配置
+  chromadb:
+    engine: "chromadb"
+    persist_directory: "./data/chroma"
+    collection_prefix: "cozychat_"
+    # 向量化配置
+    embedding:
+      model: "all-MiniLM-L6-v2"  # 默认embedding模型
+      dimension: 384
+    # 性能配置
+    performance:
+      batch_size: 100
+      max_retries: 3
+  
+  # Qdrant配置（待实现）
+  qdrant:
+    engine: "qdrant"
+    url: "http://localhost:6333"
+    collection_name: "cozychat_memories"
+    # 向量化配置
+    embedding:
+      model: "all-MiniLM-L6-v2"
+      dimension: 384
+  
+  # 缓存配置
+  cache:
+    enabled: true
+    ttl_seconds: 300
+    max_size: 100
+  
+  # 重要性评分配置
+  importance:
+    # 评分算法配置
+    scoring:
+      enabled: true
+      algorithm: "default"  # default / ml / custom
+      # 默认算法参数
+      default:
+        content_length_weight: 0.3
+        keyword_weight: 0.4
+        frequency_weight: 0.2
+        recency_weight: 0.1
+    
+    # 淘汰策略配置
+    eviction:
+      enabled: true
+      strategy: "importance_based"  # importance_based / lru / ttl
+      # 基于重要性的淘汰
+      importance_based:
+        min_importance: 0.3
+        max_memories_per_user: 1000
+        check_interval_days: 7
+

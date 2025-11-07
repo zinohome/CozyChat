@@ -1,0 +1,47 @@
+tools:
+  # 内置工具配置
+  builtin:
+    - name: "calculator"
+      display_name: "计算器"
+      description: "执行数学计算"
+      enabled: true
+      category: "utility"
+      parameters:
+        expression:
+          type: "string"
+          description: "要计算的数学表达式"
+          required: true
+    
+    - name: "time"
+      display_name: "时间工具"
+      description: "获取当前时间和日期"
+      enabled: true
+      category: "utility"
+      parameters:
+        timezone:
+          type: "string"
+          description: "时区（可选，默认UTC）"
+          required: false
+        format:
+          type: "string"
+          description: "时间格式（可选）"
+          required: false
+    
+    - name: "weather"
+      display_name: "天气工具"
+      description: "获取指定城市的天气信息"
+      enabled: true
+      category: "information"
+      parameters:
+        city:
+          type: "string"
+          description: "城市名称"
+          required: true
+        units:
+          type: "string"
+          description: "单位（metric/imperial，默认metric）"
+          required: false
+      # 需要OpenWeatherMap API Key
+      requires_api_key: true
+      api_key_env: "OPENWEATHER_API_KEY"
+

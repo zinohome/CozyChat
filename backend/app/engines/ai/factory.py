@@ -56,29 +56,70 @@ class AIEngineFactory:
                 f"Available engines: {', '.join(available_engines)}"
             )
         
-        # 根据引擎类型设置默认参数
-        if engine_type == "openai":
+        # 从YAML配置加载引擎配置
+        try:
+            config_loader = get_config_loader()
+            engine_config = config_loader.load_engine_config(engine_type)
+            
+            # 合并YAML配置和传入参数（传入参数优先级更高）
+            default_config = engine_config.get("default", {})
             if model is None:
-                model = "gpt-3.5-turbo"
-            engine = engine_class(
-                model=model,
-                api_key=kwargs.get("api_key", settings.openai_api_key),
-                base_url=kwargs.get("base_url", settings.openai_base_url),
-                **{k: v for k, v in kwargs.items() if k not in ["api_key", "base_url"]}
+                model = default_config.get("model") or kwargs.get("model")
+            
+            # 构建引擎参数
+            engine_params: Dict[str, Any] = {}
+            
+            # 从YAML默认配置获取参数
+            if engine_type == "openai":
+                engine_params.update({
+                    "model": model or default_config.get("model", "gpt-3.5-turbo"),
+                    "api_key": kwargs.get("api_key", settings.openai_api_key),
+                    "base_url": kwargs.get("base_url", default_config.get("base_url") or settings.openai_base_url),
+                })
+            elif engine_type == "ollama":
+                engine_params.update({
+                    "model": model or default_config.get("model", "llama2"),
+                    "base_url": kwargs.get("base_url", default_config.get("base_url", settings.ollama_base_url)),
+                })
+            else:
+                # 通用创建方式
+                engine_params.update({
+                    "model": model or default_config.get("model", "default"),
+                })
+                engine_params.update(default_config)
+            
+            # 传入的kwargs覆盖YAML配置
+            engine_params.update(kwargs)
+            
+            engine = engine_class(**engine_params)
+            
+        except Exception as e:
+            # 如果YAML配置加载失败，回退到硬编码配置
+            logger.warning(
+                f"Failed to load engine config from YAML, using defaults: {e}",
+                exc_info=False
             )
-        
-        elif engine_type == "ollama":
-            if model is None:
-                model = "llama2"
-            engine = engine_class(
-                model=model,
-                base_url=kwargs.get("base_url", settings.ollama_base_url),
-                **{k: v for k, v in kwargs.items() if k != "base_url"}
-            )
-        
-        else:
-            # 通用创建方式
-            engine = engine_class(model=model or "default", **kwargs)
+            
+            # 回退到硬编码配置
+            if engine_type == "openai":
+                if model is None:
+                    model = "gpt-3.5-turbo"
+                engine = engine_class(
+                    model=model,
+                    api_key=kwargs.get("api_key", settings.openai_api_key),
+                    base_url=kwargs.get("base_url", settings.openai_base_url),
+                    **{k: v for k, v in kwargs.items() if k not in ["api_key", "base_url"]}
+                )
+            elif engine_type == "ollama":
+                if model is None:
+                    model = "llama2"
+                engine = engine_class(
+                    model=model,
+                    base_url=kwargs.get("base_url", settings.ollama_base_url),
+                    **{k: v for k, v in kwargs.items() if k != "base_url"}
+                )
+            else:
+                engine = engine_class(model=model or "default", **kwargs)
         
         logger.info(
             f"Created AI engine: {engine_type}",

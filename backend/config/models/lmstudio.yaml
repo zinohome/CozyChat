@@ -1,0 +1,34 @@
+engine:
+  name: "lmstudio"
+  display_name: "LM Studio"
+  description: "本地LM Studio模型"
+  provider: "lmstudio"
+  
+  # 默认配置
+  default:
+    base_url: "http://localhost:1234/v1"
+    model: "local-model"
+    temperature: 0.7
+    max_tokens: 2048
+  
+  # 支持的模型列表（需要根据实际加载的模型配置）
+  models:
+    - name: "local-model"
+      display_name: "Local Model"
+      max_tokens: 4096
+      supports_streaming: true
+      supports_function_calling: false
+  
+  # API配置
+  api:
+    timeout: 120
+    max_retries: 2
+    retry_delay: 2.0
+  
+  # 功能支持
+  features:
+    streaming: true
+    function_calling: false
+    vision: false
+    audio: false
+

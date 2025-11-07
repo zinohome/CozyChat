@@ -1,7 +1,7 @@
 """API v1版本路由"""
 from fastapi import APIRouter
 
-from . import chat, health, memory, users
+from . import audio, auth, chat, health, memory, models, personalities, sessions, tools, users, websocket
 
 api_router = APIRouter()
 
@@ -14,10 +14,28 @@ api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
 # Week 4: Memory路由
 api_router.include_router(memory.router, prefix="/memory", tags=["memory"])
 
-# Week 7: 添加audio路由
-# api_router.include_router(audio.router, prefix="/audio", tags=["audio"])
+# Week 7: Audio路由（STT、TTS）
+api_router.include_router(audio.router, prefix="/audio", tags=["audio"])
+
+# Week 8: WebSocket路由（RealTime语音对话）
+api_router.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 
 # Week 9: 用户管理路由
-api_router.include_router(users.router, tags=["users"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+
+# 认证相关
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Models API（OpenAI兼容）
+api_router.include_router(models.router, prefix="/models", tags=["models"])
+
+# 人格管理API
+api_router.include_router(personalities.router, tags=["personalities"])
+
+# 会话管理API
+api_router.include_router(sessions.router, tags=["sessions"])
+
+# 工具管理API
+api_router.include_router(tools.router, tags=["tools"])
 
 

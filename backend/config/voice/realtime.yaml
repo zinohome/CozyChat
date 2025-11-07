@@ -1,0 +1,41 @@
+engines:
+  # RealTime语音引擎配置
+  realtime:
+    # 默认引擎
+    default: "openai"
+    
+    # OpenAI Realtime API配置
+    openai:
+      provider: "openai"
+      model: "gpt-4o-realtime-preview-2024-10-01"
+      voice: "alloy"  # alloy, echo, fable, onyx, nova, shimmer
+      # 语音配置
+      voice_settings:
+        stability: 0.5
+        similarity_boost: 0.75
+      # 转写配置
+      input_audio_transcription:
+        model: "whisper-1"
+      # 输出格式配置
+      output_format:
+        type: "pcm16"
+        sample_rate: 24000
+      # 工具配置
+      tools:
+        enabled: true
+        max_steps: 5
+      # 温度配置
+      temperature: 0.8
+      max_response_output_tokens: 4096
+      # API配置
+      api:
+        timeout: 300
+        max_retries: 2
+        retry_delay: 2.0
+      # WebSocket配置
+      websocket:
+        ping_interval: 30
+        ping_timeout: 10
+        reconnect_interval: 5
+        max_reconnect_attempts: 5
+

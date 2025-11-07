@@ -1,0 +1,46 @@
+engine:
+  name: "ollama"
+  display_name: "Ollama"
+  description: "本地Ollama模型"
+  provider: "ollama"
+  
+  # 默认配置
+  default:
+    base_url: "http://localhost:11434"
+    model: "llama2"
+    temperature: 0.7
+    max_tokens: 2048
+  
+  # 支持的模型列表（需要根据实际安装的模型配置）
+  models:
+    - name: "llama2"
+      display_name: "Llama 2"
+      max_tokens: 4096
+      supports_streaming: true
+      supports_function_calling: false
+    
+    - name: "mistral"
+      display_name: "Mistral"
+      max_tokens: 4096
+      supports_streaming: true
+      supports_function_calling: false
+    
+    - name: "codellama"
+      display_name: "Code Llama"
+      max_tokens: 4096
+      supports_streaming: true
+      supports_function_calling: false
+  
+  # API配置
+  api:
+    timeout: 120
+    max_retries: 2
+    retry_delay: 2.0
+  
+  # 功能支持
+  features:
+    streaming: true
+    function_calling: false
+    vision: false
+    audio: false
+

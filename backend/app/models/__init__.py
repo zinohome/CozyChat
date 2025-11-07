@@ -2,7 +2,9 @@
 from .base import Base
 from .user import User
 from .user_profile import UserProfile
+from .session import Session
+from .message import Message
 
-__all__ = ["Base", "User", "UserProfile"]
+__all__ = ["Base", "User", "UserProfile", "Session", "Message"]
 
 

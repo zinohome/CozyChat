@@ -12,19 +12,26 @@ from typing import Any, Dict
 # 第三方库
 from sqlalchemy import Column, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID, ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 # 本地库
 from .base import Base
 
 
-class UserProfile(Base):
+# 创建独立的基类，不包含id字段，但使用Base的metadata
+class ProfileBase(DeclarativeBase):
+    """用户画像基类，不包含id字段"""
+    # 使用Base的metadata，确保所有表在同一个metadata中
+    metadata = Base.metadata
+
+
+class UserProfile(ProfileBase):
     """用户画像模型
     
     存储用户画像和行为数据
     
     Attributes:
-        user_id: 用户ID（外键）
+        user_id: 用户ID（外键，也是主键）
         interests: 兴趣标签
         habits: 使用习惯（JSONB）
         personality_insights: 人格洞察（JSONB）
@@ -37,7 +44,8 @@ class UserProfile(Base):
     user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True
+        primary_key=True,
+        index=True
     )
     
     # 兴趣标签
@@ -76,7 +84,7 @@ class UserProfile(Base):
         default={}
     )
     
-    # 时间戳
+    # 时间戳（手动添加，不继承Base）
     generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
@@ -84,6 +92,7 @@ class UserProfile(Base):
         onupdate=datetime.utcnow,
         nullable=False
     )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # 关系
     user = relationship("User", backref="profile")

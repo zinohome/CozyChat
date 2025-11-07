@@ -18,6 +18,7 @@ from app.models.base import get_async_db, get_sync_db
 from app.models.user import User
 from app.core.user.auth import AuthService
 from app.utils.logger import logger
+from app.utils.security import decode_token
 
 # 安全相关
 security = HTTPBearer(auto_error=False)
@@ -89,6 +90,45 @@ async def get_current_user(
             detail="认证失败",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+
+async def get_current_user_from_token(token: str) -> User:
+    """从JWT token获取当前用户（用于WebSocket等场景）
+    
+    Args:
+        token: JWT token字符串
+    
+    Returns:
+        User: 用户对象
+    
+    Raises:
+        HTTPException: 如果token无效或用户不存在
+    """
+    try:
+        # 解码token
+        payload = decode_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        
+        # 从数据库获取用户
+        db = next(get_sync_session())
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return user
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user from token: {e}", exc_info=True)
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 async def get_current_active_user(

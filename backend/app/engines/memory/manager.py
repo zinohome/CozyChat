@@ -16,6 +16,7 @@ from cachetools import TTLCache
 
 # 本地库
 from app.utils.logger import logger
+from app.utils.config_loader import get_config_loader
 from .base import MemoryEngineBase
 from .chromadb_engine import ChromaDBMemoryEngine
 from .models import Memory, MemorySearchResult, MemoryType
@@ -37,8 +38,8 @@ class MemoryManager:
     def __init__(
         self,
         engine: Optional[MemoryEngineBase] = None,
-        cache_ttl: int = 300,  # 5分钟
-        cache_maxsize: int = 100,
+        cache_ttl: Optional[int] = None,
+        cache_maxsize: Optional[int] = None,
         save_timeout: float = 1.0,
         search_timeout: float = 0.5
     ):
@@ -46,12 +47,50 @@ class MemoryManager:
         
         Args:
             engine: 记忆引擎（如果不提供则使用默认ChromaDB）
-            cache_ttl: 缓存过期时间（秒）
-            cache_maxsize: 缓存最大条目数
+            cache_ttl: 缓存过期时间（秒），如果为None则从YAML配置加载
+            cache_maxsize: 缓存最大条目数，如果为None则从YAML配置加载
             save_timeout: 保存操作超时时间（秒）
             search_timeout: 搜索操作超时时间（秒）
         """
-        self.engine = engine or ChromaDBMemoryEngine()
+        # 从YAML配置加载记忆配置
+        try:
+            config_loader = get_config_loader()
+            memory_config = config_loader.load_memory_config()
+            cache_config = memory_config.get("cache", {})
+            
+            if cache_ttl is None:
+                cache_ttl = cache_config.get("ttl_seconds", 300)
+            if cache_maxsize is None:
+                cache_maxsize = cache_config.get("max_size", 100)
+            
+            # 如果引擎未提供，从配置创建
+            if engine is None:
+                default_engine = memory_config.get("default_engine", "chromadb")
+                engine_config = memory_config.get(default_engine, {})
+                
+                if default_engine == "chromadb":
+                    persist_directory = engine_config.get("persist_directory", "./data/chroma")
+                    engine = ChromaDBMemoryEngine(persist_directory=persist_directory)
+                else:
+                    # 其他引擎待实现
+                    logger.warning(f"Engine {default_engine} not implemented, using ChromaDB")
+                    engine = ChromaDBMemoryEngine()
+            
+        except Exception as e:
+            # 如果YAML配置加载失败，使用默认值
+            logger.warning(
+                f"Failed to load memory config from YAML, using defaults: {e}",
+                exc_info=False
+            )
+            
+            if cache_ttl is None:
+                cache_ttl = 300
+            if cache_maxsize is None:
+                cache_maxsize = 100
+            if engine is None:
+                engine = ChromaDBMemoryEngine()
+        
+        self.engine = engine
         self.cache: TTLCache = TTLCache(maxsize=cache_maxsize, ttl=cache_ttl)
         self.save_timeout = save_timeout
         self.search_timeout = search_timeout
@@ -62,7 +101,8 @@ class MemoryManager:
             extra={
                 "engine": self.engine.engine_name,
                 "cache_ttl": cache_ttl,
-                "cache_maxsize": cache_maxsize
+                "cache_maxsize": cache_maxsize,
+                "config_source": "yaml"
             }
         )
     

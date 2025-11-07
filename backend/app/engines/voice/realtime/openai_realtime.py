@@ -192,6 +192,10 @@ class OpenAIRealtimeEngine(RealtimeEngineBase):
         except Exception as e:
             logger.error(f"Failed to close connection: {e}", exc_info=True)
     
+    async def disconnect(self) -> None:
+        """断开连接（别名方法）"""
+        await self.close()
+    
     async def health_check(self) -> bool:
         """健康检查
         

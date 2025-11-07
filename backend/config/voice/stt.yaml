@@ -1,0 +1,33 @@
+engines:
+  # STT引擎配置
+  stt:
+    # 默认引擎
+    default: "openai"
+    
+    # OpenAI Whisper配置
+    openai:
+      provider: "openai"
+      model: "whisper-1"
+      language: "zh-CN"
+      response_format: "json"
+      temperature: 0.0
+      # API配置
+      api:
+        timeout: 60
+        max_retries: 3
+        retry_delay: 1.0
+    
+    # 腾讯ASR配置（待实现）
+    tencent:
+      provider: "tencent"
+      model: "16k_zh"
+      language: "zh-CN"
+      # API配置
+      api:
+        app_id: null  # 从环境变量获取
+        secret_id: null
+        secret_key: null
+        timeout: 30
+        max_retries: 2
+        retry_delay: 1.0
+

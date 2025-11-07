@@ -32,9 +32,15 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{__version__}")
     logger.info(f"Environment: {settings.app_env}")
     
-    # 初始化数据库（仅开发环境，生产环境使用Alembic）
+    # 初始化数据库（仅开发环境，生产环境使用Alembic迁移）
+    # 注意：生产环境应该使用Alembic迁移，而不是自动创建表
+    # 如果表已存在，init_db会跳过创建，不会报错
     if settings.is_development:
-        await init_db()
+        try:
+            await init_db()
+        except Exception as e:
+            # 数据库初始化失败不影响应用启动（表可能已存在）
+            logger.warning(f"Database initialization skipped: {e}", exc_info=False)
     
     yield
     
@@ -117,5 +123,3 @@ if __name__ == "__main__":
         reload=settings.is_development,
         log_level=settings.log_level.lower()
     )
-
-

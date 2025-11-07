@@ -1,0 +1,103 @@
+personality:
+  id: "default"
+  name: "AI助手"
+  version: "1.0.0"
+  description: "通用AI助手"
+  
+  # 人格特征
+  traits:
+    friendliness: 0.7
+    formality: 0.5
+    humor: 0.5
+    empathy: 0.6
+  
+  # AI引擎配置
+  ai:
+    provider: "openai"
+    model: "gpt-3.5-turbo"
+    temperature: 0.7
+    max_tokens: 2048
+    system_prompt: |
+      你是一个友好的AI助手，帮助用户解答问题和完成任务。
+    
+    # Token预算管理
+    token_budget:
+      max_history_tokens: 2000
+      max_memory_tokens: 500
+      max_tool_tokens: 300
+  
+  # 记忆配置
+  memory:
+    enabled: true
+    vector_db: "chromadb"
+    save_mode: "both"
+    
+    # 记忆策略
+    strategy:
+      user_memory:
+        enabled: true
+        importance_threshold: 0.5
+        max_memories: 50
+        ttl_days: 60
+      
+      ai_memory:
+        enabled: true
+        importance_threshold: 0.5
+        max_memories: 30
+        ttl_days: 30
+    
+    # 检索配置
+    retrieval:
+      max_results: 5
+      similarity_threshold: 0.7
+      timeout_seconds: 0.5
+      cache_ttl_seconds: 300
+  
+  # 工具配置
+  tools:
+    enabled: true
+    allowed_tools:
+      - "calculator"
+      - "time_tool"
+    
+    mcp_servers: []
+    
+    # 工具权限
+    permissions:
+      max_concurrent_calls: 2
+      timeout_seconds: 30
+  
+  # 语音配置
+  voice:
+    stt:
+      provider: "openai"
+      model: "whisper-1"
+      language: "zh-CN"
+    
+    tts:
+      provider: "openai"
+      voice: "alloy"
+      speed: 1.0
+    
+    realtime:
+      enabled: false
+      provider: "openai"
+      voice: "alloy"
+      turn_detection:
+        type: "server_vad"
+        threshold: 0.5
+  
+  # 用户偏好
+  user_preferences:
+    default_language: "zh-CN"
+    response_style: "conversational"
+    auto_tts: false
+    show_reasoning: false
+  
+  # 元数据
+  metadata:
+    created_at: "2025-11-07"
+    author: "CozyChat Team"
+    tags: ["general", "assistant"]
+    icon: "🤖"
+

@@ -19,10 +19,17 @@ from sqlalchemy.orm import relationship
 import uuid
 
 # 本地库
+from sqlalchemy.orm import DeclarativeBase
 from .base import Base
 
 
-class User(Base):
+# User模型使用独立的基类，因为id字段类型不同（UUID vs Integer）
+class UserBase(DeclarativeBase):
+    """User模型基类，使用Base的metadata"""
+    metadata = Base.metadata
+
+
+class User(UserBase):
     """用户模型
     
     存储用户基本信息和认证信息
@@ -104,7 +111,7 @@ class User(Base):
     total_messages = Column(Integer, default=0, nullable=False)
     total_tokens_used = Column(BigInteger, default=0, nullable=False)
     
-    # 时间戳
+    # 时间戳（手动添加，因为不继承Base）
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,

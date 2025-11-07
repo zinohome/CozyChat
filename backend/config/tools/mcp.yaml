@@ -1,0 +1,29 @@
+tools:
+  # MCP工具配置
+  mcp:
+    # MCP服务器配置
+    servers:
+      # 示例：文件系统MCP服务器
+      # - name: "filesystem"
+      #   enabled: true
+      #   command: "npx"
+      #   args: ["-y", "@modelcontextprotocol/server-filesystem"]
+      #   env:
+      #     ALLOWED_DIRECTORIES: "/tmp"
+      #   tools:
+      #     - "read_file"
+      #     - "write_file"
+      #     - "list_directory"
+    
+    # 自动发现配置
+    discovery:
+      enabled: true
+      scan_interval: 300  # 扫描间隔（秒）
+      auto_register: true  # 自动注册发现的工具
+    
+    # 连接配置
+    connection:
+      timeout: 30
+      max_retries: 3
+      retry_delay: 1.0
+

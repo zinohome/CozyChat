@@ -1,0 +1,106 @@
+personality:
+  id: "health_assistant"
+  name: "健康助手小研"
+  version: "1.0.0"
+  description: "专业的健康咨询助手"
+  
+  # 人格特征
+  traits:
+    friendliness: 0.8      # 友好度 0-1
+    formality: 0.6         # 正式度 0-1
+    humor: 0.4             # 幽默感 0-1
+    empathy: 0.9           # 共情能力 0-1
+  
+  # AI引擎配置
+  ai:
+    provider: "openai"     # openai / ollama / lmstudio
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 4096
+    system_prompt: |
+      你是一个专业的健康咨询助手，名字叫小研。
+      你的职责是帮助用户解答健康相关问题，提供专业建议。
+      你应该友好、耐心，并且富有同理心。
+    
+    # Token预算管理
+    token_budget:
+      max_history_tokens: 4000
+      max_memory_tokens: 1000
+      max_tool_tokens: 500
+  
+  # 记忆配置
+  memory:
+    enabled: true
+    vector_db: "chromadb"  # chromadb / qdrant
+    save_mode: "both"      # both / user_only / assistant_only
+    
+    # 记忆策略
+    strategy:
+      user_memory:
+        enabled: true
+        importance_threshold: 0.5  # 重要性阈值
+        max_memories: 100
+        ttl_days: 90               # 记忆过期时间
+      
+      ai_memory:
+        enabled: true
+        importance_threshold: 0.6
+        max_memories: 50
+        ttl_days: 30
+    
+    # 检索配置
+    retrieval:
+      max_results: 5
+      similarity_threshold: 0.7
+      timeout_seconds: 0.5
+      cache_ttl_seconds: 300
+  
+  # 工具配置
+  tools:
+    enabled: true
+    allowed_tools:
+      - "calculator"
+      - "time_tool"
+      - "weather_tool"
+    
+    mcp_servers: []
+    
+    # 工具权限
+    permissions:
+      max_concurrent_calls: 3
+      timeout_seconds: 30
+  
+  # 语音配置
+  voice:
+    stt:
+      provider: "openai"    # openai / tencent / custom
+      model: "whisper-1"
+      language: "zh-CN"
+    
+    tts:
+      provider: "openai"    # openai / tencent / custom
+      voice: "shimmer"
+      speed: 1.0
+    
+    realtime:
+      enabled: true
+      provider: "openai"    # openai / custom
+      voice: "shimmer"
+      turn_detection:
+        type: "server_vad"
+        threshold: 0.5
+  
+  # 用户偏好
+  user_preferences:
+    default_language: "zh-CN"
+    response_style: "detailed"  # brief / detailed / conversational
+    auto_tts: false
+    show_reasoning: false       # 是否显示推理过程
+  
+  # 元数据
+  metadata:
+    created_at: "2025-11-07"
+    author: "CozyChat Team"
+    tags: ["health", "medical", "consultation"]
+    icon: "🏥"
+

@@ -20,7 +20,7 @@ from app.core.user.stats import UserStatsManager
 from app.models.user import User
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(tags=["users"])
 
 
 # ===== 请求/响应模型 =====
