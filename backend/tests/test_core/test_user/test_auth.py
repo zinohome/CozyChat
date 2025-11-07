@@ -9,6 +9,7 @@
 """
 
 import pytest
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -29,9 +30,11 @@ class TestAuthService:
     @pytest.fixture
     def test_user_data(self):
         """测试用户数据"""
+        # 使用UUID确保每个测试使用唯一的用户名
+        unique_id = str(uuid.uuid4())[:8]
         return {
-            "username": "testuser",
-            "email": "test@example.com",
+            "username": f"testuser_{unique_id}",
+            "email": f"test_{unique_id}@example.com",
             "password": "TestPassword123!",
             "display_name": "Test User"
         }
@@ -42,7 +45,7 @@ class TestAuthService:
         from app.utils.security import hash_password
         
         user = User(
-            id="test-user-id-123",
+            id=uuid.uuid4(),
             username=test_user_data["username"],
             email=test_user_data["email"],
             password_hash=hash_password(test_user_data["password"]),
@@ -53,7 +56,13 @@ class TestAuthService:
         sync_db_session.add(user)
         sync_db_session.commit()
         sync_db_session.refresh(user)
-        return user
+        yield user
+        # 清理：删除测试用户
+        try:
+            sync_db_session.delete(user)
+            sync_db_session.commit()
+        except Exception:
+            sync_db_session.rollback()
     
     # ========== 密码哈希测试 ==========
     
@@ -87,7 +96,7 @@ class TestAuthService:
     
     def test_create_access_token(self, auth_service):
         """测试：创建访问令牌"""
-        user_id = "test-user-id"
+        user_id = str(uuid.uuid4())
         username = "testuser"
         role = "user"
         token = auth_service.create_access_token(user_id, username, role)
@@ -98,7 +107,7 @@ class TestAuthService:
     
     def test_create_refresh_token(self, auth_service):
         """测试：创建刷新令牌"""
-        user_id = "test-user-id"
+        user_id = str(uuid.uuid4())
         username = "testuser"
         token = auth_service.create_refresh_token(user_id, username)
         
@@ -108,7 +117,7 @@ class TestAuthService:
     
     def test_verify_token_success(self, auth_service):
         """测试：验证令牌成功"""
-        user_id = "test-user-id"
+        user_id = str(uuid.uuid4())
         username = "testuser"
         role = "user"
         token = auth_service.create_access_token(user_id, username, role)
@@ -120,7 +129,7 @@ class TestAuthService:
     
     def test_verify_token_expired(self, auth_service):
         """测试：验证过期令牌"""
-        user_id = "test-user-id"
+        user_id = str(uuid.uuid4())
         username = "testuser"
         role = "user"
         # 创建立即过期的令牌
@@ -181,7 +190,9 @@ class TestAuthService:
     
     def test_authenticate_user_inactive(self, auth_service, sync_db_session, db_user, test_user_data):
         """测试：用户未激活"""
-        db_user.status = "inactive"
+        # 注意：User模型的status字段只允许'active'或'suspended'，不允许'inactive'
+        # 使用'suspended'代替'inactive'
+        db_user.status = "suspended"
         sync_db_session.commit()
         
         result = auth_service.authenticate_user(
@@ -196,7 +207,7 @@ class TestAuthService:
     
     def test_get_current_user_from_token_success(self, auth_service, sync_db_session, db_user):
         """测试：从令牌获取用户成功"""
-        token = auth_service.create_access_token(db_user.id, db_user.username, db_user.role)
+        token = auth_service.create_access_token(str(db_user.id), db_user.username, db_user.role)
         
         user = auth_service.get_current_user_from_token(sync_db_session, token)
         

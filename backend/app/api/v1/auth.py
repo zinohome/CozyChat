@@ -87,7 +87,20 @@ async def refresh_token(
             )
         
         # 验证用户是否存在且活跃
-        user = db.query(User).filter(User.id == user_id).first()
+        # 将user_id转换为UUID（如果它是字符串）
+        try:
+            import uuid as uuid_module
+            if isinstance(user_id, str):
+                user_id_uuid = uuid_module.UUID(user_id)
+            else:
+                user_id_uuid = user_id
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user ID format"
+            )
+        
+        user = db.query(User).filter(User.id == user_id_uuid).first()
         if not user or user.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -118,7 +118,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
                 choices=[
                     ChatCompletionChoice(
                         index=0,
-                        message=response.message,
+                        message=response.message.to_dict() if hasattr(response.message, 'to_dict') else response.message,
                         finish_reason=response.finish_reason
                     )
                 ],

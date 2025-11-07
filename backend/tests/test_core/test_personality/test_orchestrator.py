@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import List, Dict, Any
 
-from app.core.personality.orchestrator import CoreOrchestrator
+from app.core.personality.orchestrator import Orchestrator
 from app.core.personality.models import Personality
 from app.engines.ai.base import ChatMessage, ChatResponse, StreamChunk
 
@@ -24,24 +24,25 @@ class TestOrchestrator:
     @pytest.fixture
     def mock_personality(self):
         """Mock人格配置"""
+        from app.core.personality.models import AIConfig, MemoryConfig, ToolConfig
+        
         return Personality(
             id="test-personality",
             name="Test Personality",
             description="Test personality for testing",
-            traits={},
-            ai_config={
-                "provider": "openai",
-                "model": "gpt-3.5-turbo",
-                "temperature": 0.7
-            },
-            memory_config={
-                "enabled": True,
-                "save_mode": "both"
-            },
-            tool_config={
-                "enabled": True,
-                "allowed_tools": ["calculator", "time"]
-            }
+            ai=AIConfig(
+                provider="openai",
+                model="gpt-3.5-turbo",
+                temperature=0.7
+            ),
+            memory=MemoryConfig(
+                enabled=True,
+                save_mode="both"
+            ),
+            tools=ToolConfig(
+                enabled=True,
+                allowed_tools=["calculator", "time"]
+            )
         )
     
     @pytest.fixture
@@ -89,7 +90,7 @@ class TestOrchestrator:
             mock_factory_instance.create_engine.return_value = mock_ai_engine
             mock_factory.return_value = mock_factory_instance
             
-            orchestrator = CoreOrchestrator(
+            orchestrator = Orchestrator(
                 personality_manager=mock_personality_manager,
                 memory_manager=mock_memory_manager,
                 tool_manager=mock_tool_manager

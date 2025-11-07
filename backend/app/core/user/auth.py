@@ -99,7 +99,8 @@ class AuthService:
         """
         data = {
             "sub": str(user_id),
-            "username": username
+            "username": username,
+            "type": "refresh"  # 添加type字段，用于API验证
         }
         return create_refresh_token(data)
     
