@@ -126,7 +126,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 def decode_token(token: str) -> Optional[Dict[str, Any]]:
-    """解码JWT令牌（不验证签名，仅用于调试）
+    """解码JWT令牌（不验证签名和过期时间，仅用于调试）
     
     Args:
         token: JWT令牌
@@ -135,10 +135,11 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         Optional[Dict[str, Any]]: 解码后的数据
     """
     try:
-        # 注意：这里不验证签名，仅用于调试
+        # 注意：这里不验证签名和过期时间，仅用于调试
         payload = jwt.decode(
             token,
-            options={"verify_signature": False}
+            key="",  # 空密钥，因为不验证签名
+            options={"verify_signature": False, "verify_exp": False}
         )
         return payload
     except JWTError as e:

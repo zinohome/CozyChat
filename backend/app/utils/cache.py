@@ -34,10 +34,25 @@ class CacheManager:
     def _connect(self) -> None:
         """连接Redis"""
         try:
+            redis_url = settings.redis_url
+            redis_password = settings.redis_password
+            
+            # 检查URL中是否已包含密码
+            has_password_in_url = "@" in redis_url.split("://")[1] if "://" in redis_url else False
+            
+            # 如果URL中没有密码，但配置了密码，则在URL中添加密码
+            if not has_password_in_url and redis_password:
+                # 解析URL并添加密码
+                if redis_url.startswith("redis://"):
+                    # redis://host:port/db -> redis://:password@host:port/db
+                    url_parts = redis_url.split("://")
+                    if len(url_parts) == 2:
+                        host_part = url_parts[1]
+                        redis_url = f"redis://:{redis_password}@{host_part}"
+            
             # 创建连接池
             self.pool = ConnectionPool.from_url(
-                settings.redis_url,
-                password=settings.redis_password,
+                redis_url,
                 max_connections=settings.redis_max_connections,
                 decode_responses=True
             )
