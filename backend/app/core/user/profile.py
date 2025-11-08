@@ -117,11 +117,19 @@ class UserProfileManager:
             
             if not profile:
                 profile = UserProfile(user_id=user_id)
+                # 确保interests字段被初始化
+                if profile.interests is None:
+                    profile.interests = []
                 self.db.add(profile)
+            
+            # 确保interests字段存在
+            if profile.interests is None:
+                profile.interests = []
             
             if interest not in profile.interests:
                 profile.interests.append(interest)
                 self.db.commit()
+                self.db.refresh(profile)  # 刷新对象以获取最新数据
                 logger.info(f"Interest added: {interest}", extra={"user_id": user_id})
                 return True
             
@@ -170,6 +178,7 @@ class UserProfileManager:
             
             profile.update_habits(habits)
             self.db.commit()
+            self.db.refresh(profile)  # 刷新对象以获取最新数据
             
             logger.info(f"User habits updated: {user_id}", extra={"user_id": user_id})
             
