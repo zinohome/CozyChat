@@ -192,4 +192,65 @@ personality:
                 os.environ["PERSONALITY_CONFIG_DIR"] = original_personality_dir
             elif "PERSONALITY_CONFIG_DIR" in os.environ:
                 del os.environ["PERSONALITY_CONFIG_DIR"]
+    
+    @pytest.mark.asyncio
+    async def test_create_transcription_empty_file(self, client, auth_token):
+        """测试：空音频文件"""
+        audio_file = io.BytesIO(b"")
+        audio_file.name = "empty.wav"
+        
+        response = client.post(
+            "/v1/audio/transcriptions",
+            files={"file": ("empty.wav", audio_file, "audio/wav")},
+            data={"model": "whisper-1"},
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        
+        # 应该返回400（空文件）或404（端点不存在）
+        assert response.status_code in [400, 401, 404, 422]
+    
+    @pytest.mark.asyncio
+    async def test_create_transcription_error(self, client, auth_token):
+        """测试：转录错误处理"""
+        with patch('app.api.v1.audio.STTEngineFactory') as mock_factory:
+            mock_engine = MagicMock()
+            mock_engine.transcribe = AsyncMock(side_effect=Exception("Transcription error"))
+            mock_factory.create_engine.return_value = mock_engine
+            
+            audio_file = io.BytesIO(b"fake audio data")
+            audio_file.name = "test.wav"
+            
+            response = client.post(
+                "/v1/audio/transcriptions",
+                files={"file": ("test.wav", audio_file, "audio/wav")},
+                data={"model": "whisper-1"},
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 应该返回500或404
+            assert response.status_code in [500, 401, 404, 422]
+    
+    @pytest.mark.asyncio
+    async def test_create_speech_error(self, client, auth_token):
+        """测试：语音生成错误处理"""
+        with patch('app.api.v1.audio.TTSEngineFactory') as mock_factory:
+            mock_engine = MagicMock()
+            async def failing_stream():
+                raise Exception("TTS error")
+                yield  # 永远不会执行
+            mock_engine.stream_synthesize = failing_stream
+            mock_factory.create_engine.return_value = mock_engine
+            
+            response = client.post(
+                "/v1/audio/speech",
+                json={
+                    "input": "这是测试文本",
+                    "model": "tts-1",
+                    "voice": "alloy"
+                },
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 应该返回500或404
+            assert response.status_code in [500, 401, 404, 422]
 

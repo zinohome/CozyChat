@@ -14,8 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 # 第三方库
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, Session
@@ -88,7 +89,7 @@ TestAsyncSessionLocal = async_sessionmaker(
 #     yield policy
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """创建测试数据库会话（异步）
     
@@ -144,8 +145,8 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-@pytest.fixture
-async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+@pytest_asyncio.fixture
+async def async_client(db_session: AsyncSession):
     """创建异步测试客户端
     
     覆盖数据库依赖以使用测试数据库
@@ -163,7 +164,7 @@ async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, 
     app.dependency_overrides[get_async_db] = override_get_async_db
     app.dependency_overrides[get_sync_db] = override_get_sync_db
     
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
     
     app.dependency_overrides.clear()

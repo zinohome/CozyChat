@@ -16,8 +16,9 @@ from app import __version__
 class TestHealthEndpoint:
     """测试健康检查接口"""
     
-    async def test_health_check(self, async_client: AsyncClient):
+    async def test_health_check(self, async_client):
         """测试健康检查接口返回正确状态"""
+        # pytest会自动处理async generator fixture，直接使用即可
         response = await async_client.get("/v1/health")
         
         assert response.status_code == 200
@@ -32,8 +33,9 @@ class TestHealthEndpoint:
         assert data["version"] == __version__
         assert data["status"] in ["healthy", "unhealthy"]
     
-    async def test_root_endpoint(self, async_client: AsyncClient):
+    async def test_root_endpoint(self, async_client):
         """测试根路径返回欢迎信息"""
+        # pytest会自动处理async generator fixture，直接使用即可
         response = await async_client.get("/")
         
         assert response.status_code == 200

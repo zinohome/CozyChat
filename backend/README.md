@@ -86,6 +86,106 @@ python -m app.main
 - ReDoc: http://localhost:8000/redoc
 - 健康检查: http://localhost:8000/v1/health
 
+### 7. API认证使用
+
+系统**没有预设的默认用户名和密码**，需要先注册账号，然后登录获取token。
+
+#### 7.1 注册新用户
+
+```bash
+curl -X POST http://localhost:8000/v1/users/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "your_username",
+    "email": "your_email@example.com",
+    "password": "your_password",
+    "display_name": "Your Display Name"
+  }'
+```
+
+**要求**：
+- `username`: 3-50个字符
+- `email`: 有效邮箱地址
+- `password`: 至少6个字符
+
+#### 7.2 用户登录
+
+```bash
+curl -X POST http://localhost:8000/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "your_username",
+    "password": "your_password"
+  }'
+```
+
+**响应示例**：
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 2592000,
+  "user": {
+    "id": "user-uuid",
+    "username": "your_username",
+    "email": "your_email@example.com",
+    "role": "user"
+  }
+}
+```
+
+#### 7.3 使用Token访问API
+
+在请求头中添加 `Authorization`：
+
+```bash
+curl -X GET http://localhost:8000/v1/users/me \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+#### 7.4 在Swagger UI中测试
+
+1. 访问 `http://localhost:8000/docs`
+2. 找到 `/v1/users/register`，注册账号
+3. 找到 `/v1/users/login`，登录获取token
+4. 点击右上角 **"Authorize"** 按钮
+5. 输入 `Bearer YOUR_ACCESS_TOKEN`
+6. 现在可以测试其他需要认证的API
+
+#### 7.5 快速开始示例
+
+```bash
+# 1. 注册账号
+curl -X POST http://localhost:8000/v1/users/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "demo",
+    "email": "demo@example.com",
+    "password": "demo123456"
+  }'
+
+# 2. 登录获取token
+TOKEN=$(curl -X POST http://localhost:8000/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "demo",
+    "password": "demo123456"
+  }' | jq -r '.access_token')
+
+# 3. 使用token访问API
+curl -X GET http://localhost:8000/v1/users/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### 7.6 注意事项
+
+- ✅ 系统没有默认管理员账号，需要先注册
+- ✅ 密码要求至少6个字符
+- ✅ Token有效期：30天（可在配置中修改）
+- ✅ 支持用户名或邮箱登录
+- ✅ 用户状态必须是 `active` 才能登录
+
 ## 项目结构
 
 ```

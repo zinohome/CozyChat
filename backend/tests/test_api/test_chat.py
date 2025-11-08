@@ -94,10 +94,17 @@ class TestChatAPI:
     def test_create_chat_completion_stream(self, client, mock_openai_engine, auth_token, mocker):
         """测试：创建流式聊天完成"""
         # Mock AI引擎工厂
-        with patch('app.api.v1.chat.AIEngineFactory') as mock_factory:
-            mock_factory_instance = MagicMock()
-            mock_factory_instance.create_engine.return_value = mock_openai_engine
-            mock_factory.return_value = mock_factory_instance
+        with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
+            # 设置流式响应
+            async def mock_stream():
+                from app.engines.ai.base import StreamChunk
+                yield StreamChunk(
+                    id="chatcmpl-123",
+                    delta={"content": "Hello"},
+                    model="gpt-3.5-turbo"
+                )
+            
+            mock_openai_engine.chat_stream = mock_stream
             
             response = client.post(
                 "/v1/chat/completions",
@@ -111,6 +118,29 @@ class TestChatAPI:
             
             assert response.status_code == 200
             assert "text/event-stream" in response.headers.get("content-type", "")
+    
+    def test_create_chat_completion_stream_error(self, client, mock_openai_engine, auth_token, mocker):
+        """测试：流式聊天完成错误处理"""
+        with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
+            # 设置流式响应抛出异常
+            async def failing_stream():
+                raise Exception("Stream error")
+                yield  # 永远不会执行
+            
+            mock_openai_engine.chat_stream = failing_stream
+            
+            response = client.post(
+                "/v1/chat/completions",
+                json={
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "model": "gpt-3.5-turbo",
+                    "stream": True
+                },
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 流式响应即使有错误也会返回200，但内容包含错误信息
+            assert response.status_code == 200
     
     def test_create_chat_completion_with_personality(self, client, mock_openai_engine, auth_token, mocker):
         """测试：带人格的聊天完成（当前chat.py不支持personality_id，暂时跳过）"""
@@ -127,6 +157,36 @@ class TestChatAPI:
         )
         
         assert response.status_code == 422  # 验证错误
+    
+    def test_create_chat_completion_engine_error(self, client, auth_token, mocker):
+        """测试：引擎创建错误"""
+        with patch.object(AIEngineFactory, 'create_engine', side_effect=ValueError("Invalid engine")):
+            response = client.post(
+                "/v1/chat/completions",
+                json={
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "model": "gpt-3.5-turbo"
+                },
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            assert response.status_code == 400
+    
+    def test_create_chat_completion_chat_error(self, client, mock_openai_engine, auth_token, mocker):
+        """测试：聊天生成错误"""
+        with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
+            mock_openai_engine.chat = AsyncMock(side_effect=Exception("Chat error"))
+            
+            response = client.post(
+                "/v1/chat/completions",
+                json={
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "model": "gpt-3.5-turbo"
+                },
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            assert response.status_code == 500
     
     def test_list_engines(self, client, auth_token):
         """测试：列出引擎"""

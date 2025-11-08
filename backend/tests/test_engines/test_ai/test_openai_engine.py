@@ -119,13 +119,25 @@ class TestOpenAIEngine:
     async def test_chat_completion_with_tools(self, openai_engine_async, mock_openai_response, test_messages, mocker):
         """测试：带工具调用的聊天完成"""
         # 设置工具调用响应
-        mock_tool_call = MagicMock()
+        from openai.types.chat import ChatCompletionMessageToolCall
+        
+        mock_tool_call = MagicMock(spec=ChatCompletionMessageToolCall)
         mock_tool_call.id = "call_123"
         mock_tool_call.type = "function"
         mock_function = MagicMock()
         mock_function.name = "search"
         mock_function.arguments = '{"query": "test"}'
         mock_tool_call.function = mock_function
+        
+        # Mock to_dict方法返回正确的字典结构
+        mock_tool_call.to_dict = MagicMock(return_value={
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "search",
+                "arguments": '{"query": "test"}'
+            }
+        })
         
         mock_openai_response.choices[0].message.tool_calls = [mock_tool_call]
         mock_openai_response.choices[0].message.content = None
@@ -160,6 +172,7 @@ class TestOpenAIEngine:
         # 验证结果
         assert result.message.tool_calls is not None
         assert len(result.message.tool_calls) == 1
+        # tool_calls是通过to_dict()转换的，所以结构是字典
         assert result.message.tool_calls[0]["function"]["name"] == "search"
         
         # 验证工具参数传递
@@ -170,12 +183,15 @@ class TestOpenAIEngine:
     async def test_chat_completion_api_error(self, openai_engine_async, test_messages, mocker):
         """测试：API错误处理"""
         from openai import APIError
+        from unittest.mock import Mock
         
         # Mock API错误
+        mock_request = Mock()
+        mock_body = Mock()
         mock_create = AsyncMock(side_effect=APIError(
             message="API Error",
-            request=None,
-            response=None
+            request=mock_request,
+            body=mock_body
         ))
         mocker.patch.object(
             openai_engine_async.client.chat.completions,

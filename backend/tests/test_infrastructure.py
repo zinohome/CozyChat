@@ -82,7 +82,7 @@ class TestClientFixtures:
         """测试异步测试客户端"""
         assert async_client is not None
         # 测试健康检查
-        response = await async_client.get("/health")
+        response = await async_client.get("/v1/health")
         assert response.status_code in [200, 404]  # 可能路由不同
 
 

@@ -32,7 +32,7 @@ class MCPToolAdapter(Tool):
             server_name: 服务器名称
             tool_info: 工具信息
         """
-        super().__init__(tool_type=ToolType.MCP)
+        # 先设置属性，因为super().__init__会调用self.name
         self.mcp_client = mcp_client
         self.server_name = server_name
         self.tool_info = tool_info
@@ -42,6 +42,9 @@ class MCPToolAdapter(Tool):
         # 解析参数schema
         input_schema = tool_info.get("inputSchema", {})
         self._parameters = input_schema.get("properties", {})
+        
+        # 现在可以安全地调用super().__init__，因为它会调用self.name
+        super().__init__(tool_type=ToolType.MCP)
         
         logger.debug(
             f"Initializing MCP tool adapter: {self.name}",
