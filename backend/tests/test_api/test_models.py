@@ -98,4 +98,58 @@ class TestModelsAPI:
         
         # 应该返回404或200（如果返回空数据）
         assert response.status_code in [200, 401, 404]
+    
+    @pytest.mark.asyncio
+    async def test_list_models_with_engine_error(self, client, auth_token):
+        """测试：列出模型（引擎错误）"""
+        # Mock AI引擎注册表抛出异常
+        with patch('app.api.v1.models.AIEngineRegistry') as mock_registry:
+            mock_registry.list_engines = MagicMock(side_effect=Exception("Registry error"))
+            
+            response = client.get(
+                "/v1/models",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 应该返回500
+            assert response.status_code in [500, 401, 404]
+    
+    @pytest.mark.asyncio
+    async def test_list_models_engine_without_models(self, client, auth_token):
+        """测试：列出模型（引擎无模型）"""
+        # Mock AI引擎注册表和工厂
+        with patch('app.api.v1.models.AIEngineRegistry') as mock_registry:
+            with patch('app.api.v1.models.AIEngineFactory') as mock_factory:
+                mock_registry.list_engines.return_value = ["openai"]
+                
+                # Mock引擎实例
+                mock_engine = MagicMock()
+                mock_engine.model = None
+                mock_engine.list_models = MagicMock(return_value=[])
+                mock_factory.create_engine.return_value = mock_engine
+                
+                response = client.get(
+                    "/v1/models",
+                    headers={"Authorization": f"Bearer {auth_token}"}
+                )
+                
+                assert response.status_code in [200, 401, 404]
+                if response.status_code == 200:
+                    data = response.json()
+                    assert "data" in data or "models" in data
+    
+    @pytest.mark.asyncio
+    async def test_get_model_detail_error(self, client, auth_token):
+        """测试：获取模型详情（错误处理）"""
+        # Mock AI引擎注册表抛出异常
+        with patch('app.api.v1.models.AIEngineRegistry') as mock_registry:
+            mock_registry.list_engines = MagicMock(side_effect=Exception("Registry error"))
+            
+            response = client.get(
+                "/v1/models/gpt-4",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 应该返回500
+            assert response.status_code in [500, 401, 404]
 

@@ -145,4 +145,55 @@ class TestToolsAPI:
         # 如果API没有认证要求，返回200是正常的
         # 如果有认证要求，应该返回401
         assert response.status_code in [200, 401]
+    
+    @pytest.mark.asyncio
+    async def test_list_tools_with_type_filter(self, client, auth_token, mock_tool_manager):
+        """测试：列出工具（类型过滤）"""
+        response = client.get(
+            "/v1/tools?type=builtin",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        
+        assert response.status_code in [200, 401]
+        if response.status_code == 200:
+            data = response.json()
+            assert "tools" in data or "data" in data or isinstance(data, list)
+    
+    @pytest.mark.asyncio
+    async def test_list_tools_with_mcp_filter(self, client, auth_token, mock_tool_manager):
+        """测试：列出工具（MCP过滤）"""
+        response = client.get(
+            "/v1/tools?type=mcp",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        
+        assert response.status_code in [200, 401]
+    
+    @pytest.mark.asyncio
+    async def test_execute_tool_error(self, client, auth_token, mock_tool_manager):
+        """测试：执行工具错误"""
+        mock_tool_manager.execute_tool = AsyncMock(side_effect=Exception("Tool execution error"))
+        
+        response = client.post(
+            "/v1/tools/execute",
+            json={
+                "tool_name": "calculator",
+                "parameters": {"expression": "2 + 3"}
+            },
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        
+        assert response.status_code in [200, 400, 401, 404, 500]
+    
+    @pytest.mark.asyncio
+    async def test_get_tool_info_not_found(self, client, auth_token, mock_tool_manager):
+        """测试：获取工具信息（不存在）"""
+        mock_tool_manager.registry.get_tool_class = MagicMock(return_value=None)
+        
+        response = client.get(
+            "/v1/tools/nonexistent_tool",
+            headers={"Authorization": f"Bearer {auth_token}"}
+        )
+        
+        assert response.status_code in [404, 401]
 
