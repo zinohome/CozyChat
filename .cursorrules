@@ -221,14 +221,76 @@ backend/
 
 ## React开发规范（前端）
 
+### 技术栈规范
+
+**核心框架**:
+- React 18+ (函数组件 + Hooks)
+- TypeScript 5+ (严格模式)
+- Vite 5+ (构建工具)
+- pnpm (包管理器，首选)
+
+**UI组件库**:
+- **AI聊天组件**: `@chatui/core` (首选，专为聊天设计，企业级成熟度)
+- **通用UI组件**: `antd` (布局、表单、反馈、Drawer等)
+- **图标库**: `@ant-design/icons`
+
+**状态管理**:
+- **全局状态**: `zustand` (轻量级，首选) 或 `Jotai` (原子化)
+- **服务端状态**: `@tanstack/react-query` (数据获取、缓存、乐观更新)
+- **表单状态**: `React Hook Form` + `Zod` (表单管理 + 验证)
+
+**样式方案**:
+- `@chatui/core`: 聊天组件样式
+- `antd`: 通用组件样式
+- `tailwindcss`: 原子化CSS（可选，用于自定义样式）
+- `CSS Modules`: 作为备选
+
 ### 代码风格
+
 - 使用 TypeScript，严格模式
 - ESLint + Prettier 自动格式化
 - 单引号、分号、2空格缩进
+- 必须通过 ESLint 和 TypeScript 检查
+
+### 导入顺序规范
+
+```typescript
+// 1. React相关
+import React, { useState, useEffect, useCallback } from 'react';
+
+// 2. 第三方库
+import { Chat } from '@chatui/core';
+import { Button, Drawer } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+
+// 3. 本地组件
+import { ChatMessage } from '@/components/chat/ChatMessage';
+import { Header } from '@/components/layout/Header';
+
+// 4. Hooks
+import { useChat } from '@/hooks/useChat';
+import { useAuth } from '@/hooks/useAuth';
+
+// 5. 服务
+import { chatApi } from '@/services/chat';
+
+// 6. 类型
+import type { Message, ChatState } from '@/types/chat';
+
+// 7. 工具函数
+import { formatDate } from '@/utils/format';
+
+// 8. 样式
+import styles from './ChatPage.module.css';
+```
 
 ### 组件规范
+
 ```typescript
-// ✅ 函数组件 + TypeScript接口
+// ✅ 函数组件 + TypeScript接口 + JSDoc注释
+/**
+ * 聊天消息组件属性
+ */
 interface ChatMessageProps {
   /** 消息角色 */
   role: 'user' | 'assistant';
@@ -238,95 +300,511 @@ interface ChatMessageProps {
   timestamp: Date;
   /** 是否加载中 */
   loading?: boolean;
+  /** 点击回调 */
+  onClick?: () => void;
 }
 
 /**
  * 聊天消息组件
  * 
  * 显示单条聊天消息，支持用户和AI两种角色。
+ * 
+ * @example
+ * ```tsx
+ * <ChatMessage
+ *   role="user"
+ *   content="Hello, AI!"
+ *   timestamp={new Date()}
+ * />
+ * ```
  */
 const ChatMessage: React.FC<ChatMessageProps> = ({
   role,
   content,
   timestamp,
   loading = false,
+  onClick,
 }) => {
   // 组件实现
-  return <div>{content}</div>;
+  return (
+    <div
+      className={`${styles.message} ${styles[role]}`}
+      data-testid={`${role}-message`}
+      onClick={onClick}
+    >
+      {content}
+    </div>
+  );
 };
 
 export default React.memo(ChatMessage);
+export type { ChatMessageProps };
+```
+
+**组件最佳实践**:
+1. ✅ 使用函数组件和Hooks，避免类组件
+2. ✅ Props使用TypeScript接口定义，必须包含JSDoc注释
+3. ✅ 导出组件和类型: `export type { ChatMessageProps }; export default ChatMessage;`
+4. ✅ 使用React.memo优化性能: `export default React.memo(ChatMessage);`
+5. ✅ 使用data-testid用于测试: `<div data-testid="chat-message">...</div>`
+6. ✅ 条件渲染: `{isLoading && <Spinner />}` 而不是 `{isLoading ? <Spinner /> : null}`
+
+### ChatUI组件使用规范
+
+```typescript
+// src/features/chat/components/ChatContainer/ChatContainer.tsx
+import React, { useState, useCallback } from 'react';
+import { Chat } from '@chatui/core';
+import '@chatui/core/dist/index.css';
+import { useChat } from '@/hooks/useChat';
+import type { Message } from '@/types/chat';
+
+interface ChatContainerProps {
+  /** 会话ID */
+  sessionId: string;
+  /** 人格ID */
+  personalityId: string;
+}
+
+/**
+ * 聊天容器组件
+ * 
+ * 使用ChatUI核心组件构建聊天界面。
+ */
+const ChatContainer: React.FC<ChatContainerProps> = ({
+  sessionId,
+  personalityId,
+}) => {
+  const { messages, sendMessage, isLoading } = useChat(sessionId, personalityId);
+  
+  const handleSend = useCallback(
+    async (type: string, val: string) => {
+      if (type === 'text' && val.trim()) {
+        await sendMessage(val);
+      }
+    },
+    [sendMessage]
+  );
+  
+  return (
+    <Chat
+      navbar={{
+        title: 'CozyChat',
+      }}
+      messages={messages}
+      onSend={handleSend}
+      placeholder="输入消息..."
+      locale="zh-CN"
+    />
+  );
+};
+
+export default ChatContainer;
+```
+
+### Ant Design组件使用规范
+
+```typescript
+// src/components/user/HealthRecordDrawer/HealthRecordDrawer.tsx
+import React from 'react';
+import { Drawer, Tabs, Space } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
+import type { DrawerProps } from 'antd';
+
+interface HealthRecordDrawerProps {
+  /** 是否可见 */
+  open: boolean;
+  /** 关闭回调 */
+  onClose: () => void;
+}
+
+/**
+ * 健康档案抽屉组件
+ * 
+ * 使用Ant Design的Drawer组件实现侧边栏。
+ */
+const HealthRecordDrawer: React.FC<HealthRecordDrawerProps> = ({
+  open,
+  onClose,
+}) => {
+  const tabItems = [
+    {
+      key: 'basic',
+      label: '基本信息',
+      children: <BasicInfo />,
+    },
+    {
+      key: 'health',
+      label: '健康记录',
+      children: <HealthRecords />,
+    },
+  ];
+  
+  return (
+    <Drawer
+      title={
+        <Space>
+          <UserOutlined />
+          健康档案
+        </Space>
+      }
+      placement="right"
+      width={600}
+      open={open}
+      onClose={onClose}
+      maskClosable={false}
+    >
+      <Tabs items={tabItems} />
+    </Drawer>
+  );
+};
+
+export default HealthRecordDrawer;
 ```
 
 ### 命名规范
+
 - **组件文件**: 大驼峰 `ChatMessage.tsx`
+- **组件目录**: 大驼峰 `ChatMessage/`
 - **组件名**: 大驼峰 `ChatMessage`
-- **Hooks**: use开头 `useChat`, `useAuth`
-- **工具函数**: 小驼峰 `formatDate`, `parseMessage`
+- **Hooks**: use开头+小驼峰 `useChat.ts`, `useAuth.ts`
+- **工具函数**: 小驼峰 `formatDate.ts`, `parseMessage.ts`
 - **常量**: 大写+下划线 `API_BASE_URL`
 - **类型/接口**: 大驼峰 `UserType`, `ChatMessageProps`
+- **样式文件**: 组件名.module.css `ChatMessage.module.css`
+- **测试文件**: 组件名.test.tsx `ChatMessage.test.tsx`
 
 ### 项目结构
+
 ```
 frontend/src/
   components/          # 通用组件
     ui/                # UI基础组件（Button, Input等）
+      Button/
+        Button.tsx
+        Button.module.css
+        Button.test.tsx
+        index.ts
     layout/            # 布局组件
+      Header/
+      Sidebar/
+      Footer/
     chat/              # 聊天组件
+      ChatMessage/
+      ChatInput/
+      ChatContainer/
   features/            # 功能模块
     auth/              # 认证模块
       components/
       hooks/
       api/
+      types/
+      index.ts
     chat/              # 聊天模块
+      components/
+      hooks/
+      api/
+      types/
+      index.ts
     settings/          # 设置模块
   hooks/               # 全局Hooks
+    useAuth.ts
+    useChat.ts
+    useWebSocket.ts
   services/            # API服务层
-  store/               # Redux状态管理
+    api.ts             # API客户端
+    chat.ts            # 聊天API
+    user.ts            # 用户API
+    voice.ts           # 语音API
+  store/               # 状态管理
+    slices/            # Zustand slices
+      authSlice.ts
+      chatSlice.ts
+    store.ts
   types/               # TypeScript类型定义
+    user.ts
+    chat.ts
+    api.ts
   utils/               # 工具函数
+    format.ts
+    storage.ts
+    validation.ts
+  styles/              # 全局样式
+    globals.css
+    variables.css
+    reset.css
+  App.tsx              # 应用入口
+  main.tsx             # 应用启动
 ```
 
-### 状态管理
-```typescript
-// 使用 Redux Toolkit
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+### 状态管理规范
 
-interface ChatState {
-  messages: Message[];
-  loading: boolean;
-  error: string | null;
+**Zustand Store规范**:
+
+```typescript
+// src/store/slices/chatSlice.ts
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import type { Message, ChatState } from '@/types/chat';
+
+interface ChatStore extends ChatState {
+  // Actions
+  addMessage: (message: Message) => void;
+  clearMessages: () => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
 }
 
-const chatSlice = createSlice({
-  name: 'chat',
-  initialState,
-  reducers: {
-    addMessage: (state, action: PayloadAction<Message>) => {
-      state.messages.push(action.payload);
-    },
-  },
-});
+/**
+ * 聊天状态管理Store
+ * 
+ * 使用Zustand管理聊天相关的全局状态。
+ */
+export const useChatStore = create<ChatStore>()(
+  devtools(
+    persist(
+      (set) => ({
+        // State
+        messages: [],
+        loading: false,
+        error: null,
+        
+        // Actions
+        addMessage: (message) =>
+          set((state) => ({
+            messages: [...state.messages, message],
+          })),
+        
+        clearMessages: () =>
+          set({
+            messages: [],
+            error: null,
+          }),
+        
+        setLoading: (loading) =>
+          set({ loading }),
+        
+        setError: (error) =>
+          set({ error }),
+      }),
+      {
+        name: 'chat-storage',
+        partialize: (state) => ({
+          messages: state.messages,
+        }),
+      }
+    ),
+    { name: 'ChatStore' }
+  )
+);
 ```
 
-### API调用
-```typescript
-// 使用统一的 API 客户端
-import { apiClient } from '@/services/api';
+**React Query规范**:
 
+```typescript
+// src/hooks/useChat.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { chatApi } from '@/services/chat';
+import type { Message, ChatRequest } from '@/types/chat';
+
+/**
+ * 聊天Hook
+ * 
+ * 使用React Query管理聊天相关的服务端状态。
+ */
+export const useChat = (sessionId: string, personalityId: string) => {
+  const queryClient = useQueryClient();
+  
+  // 获取历史消息
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: ['chat', 'messages', sessionId],
+    queryFn: () => chatApi.getHistory(sessionId),
+    enabled: !!sessionId,
+  });
+  
+  // 发送消息
+  const sendMutation = useMutation({
+    mutationFn: (request: ChatRequest) => chatApi.send(request),
+    onSuccess: (response) => {
+      // 更新缓存
+      queryClient.setQueryData(
+        ['chat', 'messages', sessionId],
+        (old: Message[] = []) => [...old, response.message]
+      );
+    },
+  });
+  
+  const sendMessage = async (content: string) => {
+    await sendMutation.mutateAsync({
+      messages: [
+        ...messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        { role: 'user', content },
+      ],
+      personality_id: personalityId,
+      stream: false,
+    });
+  };
+  
+  return {
+    messages,
+    isLoading,
+    sendMessage,
+    isSending: sendMutation.isPending,
+  };
+};
+```
+
+### API调用规范
+
+**API客户端规范**:
+
+```typescript
+// src/services/api.ts
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+/**
+ * API客户端类
+ * 
+ * 封装Axios，提供统一的API调用接口。
+ */
+class ApiClient {
+  private client: AxiosInstance;
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    this.setupInterceptors();
+  }
+
+  private setupInterceptors() {
+    // 请求拦截器
+    this.client.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('access_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // 响应拦截器
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          // 处理认证失败
+          localStorage.removeItem('access_token');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.client.get<T>(url, config);
+    return response.data;
+  }
+
+  async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.client.post<T>(url, data, config);
+    return response.data;
+  }
+
+  async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.client.put<T>(url, data, config);
+    return response.data;
+  }
+
+  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.client.delete<T>(url, config);
+    return response.data;
+  }
+}
+
+export const apiClient = new ApiClient();
+```
+
+**API服务规范**:
+
+```typescript
+// src/services/chat.ts
+import { apiClient } from './api';
+import type { Message, ChatRequest, ChatResponse } from '@/types/chat';
+
+/**
+ * 聊天API服务
+ * 
+ * 封装聊天相关的API调用。
+ */
 export const chatApi = {
+  /**
+   * 发送聊天消息
+   */
   async send(request: ChatRequest): Promise<ChatResponse> {
     return apiClient.post<ChatResponse>('/v1/chat/completions', request);
   },
-  
-  // 流式响应
+
+  /**
+   * 获取历史消息
+   */
+  async getHistory(sessionId: string): Promise<Message[]> {
+    return apiClient.get<Message[]>(`/v1/chat/sessions/${sessionId}/messages`);
+  },
+
+  /**
+   * 流式聊天（SSE）
+   */
   async *streamChat(request: ChatRequest): AsyncGenerator<string> {
-    // SSE实现
+    const response = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/v1/chat/stream`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify(request),
+      }
+    );
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader!.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          yield data;
+        }
+      }
+    }
   },
 };
 ```
 
-### Hooks使用
+### Hooks使用规范
+
 ```typescript
 // ✅ 性能优化
 import { useMemo, useCallback } from 'react';
@@ -341,23 +819,115 @@ const handleClick = useCallback((id: string) => {
 ```
 
 ### 样式规范
+
+**CSS Modules规范**:
+
 ```css
-/* 使用 CSS Modules */
+/* src/components/chat/ChatMessage/ChatMessage.module.css */
 .message {
   display: flex;
-  padding: var(--spacing-md);
-  border-radius: var(--border-radius);
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.message:hover {
+  background-color: var(--hover-bg);
 }
 
 .user {
+  flex-direction: row-reverse;
   background-color: var(--user-message-bg);
 }
 
-/* 使用 CSS 变量 */
+.assistant {
+  background-color: var(--assistant-message-bg);
+}
+```
+
+**CSS变量规范**:
+
+```css
+/* src/styles/variables.css */
 :root {
+  /* Colors */
   --primary-color: #3b82f6;
+  --secondary-color: #64748b;
+  --success-color: #10b981;
+  --error-color: #ef4444;
+  
+  /* Backgrounds */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --hover-bg: #f1f5f9;
+  
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
   --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  /* Border */
   --border-radius: 8px;
+  --border-color: #e2e8f0;
+}
+```
+
+### 性能优化规范
+
+**代码分割**:
+
+```typescript
+// 路由懒加载
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
+const Chat = lazy(() => import('./features/chat/Chat'));
+const Settings = lazy(() => import('./features/settings/Settings'));
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  );
+}
+```
+
+**虚拟滚动**:
+
+```typescript
+import { FixedSizeList } from 'react-window';
+
+function MessageList({ messages }) {
+  const Row = ({ index, style }) => (
+    <div style={style}>
+      <ChatMessage {...messages[index]} />
+    </div>
+  );
+
+  return (
+    <FixedSizeList
+      height={600}
+      itemCount={messages.length}
+      itemSize={100}
+      width="100%"
+    >
+      {Row}
+    </FixedSizeList>
+  );
 }
 ```
 
@@ -854,6 +1424,9 @@ def test_example():
 
 前端开发：
 ☑ docs/03-前端架构设计.md - 理解组件设计
+☑ docs/17-前端开发规范.md - 完整前端开发规范（ChatUI + Ant Design）
+☑ docs/14-ChatUI实施指南.md - ChatUI使用指南
+☑ docs/15-ChatUI-Drawer实现方案.md - Drawer组件实现方案
 ☑ docs/06-开发规范.md (React部分) - 遵循React规范
 ☑ docs/07-测试规范.md (前端部分) - 组件测试要求
 
@@ -1065,6 +1638,9 @@ AI: （生成代码后）"已实现记忆检索器，包含：
 
 详细规范请参考：
 - `docs/06-开发规范.md` - 完整开发规范
+- `docs/17-前端开发规范.md` - 完整前端开发规范（ChatUI + Ant Design）
+- `docs/14-ChatUI实施指南.md` - ChatUI使用指南
+- `docs/15-ChatUI-Drawer实现方案.md` - Drawer组件实现方案
 - `docs/07-测试规范.md` - 完整测试规范和最佳实践
 - `docs/08-开发流程管控.md` - 开发流程管控和文档驱动开发
 - `docs/02-后端架构设计.md` - 后端架构设计
