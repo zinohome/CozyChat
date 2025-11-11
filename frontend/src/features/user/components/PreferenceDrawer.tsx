@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/slices/authSlice';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from '@/services/user';
 import { useUIStore } from '@/store/slices/uiSlice';
+import { showError, showSuccess } from '@/utils/errorHandler';
 import type { UserPreferences } from '@/types/user';
 
 /**
@@ -33,17 +34,17 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
 
   // 获取用户偏好
   const { data: preferences, isLoading } = useQuery({
-    queryKey: ['user', 'preferences', user?.id],
-    queryFn: () => userApi.getUserPreferences(user!.id),
+    queryKey: ['user', 'preferences'],
+    queryFn: () => userApi.getCurrentUserPreferences(),
     enabled: !!user?.id,
   });
 
   // 更新偏好Mutation
   const updateMutation = useMutation({
     mutationFn: (prefs: UserPreferences) =>
-      userApi.updateUserPreferences(user!.id, prefs),
+      userApi.updateCurrentUserPreferences(prefs),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user', 'preferences', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'preferences'] });
     },
   });
 
@@ -67,9 +68,10 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
       if (values.language) {
         setLanguage(values.language);
       }
+      showSuccess('偏好设置已保存');
       onClose();
     } catch (error) {
-      console.error('Failed to update preferences:', error);
+      showError(error, '保存偏好设置失败');
     }
   };
 

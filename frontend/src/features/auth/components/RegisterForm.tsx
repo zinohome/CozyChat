@@ -1,7 +1,8 @@
 import React from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
+import { showError, showSuccess } from '@/utils/errorHandler';
 import type { RegisterRequest } from '@/types/user';
 
 /**
@@ -15,9 +16,9 @@ export const RegisterForm: React.FC = () => {
     try {
       const { confirmPassword, ...registerData } = values;
       await registerUser(registerData);
-      message.success('注册成功');
+      showSuccess('注册成功');
     } catch (error: any) {
-      message.error(error.message || '注册失败');
+      showError(error, '注册失败');
     }
   };
 

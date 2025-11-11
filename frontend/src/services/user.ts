@@ -39,23 +39,47 @@ export const userApi = {
   },
 
   /**
-   * 获取用户偏好
+   * 获取当前用户信息
    */
-  async getUserPreferences(userId: string): Promise<UserPreferences> {
-    return apiClient.get<UserPreferences>(`/v1/users/${userId}/preferences`);
+  async getCurrentUser(): Promise<User> {
+    return apiClient.get<User>('/v1/users/me');
   },
 
   /**
-   * 更新用户偏好
+   * 更新当前用户信息
    */
-  async updateUserPreferences(
-    userId: string,
+  async updateCurrentUser(data: Partial<User>): Promise<User> {
+    return apiClient.put<User>('/v1/users/me', data);
+  },
+
+  /**
+   * 获取当前用户画像
+   */
+  async getCurrentUserProfile(): Promise<UserProfile> {
+    return apiClient.get<UserProfile>('/v1/users/me/profile');
+  },
+
+  /**
+   * 获取当前用户偏好
+   */
+  async getCurrentUserPreferences(): Promise<UserPreferences> {
+    return apiClient.get<UserPreferences>('/v1/users/me/preferences');
+  },
+
+  /**
+   * 更新当前用户偏好
+   */
+  async updateCurrentUserPreferences(
     preferences: UserPreferences
   ): Promise<UserPreferences> {
-    return apiClient.put<UserPreferences>(
-      `/v1/users/${userId}/preferences`,
-      preferences
-    );
+    return apiClient.put<UserPreferences>('/v1/users/me/preferences', preferences);
+  },
+
+  /**
+   * 获取当前用户统计
+   */
+  async getCurrentUserStats(): Promise<any> {
+    return apiClient.get<any>('/v1/users/me/stats');
   },
 };
 

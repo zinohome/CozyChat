@@ -2,6 +2,7 @@ import React from 'react';
 import { Drawer, Tabs, Space } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import { UserProfile } from './UserProfile';
+import { HealthRecords } from './HealthRecords';
 
 /**
  * 健康档案抽屉组件属性
@@ -31,7 +32,7 @@ export const HealthRecordDrawer: React.FC<HealthRecordDrawerProps> = ({
     {
       key: 'health',
       label: '健康记录',
-      children: <div>健康记录功能开发中...</div>,
+      children: <HealthRecords />,
     },
   ];
 
@@ -44,7 +45,7 @@ export const HealthRecordDrawer: React.FC<HealthRecordDrawerProps> = ({
         </Space>
       }
       placement="right"
-      width={600}
+      width={700}
       open={open}
       onClose={onClose}
       maskClosable={false}

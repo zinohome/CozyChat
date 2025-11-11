@@ -1,10 +1,12 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Chat } from '@chatui/core';
 import '@chatui/core/dist/index.css';
+import { Alert } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { useStreamChat } from '../hooks/useStreamChat';
 import { chatApi } from '@/services/chat';
+import { showError } from '@/utils/errorHandler';
 import type { Message } from '@/types/chat';
 
 /**
@@ -26,8 +28,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { messages, setMessages, isLoading, error } = useChatStore();
+  const { messages, setMessages, isLoading, error, setError } = useChatStore();
   const { sendStreamMessage, isStreaming } = useStreamChat(sessionId, personalityId);
+
+  // 显示错误提示
+  useEffect(() => {
+    if (error) {
+      showError(error);
+      // 清除错误状态
+      setError(null);
+    }
+  }, [error, setError]);
 
   // 获取历史消息
   const { isLoading: isLoadingHistory } = useQuery({
@@ -84,16 +95,27 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   });
 
   return (
-    <Chat
-      navbar={{
-        title: 'CozyChat',
-      }}
-      messages={chatUIMessages}
-      onSend={handleSend}
-      placeholder="输入消息..."
-      locale="zh-CN"
-      loading={isLoading || isLoadingHistory || isStreaming}
-    />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {error && (
+        <Alert
+          type="error"
+          message={error}
+          closable
+          onClose={() => setError(null)}
+          style={{ margin: '8px' }}
+        />
+      )}
+      <Chat
+        navbar={{
+          title: 'CozyChat',
+        }}
+        messages={chatUIMessages}
+        onSend={handleSend}
+        placeholder="输入消息..."
+        locale="zh-CN"
+        loading={isLoading || isLoadingHistory || isStreaming}
+      />
+    </div>
   );
 };
 

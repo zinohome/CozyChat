@@ -14,9 +14,9 @@ export const LoginForm: React.FC = () => {
   const onSubmit = async (values: LoginRequest) => {
     try {
       await login(values);
-      message.success('登录成功');
+      showSuccess('登录成功');
     } catch (error: any) {
-      message.error(error.message || '登录失败');
+      showError(error, '登录失败');
     }
   };
 

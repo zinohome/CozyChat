@@ -1,11 +1,12 @@
-import React from 'react';
-import { Layout, Menu } from 'antd';
+import React, { useState } from 'react';
+import { Layout, Menu, Tabs } from 'antd';
 import {
   MessageOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUIStore } from '@/store/slices/uiSlice';
+import { SessionList } from '@/features/chat/components/SessionList';
 
 const { Sider } = Layout;
 
@@ -18,6 +19,12 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sidebarOpen } = useUIStore();
+  const [activeTab, setActiveTab] = useState('sessions');
+  
+  // 从URL路径中提取sessionId
+  const sessionId = location.pathname.startsWith('/chat/')
+    ? location.pathname.split('/chat/')[1] || undefined
+    : undefined;
 
   const menuItems = [
     {
@@ -36,24 +43,60 @@ export const Sidebar: React.FC = () => {
     navigate(key);
   };
 
+  const handleSessionSelect = (selectedSessionId: string) => {
+    if (selectedSessionId) {
+      navigate(`/chat/${selectedSessionId}`);
+    } else {
+      navigate('/chat');
+    }
+  };
+
   if (!sidebarOpen) {
     return null;
   }
 
+  const tabItems = [
+    {
+      key: 'sessions',
+      label: '会话',
+      children: (
+        <SessionList
+          currentSessionId={sessionId}
+          onSessionSelect={handleSessionSelect}
+        />
+      ),
+    },
+    {
+      key: 'menu',
+      label: '菜单',
+      children: (
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={handleMenuClick}
+          style={{ borderRight: 0 }}
+        />
+      ),
+    },
+  ];
+
   return (
     <Sider
-      width={250}
+      width={280}
       style={{
         background: '#fff',
         borderRight: '1px solid #e8e8e8',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <Menu
-        mode="inline"
-        selectedKeys={[location.pathname]}
-        items={menuItems}
-        onClick={handleMenuClick}
-        style={{ height: '100%', borderRight: 0 }}
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+        tabBarStyle={{ margin: 0, padding: '0 16px' }}
       />
     </Sider>
   );

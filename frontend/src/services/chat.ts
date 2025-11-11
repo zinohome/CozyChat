@@ -75,7 +75,7 @@ export const chatApi = {
               const chunk: StreamChunk = JSON.parse(data);
               yield chunk;
             } catch (e) {
-              console.warn('Failed to parse SSE chunk:', e);
+              // 忽略解析错误，继续处理下一个chunk
             }
           }
         }

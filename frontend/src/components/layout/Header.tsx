@@ -29,7 +29,7 @@ export const Header: React.FC = () => {
       await logout();
       navigate('/login');
     } catch (error) {
-      console.error('Logout failed:', error);
+      // 错误已在useAuth Hook中处理
     }
   };
 

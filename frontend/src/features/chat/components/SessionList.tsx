@@ -40,7 +40,7 @@ export const SessionList: React.FC<SessionListProps> = ({
         onSessionSelect(newSession.id);
       }
     } catch (error) {
-      console.error('Failed to create session:', error);
+      // 错误已在useSessions Hook中处理
     }
   };
 
@@ -54,7 +54,7 @@ export const SessionList: React.FC<SessionListProps> = ({
         onSessionSelect('');
       }
     } catch (error) {
-      console.error('Failed to delete session:', error);
+      // 错误已在useSessions Hook中处理
     }
   };
 

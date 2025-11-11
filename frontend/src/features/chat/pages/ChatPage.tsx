@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { ChatContainer } from '../components/ChatContainer';
+import { EnhancedChatContainer } from '../components/EnhancedChatContainer';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { personalityApi } from '@/services/personality';
+import { showError } from '@/utils/errorHandler';
 
 /**
  * 聊天页面
@@ -35,7 +36,7 @@ export const ChatPage: React.FC = () => {
           setPersonalityId(personalities[0].id);
         }
       } catch (error) {
-        console.error('Failed to load personalities:', error);
+        showError(error, '加载人格列表失败');
       }
     };
     loadDefaultPersonality();
@@ -46,7 +47,7 @@ export const ChatPage: React.FC = () => {
   return (
     <MainLayout>
       <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
-        <ChatContainer
+        <EnhancedChatContainer
           sessionId={currentSessionId}
           personalityId={personalityId}
         />
