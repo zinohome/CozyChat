@@ -26,7 +26,7 @@ export const SessionList: React.FC<SessionListProps> = ({
   currentSessionId,
   onSessionSelect,
 }) => {
-  const { sessions, isLoading, createSession, deleteSession } = useSessions();
+  const { sessions, isLoading, createSession, deleteSession, updateSession } = useSessions();
 
   /**
    * 创建新会话
@@ -58,6 +58,14 @@ export const SessionList: React.FC<SessionListProps> = ({
     }
   };
 
+  /**
+   * 更新会话
+   */
+  const handleUpdateSession = async (session: Session) => {
+    // useSessions Hook已经处理了缓存更新，这里不需要额外操作
+    // 但可以触发重新获取以确保数据同步
+  };
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px', borderBottom: '1px solid #e8e8e8' }}>
@@ -87,6 +95,7 @@ export const SessionList: React.FC<SessionListProps> = ({
             isActive={session.id === currentSessionId}
             onSelect={() => onSessionSelect?.(session.id)}
             onDelete={() => handleDeleteSession(session.id)}
+            onUpdate={handleUpdateSession}
           />
         )}
       />

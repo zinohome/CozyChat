@@ -1,7 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { Chat } from '@chatui/core';
 import '@chatui/core/dist/index.css';
-import { useChat } from '../hooks/useChat';
+import { useQuery } from '@tanstack/react-query';
+import { useChatStore } from '@/store/slices/chatSlice';
+import { useStreamChat } from '../hooks/useStreamChat';
+import { chatApi } from '@/services/chat';
 import type { Message } from '@/types/chat';
 
 /**
@@ -17,13 +20,32 @@ interface ChatContainerProps {
 /**
  * 聊天容器组件
  *
- * 使用ChatUI核心组件构建聊天界面。
+ * 使用ChatUI核心组件构建聊天界面，支持流式响应。
  */
 export const ChatContainer: React.FC<ChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { messages, sendMessage, isLoading } = useChat(sessionId, personalityId);
+  const { messages, setMessages, isLoading, error } = useChatStore();
+  const { sendStreamMessage, isStreaming } = useStreamChat(sessionId, personalityId);
+
+  // 获取历史消息
+  const { isLoading: isLoadingHistory } = useQuery({
+    queryKey: ['chat', 'messages', sessionId],
+    queryFn: async () => {
+      if (!sessionId || sessionId === 'default') return [];
+      try {
+        const response = await chatApi.getHistory(sessionId);
+        setMessages(response);
+        return response;
+      } catch (error) {
+        console.error('Failed to load history:', error);
+        return [];
+      }
+    },
+    enabled: !!sessionId && sessionId !== 'default',
+    staleTime: 5 * 60 * 1000, // 5分钟
+  });
 
   /**
    * 处理发送消息
@@ -31,29 +53,35 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const handleSend = useCallback(
     async (type: string, val: string) => {
       if (type === 'text' && val.trim()) {
-        await sendMessage(val);
+        await sendStreamMessage(val);
       }
     },
-    [sendMessage]
+    [sendStreamMessage]
   );
 
   /**
    * 转换消息格式为ChatUI格式
    */
-  const chatUIMessages = messages.map((msg) => ({
-    _id: msg.id,
-    type: 'text',
-    content: { text: typeof msg.content === 'string' ? msg.content : msg.content.text || '' },
-    user: {
-      id: msg.role === 'user' ? 'user' : 'assistant',
-      avatar: msg.role === 'user' ? '👤' : '🤖',
-    },
-    createdAt: typeof msg.timestamp === 'string' 
-      ? new Date(msg.timestamp).getTime() 
-      : msg.timestamp instanceof Date 
-        ? msg.timestamp.getTime() 
-        : Date.now(),
-  }));
+  const chatUIMessages = messages.map((msg) => {
+    const content = typeof msg.content === 'string' 
+      ? msg.content 
+      : (msg.content as any)?.text || '';
+    
+    return {
+      _id: msg.id,
+      type: 'text' as const,
+      content: { text: content },
+      user: {
+        id: msg.role === 'user' ? 'user' : 'assistant',
+        avatar: msg.role === 'user' ? '👤' : '🤖',
+      },
+      createdAt: typeof msg.timestamp === 'string' 
+        ? new Date(msg.timestamp).getTime() 
+        : msg.timestamp instanceof Date 
+          ? msg.timestamp.getTime() 
+          : Date.now(),
+    };
+  });
 
   return (
     <Chat
@@ -64,7 +92,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       onSend={handleSend}
       placeholder="输入消息..."
       locale="zh-CN"
-      loading={isLoading}
+      loading={isLoading || isLoadingHistory || isStreaming}
     />
   );
 };
