@@ -99,3 +99,21 @@ export function showInfo(messageText: string): void {
   message.info(messageText);
 }
 
+/**
+ * 显示确认对话框
+ */
+export function showConfirm(
+  title: string,
+  content: string,
+  onOk: () => void | Promise<void>,
+  onCancel?: () => void
+): void {
+  const { Modal } = require('antd');
+  Modal.confirm({
+    title,
+    content,
+    onOk,
+    onCancel,
+  });
+}
+

@@ -13,7 +13,6 @@ import { showError } from '@/utils/errorHandler';
  */
 export const ChatPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId?: string }>();
-  const navigate = useNavigate();
   const { setCurrentSessionId } = useChatStore();
   const [personalityId, setPersonalityId] = useState<string>('default');
 

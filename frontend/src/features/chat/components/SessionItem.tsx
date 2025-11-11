@@ -67,11 +67,11 @@ export const SessionItem: React.FC<SessionItemProps> = ({
       const updatedSession = await sessionApi.updateSession(session.id, {
         title: editTitle.trim(),
       });
-      message.success('会话标题已更新');
+      showSuccess('会话标题已更新');
       setIsEditModalOpen(false);
       onUpdate?.(updatedSession);
     } catch (error: any) {
-      message.error(error.message || '更新会话失败');
+      showError(error, '更新会话失败');
     } finally {
       setIsUpdating(false);
     }

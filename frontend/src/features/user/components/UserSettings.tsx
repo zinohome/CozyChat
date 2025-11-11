@@ -17,14 +17,18 @@ export const UserSettings: React.FC = () => {
 
   // 更新用户资料Mutation
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<UserProfile>) =>
-      userApi.updateUserProfile(user!.id, data),
+    mutationFn: (data: Partial<UserProfile>) => {
+      if (!user?.id) {
+        throw new Error('用户未登录');
+      }
+      return userApi.updateUserProfile(user.id, data);
+    },
     onSuccess: () => {
       message.success('更新成功');
       queryClient.invalidateQueries({ queryKey: ['user', 'profile', user?.id] });
     },
-    onError: () => {
-      message.error('更新失败');
+    onError: (error: any) => {
+      message.error(error?.message || '更新失败');
     },
   });
 

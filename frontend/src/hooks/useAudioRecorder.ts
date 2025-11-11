@@ -167,6 +167,21 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
     }
   }, [status, duration]);
 
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [audioUrl]);
+
   return {
     status,
     isRecording: status === 'recording',

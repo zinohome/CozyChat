@@ -93,5 +93,26 @@ export const chatApi = {
       `/v1/chat/sessions/${sessionId}/messages`
     );
   },
+
+  /**
+   * 更新消息
+   */
+  async updateMessage(
+    sessionId: string,
+    messageId: string,
+    content: string
+  ): Promise<Message> {
+    return apiClient.put<Message>(
+      `/v1/chat/sessions/${sessionId}/messages/${messageId}`,
+      { content }
+    );
+  },
+
+  /**
+   * 删除消息
+   */
+  async deleteMessage(sessionId: string, messageId: string): Promise<void> {
+    return apiClient.delete(`/v1/chat/sessions/${sessionId}/messages/${messageId}`);
+  },
 };
 

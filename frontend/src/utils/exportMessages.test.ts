@@ -154,4 +154,3 @@ describe('exportMessagesAsCSV', () => {
     expect(result).toContain('user');
   });
 });
-

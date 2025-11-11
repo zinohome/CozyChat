@@ -50,7 +50,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         setMessages(response);
         return response;
       } catch (error) {
-        console.error('Failed to load history:', error);
+        showError(error, '加载历史消息失败');
         return [];
       }
     },

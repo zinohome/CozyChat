@@ -125,10 +125,8 @@ export const useStreamChat = (
         
         // 如果出错，删除占位符消息
         if (failedMessageId) {
-          const state = useChatStore.getState();
-          useChatStore.setState({
-            messages: state.messages.filter((msg) => msg.id !== failedMessageId),
-          });
+          const { removeMessage } = useChatStore.getState();
+          removeMessage(failedMessageId);
         }
       }
     },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -47,6 +47,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(content);
   const isMobile = useIsMobile();
+  const copyTimerRef = useRef<number | null>(null);
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   /**
    * 复制消息内容
@@ -56,7 +66,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       await navigator.clipboard.writeText(content);
       setCopied(true);
       showSuccess('已复制到剪贴板');
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       message.error('复制失败');
     }

@@ -102,25 +102,50 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
    * 处理删除消息
    */
   const handleDeleteMessage = useCallback(
-    (messageId: string) => {
+    async (messageId: string) => {
+      // 先更新UI
       removeMessage(messageId);
+
+      // 调用API删除后端消息
+      if (sessionId && sessionId !== 'default') {
+        try {
+          await chatApi.deleteMessage(sessionId, messageId);
+        } catch (error) {
+          // 如果删除失败，恢复消息
+          const message = messages.find((msg) => msg.id === messageId);
+          if (message) {
+            setMessages([...messages, message]);
+          }
+          showError(error, '删除消息失败');
+        }
+      }
     },
-    [removeMessage]
+    [removeMessage, sessionId, messages, setMessages]
   );
 
   /**
    * 处理编辑消息
    */
   const handleEditMessage = useCallback(
-    (messageId: string, newContent: string) => {
-      // 更新消息内容
+    async (messageId: string, newContent: string) => {
+      // 先更新UI
       const updatedMessages = messages.map((msg) =>
         msg.id === messageId ? { ...msg, content: newContent } : msg
       );
       setMessages(updatedMessages);
-      // TODO: 调用API更新后端消息
+
+      // 调用API更新后端消息
+      if (sessionId && sessionId !== 'default') {
+        try {
+          await chatApi.updateMessage(sessionId, messageId, newContent);
+        } catch (error) {
+          // 如果更新失败，恢复原内容
+          setMessages(messages);
+          showError(error, '更新消息失败');
+        }
+      }
     },
-    [messages, setMessages]
+    [messages, setMessages, sessionId]
   );
 
   return (
