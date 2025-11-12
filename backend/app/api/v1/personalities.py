@@ -163,7 +163,7 @@ async def get_personality(
             id=personality.id,
             name=personality.name,
             description=personality.description,
-            config=personality.to_dict(),
+            config=personality.to_config(),
             metadata=personality.metadata
         )
         
