@@ -7,6 +7,11 @@ import { devtools, persist } from 'zustand/middleware';
 export type ThemeName = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'cyan';
 
 /**
+ * 聊天背景样式类型
+ */
+export type ChatBackgroundStyle = 'gradient' | 'solid';
+
+/**
  * UI状态
  */
 interface UIState {
@@ -14,6 +19,7 @@ interface UIState {
   sidebarOpen: boolean;
   mobileMenuOpen: boolean;
   language: string;
+  chatBackgroundStyle: ChatBackgroundStyle;
 }
 
 /**
@@ -24,6 +30,7 @@ interface UIActions {
   setSidebarOpen: (open: boolean) => void;
   setMobileMenuOpen: (open: boolean) => void;
   setLanguage: (language: string) => void;
+  setChatBackgroundStyle: (style: ChatBackgroundStyle) => void;
   toggleSidebar: () => void;
   toggleMobileMenu: () => void;
 }
@@ -41,6 +48,7 @@ const initialState: UIState = {
   sidebarOpen: true,
   mobileMenuOpen: false,
   language: 'zh-CN',
+  chatBackgroundStyle: 'gradient',
 };
 
 /**
@@ -74,6 +82,11 @@ export const useUIStore = create<UIStore>()(
             language,
           }),
 
+        setChatBackgroundStyle: (style) =>
+          set({
+            chatBackgroundStyle: style,
+          }),
+
         toggleSidebar: () =>
           set((state) => ({
             sidebarOpen: !state.sidebarOpen,
@@ -89,6 +102,7 @@ export const useUIStore = create<UIStore>()(
         partialize: (state) => ({
           theme: state.theme,
           language: state.language,
+          chatBackgroundStyle: state.chatBackgroundStyle,
         }),
       }
     ),

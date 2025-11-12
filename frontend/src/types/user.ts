@@ -36,11 +36,17 @@ export interface UserProfile {
 }
 
 /**
+ * 聊天背景样式类型
+ */
+export type ChatBackgroundStyle = 'gradient' | 'solid';
+
+/**
  * 用户偏好
  */
 export interface UserPreferences {
   theme?: 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'cyan';
   language?: string;
+  chatBackgroundStyle?: ChatBackgroundStyle;
   notifications?: {
     email?: boolean;
     push?: boolean;

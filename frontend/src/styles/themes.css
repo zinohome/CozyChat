@@ -35,6 +35,9 @@
   /* Header渐变 - 优雅的蓝紫渐变 */
   --header-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   
+  /* 聊天背景渐变 - 柔和的蓝紫渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #f8f9ff 0%, #f0f2ff 50%, #e8ebff 100%);
+  
   /* 消息气泡 */
   --message-user-bg: #5e6ad2;
   --message-user-text: #ffffff;
@@ -77,6 +80,9 @@
   
   /* Header渐变 - 绿色到青色 */
   --header-gradient: linear-gradient(135deg, #22c55e 0%, #14b8a6 100%);
+  
+  /* 聊天背景渐变 - 清新的绿色渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 50%, #d1fae5 100%);
   
   /* 消息气泡 */
   --message-user-bg: #22c55e;
@@ -121,6 +127,9 @@
   /* Header渐变 - 紫色到粉色 */
   --header-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
   
+  /* 聊天背景渐变 - 优雅的紫色渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%);
+  
   /* 消息气泡 */
   --message-user-bg: #a855f7;
   --message-user-text: #ffffff;
@@ -163,6 +172,9 @@
   
   /* Header渐变 - 橙色到红色 */
   --header-gradient: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  
+  /* 聊天背景渐变 - 温暖的橙色渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%);
   
   /* 消息气泡 */
   --message-user-bg: #f97316;
@@ -207,6 +219,9 @@
   /* Header渐变 - 粉色到紫色 */
   --header-gradient: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
   
+  /* 聊天背景渐变 - 温柔的粉色渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 50%, #fbcfe8 100%);
+  
   /* 消息气泡 */
   --message-user-bg: #ec4899;
   --message-user-text: #ffffff;
@@ -249,6 +264,9 @@
   
   /* Header渐变 - 青色到蓝色 */
   --header-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  
+  /* 聊天背景渐变 - 清新的青色渐变 */
+  --chat-bg-gradient: linear-gradient(180deg, #ecfeff 0%, #cffafe 50%, #a5f3fc 100%);
   
   /* 消息气泡 */
   --message-user-bg: #06b6d4;

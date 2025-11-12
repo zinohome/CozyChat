@@ -157,6 +157,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         flexDirection: 'column',
         alignItems: isUser ? 'flex-end' : 'flex-start',
         marginBottom: '16px',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {/* 角色标识 */}
@@ -190,6 +193,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <div
         style={{
           maxWidth: isMobile ? '85%' : '75%',
+          width: 'fit-content',
           padding: isMobile ? '10px 12px' : '12px 16px',
           borderRadius: '12px',
           backgroundColor: isUser ? 'var(--message-user-bg)' : 'var(--message-assistant-bg)',
@@ -197,6 +201,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           position: 'relative',
           boxShadow: 'var(--shadow-sm)',
           transition: 'background-color 0.3s ease, color 0.3s ease',
+          boxSizing: 'border-box',
+          minWidth: 0, // 允许缩小
         }}
       >
         {/* Markdown内容 */}
@@ -205,6 +211,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               fontSize: '14px',
               lineHeight: '1.6',
               wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+              wordWrap: 'break-word',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
             }}
           >
             <ReactMarkdown

@@ -20,11 +20,11 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <ConfigProvider locale={zhCN}>
-        <QueryClientProvider client={queryClient}>
-          <App />
-        </QueryClientProvider>
-      </ConfigProvider>
+    <ConfigProvider locale={zhCN}>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </ConfigProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

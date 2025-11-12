@@ -95,6 +95,21 @@ input,
 textarea {
   font-family: inherit;
   outline: none;
+  box-sizing: border-box;
+}
+
+/* 防止代码块和图片导致横向滚动 */
+pre,
+code {
+  max-width: 100%;
+  overflow-x: auto;
+  word-break: break-word;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
 }
 
 /* 工具类 */

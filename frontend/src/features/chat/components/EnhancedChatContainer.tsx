@@ -6,6 +6,7 @@ import { useChatStore } from '@/store/slices/chatSlice';
 import { useStreamChat } from '../hooks/useStreamChat';
 import { useSessions } from '../hooks/useSessions';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
 import { MessageBubble } from './MessageBubble';
 import { showError } from '@/utils/errorHandler';
@@ -43,6 +44,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const inputRef = useRef<any>(null);
   const isMobile = useIsMobile();
   const [currentSessionId, setCurrentSessionIdLocal] = useState(sessionId);
+  const { chatBackgroundStyle } = useUIStore();
   
   // 使用动态的 sessionId 创建 sendStreamMessage
   const { sendStreamMessage, isStreaming } = useStreamChat(currentSessionId, personalityId);
@@ -329,10 +331,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     <div
       style={{
         height: '100%',
+        width: '100%',
+        maxWidth: '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'var(--bg-primary)',
-        overflow: 'hidden', // 防止外层出现滚动条
+        overflow: 'hidden',
         transition: 'background-color 0.3s ease',
       }}
     >
@@ -340,17 +344,23 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       <div
         style={{
           flex: 1,
+          minHeight: 0, // 关键：允许 flex 子元素缩小
           overflowY: 'auto',
-          overflowX: 'hidden', // 防止横向滚动条
+          overflowX: 'hidden',
           padding: isMobile ? '12px' : '16px',
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          // 自定义滚动条样式（隐藏滚动条但保持功能）
-          scrollbarWidth: 'thin', // Firefox
-          scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent', // Firefox
+          background:
+            chatBackgroundStyle === 'gradient'
+              ? 'var(--chat-bg-gradient)'
+              : 'var(--bg-primary)',
+          transition: 'background 0.3s ease',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
         }}
-        className="chat-messages-container" // 用于CSS样式
+        className="chat-messages-container"
       >
         {isLoadingHistory ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -391,12 +401,25 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       <div
         style={{
           borderTop: '1px solid var(--border-color)',
-          padding: '12px 16px',
+          padding: isMobile ? '8px 12px' : '12px 16px',
           backgroundColor: 'var(--bg-secondary)',
           transition: 'background-color 0.3s ease, border-color 0.3s ease',
+          flexShrink: 0,
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <div 
+          style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            alignItems: 'flex-end',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
           <TextArea
             ref={inputRef}
             value={inputValue}
@@ -405,7 +428,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             placeholder="输入消息... (Shift+Enter换行)"
             autoSize={{ minRows: 1, maxRows: 4 }}
             disabled={isLoading || isStreaming}
-            style={{ flex: 1 }}
+            style={{ 
+              flex: 1,
+              minWidth: 0, // 关键：允许 flex 子元素缩小
+              maxWidth: '100%',
+            }}
           />
           <Button
             type="primary"

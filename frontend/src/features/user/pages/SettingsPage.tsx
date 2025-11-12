@@ -3,9 +3,11 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { UserSettings } from '../components/UserSettings';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
-import { Card, Space, Divider, Button } from 'antd';
+import { Card, Space, Divider, Button, Select } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useUIStore } from '@/store/slices/uiSlice';
+import type { ChatBackgroundStyle } from '@/store/slices/uiSlice';
 
 /**
  * 设置页面
@@ -14,9 +16,14 @@ import { useNavigate } from 'react-router-dom';
  */
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { chatBackgroundStyle, setChatBackgroundStyle } = useUIStore();
 
   const handleClose = () => {
     navigate('/chat');
+  };
+
+  const handleChatBackgroundStyleChange = (value: ChatBackgroundStyle) => {
+    setChatBackgroundStyle(value);
   };
 
   return (
@@ -57,6 +64,18 @@ export const SettingsPage: React.FC = () => {
             <Space style={{ width: '100%', justifyContent: 'space-between' }}>
               <span>语言</span>
               <LanguageSwitcher />
+            </Space>
+            <Divider />
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+              <span>聊天背景</span>
+              <Select
+                value={chatBackgroundStyle}
+                onChange={handleChatBackgroundStyleChange}
+                style={{ width: 120 }}
+              >
+                <Select.Option value="gradient">渐变色</Select.Option>
+                <Select.Option value="solid">纯色</Select.Option>
+              </Select>
             </Space>
           </Space>
         </Card>

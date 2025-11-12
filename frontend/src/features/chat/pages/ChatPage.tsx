@@ -49,17 +49,19 @@ export const ChatPage: React.FC = () => {
 
   // 根据屏幕尺寸计算 padding（MainLayout Content 的 padding）
   const contentPadding = isMobile ? 12 : 24;
-  const paddingTotal = contentPadding * 2; // 上下各一个 padding
+  const paddingTotal = contentPadding * 2; // 左右各一个 padding
 
   return (
     <MainLayout>
       <div 
         style={{ 
-          height: `calc(100vh - 64px - ${paddingTotal}px)`, // 减去 header(64px) 和 Content padding
+          height: 'calc(100vh - 64px)',
           display: 'flex', 
           flexDirection: 'column',
-          overflow: 'hidden', // 防止外层出现滚动条
-          margin: `-${contentPadding}px`, // 抵消 MainLayout Content 的 padding
+          overflow: 'hidden',
+          margin: `-${contentPadding}px`,
+          width: `calc(100% + ${paddingTotal}px)`,
+          maxWidth: `calc(100% + ${paddingTotal}px)`,
         }}
       >
         <EnhancedChatContainer

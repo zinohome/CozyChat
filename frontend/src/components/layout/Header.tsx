@@ -81,15 +81,15 @@ export const Header: React.FC = () => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {shouldShowMenuButton && (
-          <Button
-            type="text"
-            icon={<MenuOutlined />}
-            onClick={toggleSidebar}
+        <Button
+          type="text"
+          icon={<MenuOutlined />}
+          onClick={toggleSidebar}
             style={{
               color: '#fff',
               fontSize: '18px',
             }}
-          />
+        />
         )}
         <div style={{ marginRight: '12px' }}>
           <Logo size={40} />

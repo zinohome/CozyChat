@@ -77,6 +77,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             minHeight: 'calc(100vh - 64px)',
             color: 'var(--text-primary)',
             transition: 'background-color 0.3s ease, color 0.3s ease',
+            position: 'relative', // 允许子元素使用 absolute 定位
           }}
         >
           {children}

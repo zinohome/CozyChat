@@ -38,7 +38,7 @@ export const ThemeSwitcher: React.FC = () => {
     >
       {themes.map((themeOption) => (
         <Select.Option key={themeOption.value} value={themeOption.value}>
-          <Space>
+    <Space>
             <span
               style={{
                 display: 'inline-block',
@@ -50,7 +50,7 @@ export const ThemeSwitcher: React.FC = () => {
               }}
             />
             {themeOption.label}
-          </Space>
+    </Space>
         </Select.Option>
       ))}
     </Select>

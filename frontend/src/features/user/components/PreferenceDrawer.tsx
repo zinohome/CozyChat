@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/slices/uiSlice';
 import { showError, showSuccess } from '@/utils/errorHandler';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import type { UserPreferences } from '@/types/user';
+import type { ChatBackgroundStyle } from '@/store/slices/uiSlice';
 
 /**
  * 偏好设置抽屉组件属性
@@ -29,7 +30,7 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
   onClose,
 }) => {
   const { user } = useAuthStore();
-  const { theme, setTheme, language, setLanguage } = useUIStore();
+  const { theme, setTheme, language, setLanguage, chatBackgroundStyle, setChatBackgroundStyle } = useUIStore();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<UserPreferences>();
 
@@ -52,9 +53,17 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
   // 初始化表单
   React.useEffect(() => {
     if (preferences) {
-      form.setFieldsValue(preferences);
+      form.setFieldsValue({
+        ...preferences,
+        chatBackgroundStyle: preferences.chatBackgroundStyle || chatBackgroundStyle,
+      });
+    } else {
+      // 如果没有偏好设置，使用当前UI状态
+      form.setFieldsValue({
+        chatBackgroundStyle,
+      });
     }
-  }, [preferences, form]);
+  }, [preferences, form, chatBackgroundStyle]);
 
   /**
    * 提交表单
@@ -68,6 +77,9 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
       }
       if (values.language) {
         setLanguage(values.language);
+      }
+      if (values.chatBackgroundStyle) {
+        setChatBackgroundStyle(values.chatBackgroundStyle);
       }
       showSuccess('偏好设置已保存');
       onClose();
@@ -105,6 +117,13 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
           <Select>
             <Select.Option value="zh-CN">中文</Select.Option>
             <Select.Option value="en-US">English</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item name="chatBackgroundStyle" label="聊天背景">
+          <Select value={chatBackgroundStyle} onChange={(value: ChatBackgroundStyle) => setChatBackgroundStyle(value)}>
+            <Select.Option value="gradient">渐变色</Select.Option>
+            <Select.Option value="solid">纯色</Select.Option>
           </Select>
         </Form.Item>
 
