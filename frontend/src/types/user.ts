@@ -39,7 +39,7 @@ export interface UserProfile {
  * 用户偏好
  */
 export interface UserPreferences {
-  theme?: 'light' | 'dark' | 'auto';
+  theme?: 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'cyan';
   language?: string;
   notifications?: {
     email?: boolean;

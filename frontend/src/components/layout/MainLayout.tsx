@@ -60,7 +60,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 top: 0,
                 bottom: 0,
                 width: '280px',
-                backgroundColor: '#fff',
+                backgroundColor: 'var(--bg-primary)',
                 boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -73,8 +73,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <Content
           style={{
             padding: isMobile ? '12px' : '24px',
-            background: '#fff',
+            background: 'var(--bg-primary)',
             minHeight: 'calc(100vh - 64px)',
+            color: 'var(--text-primary)',
+            transition: 'background-color 0.3s ease, color 0.3s ease',
           }}
         >
           {children}

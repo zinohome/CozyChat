@@ -2,10 +2,15 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 
 /**
+ * 主题类型
+ */
+export type ThemeName = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'cyan';
+
+/**
  * UI状态
  */
 interface UIState {
-  theme: 'light' | 'dark' | 'auto';
+  theme: ThemeName;
   sidebarOpen: boolean;
   mobileMenuOpen: boolean;
   language: string;
@@ -15,7 +20,7 @@ interface UIState {
  * UIActions
  */
 interface UIActions {
-  setTheme: (theme: 'light' | 'dark' | 'auto') => void;
+  setTheme: (theme: ThemeName) => void;
   setSidebarOpen: (open: boolean) => void;
   setMobileMenuOpen: (open: boolean) => void;
   setLanguage: (language: string) => void;
@@ -32,7 +37,7 @@ type UIStore = UIState & UIActions;
  * 初始状态
  */
 const initialState: UIState = {
-  theme: 'auto',
+  theme: 'blue',
   sidebarOpen: true,
   mobileMenuOpen: false,
   language: 'zh-CN',

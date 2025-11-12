@@ -1,0 +1,373 @@
+/**
+ * 主题系统样式
+ * 
+ * 精心设计的配色方案，参考现代应用和设计系统
+ */
+
+/* ===== 蓝色主题（Linear风格） ===== */
+:root,
+[data-theme='blue'] {
+  /* 主色调 - 现代蓝色系 */
+  --primary-color: #5e6ad2;
+  --primary-hover: #4c56c4;
+  --primary-active: #3d46b8;
+  
+  /* 背景色 - 温暖的白色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 优雅的蓝紫渐变 */
+  --header-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #5e6ad2;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 绿色主题（自然清新） ===== */
+[data-theme='green'] {
+  /* 主色调 - 清新绿色系 */
+  --primary-color: #22c55e;
+  --primary-hover: #16a34a;
+  --primary-active: #15803d;
+  
+  /* 背景色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 绿色到青色 */
+  --header-gradient: linear-gradient(135deg, #22c55e 0%, #14b8a6 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #22c55e;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 紫色主题（Discord风格） ===== */
+[data-theme='purple'] {
+  /* 主色调 - 优雅紫色系 */
+  --primary-color: #a855f7;
+  --primary-hover: #9333ea;
+  --primary-active: #7e22ce;
+  
+  /* 背景色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 紫色到粉色 */
+  --header-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #a855f7;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 橙色主题（温暖活力） ===== */
+[data-theme='orange'] {
+  /* 主色调 - 温暖橙色系 */
+  --primary-color: #f97316;
+  --primary-hover: #ea580c;
+  --primary-active: #c2410c;
+  
+  /* 背景色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 橙色到红色 */
+  --header-gradient: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #f97316;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 粉色主题（温柔浪漫） ===== */
+[data-theme='pink'] {
+  /* 主色调 - 温柔粉色系 */
+  --primary-color: #ec4899;
+  --primary-hover: #db2777;
+  --primary-active: #be185d;
+  
+  /* 背景色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 粉色到紫色 */
+  --header-gradient: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #ec4899;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 青色主题（清新科技） ===== */
+[data-theme='cyan'] {
+  /* 主色调 - 清新青色系 */
+  --primary-color: #06b6d4;
+  --primary-hover: #0891b2;
+  --primary-active: #0e7490;
+  
+  /* 背景色 */
+  --bg-primary: #fbfbfb;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #eaeaec;
+  
+  /* 文本色 */
+  --text-primary: #0d0d0d;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+  
+  /* 边框色 */
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  
+  /* Header渐变 - 青色到蓝色 */
+  --header-gradient: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  
+  /* 消息气泡 */
+  --message-user-bg: #06b6d4;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #ffffff;
+  --message-assistant-text: #0d0d0d;
+  
+  /* 功能色 */
+  --success-color: #22c55e;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+}
+
+/* ===== 主题应用 ===== */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ant Design 主题覆盖 */
+.ant-layout {
+  background: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+.ant-layout-header {
+  background: var(--header-gradient) !important;
+  transition: background 0.3s ease;
+}
+
+.ant-layout-sider {
+  background: var(--bg-primary) !important;
+  border-right: 1px solid var(--border-color) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.ant-layout-content {
+  background: var(--bg-primary) !important;
+  transition: background-color 0.3s ease;
+}
+
+.ant-card {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.ant-card-head {
+  border-bottom-color: var(--border-color);
+  transition: border-color 0.3s ease;
+}
+
+.ant-card-head-title {
+  color: var(--text-primary);
+}
+
+.ant-input,
+.ant-input-affix-wrapper {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.ant-input:focus,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: var(--primary-color);
+}
+
+.ant-btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.ant-btn-primary:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.ant-btn-primary:active {
+  background-color: var(--primary-active);
+  border-color: var(--primary-active);
+}
+
+/* 下拉菜单主题适配 */
+.ant-dropdown-menu {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
+
+.ant-dropdown-menu-item {
+  color: var(--text-primary);
+}
+
+.ant-dropdown-menu-item:hover {
+  background: var(--bg-secondary);
+}
+
+/* 选择器主题适配 */
+.ant-select-selector {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.ant-select-selection-item {
+  color: var(--text-primary) !important;
+}
+
+/* 文本区域主题适配 */
+.ant-input {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.ant-input::placeholder {
+  color: var(--text-tertiary);
+}

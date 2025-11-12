@@ -10,19 +10,25 @@ import { useAuthStore } from '@/store/slices/authSlice';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { Logo } from './Logo';
 
 const { Header: AntHeader } = Layout;
 
 /**
  * 顶部导航组件
  *
- * 显示应用标题、用户信息和导航菜单。
+ * 显示应用标题、Logo、用户信息和导航菜单。
  */
 export const Header: React.FC = () => {
   const { user } = useAuthStore();
-  const { toggleSidebar, toggleMobileMenu } = useUIStore();
+  const { toggleSidebar, sidebarOpen } = useUIStore();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  
+  // 在窄屏幕下，只有当侧边栏打开时才显示切换按钮
+  const shouldShowMenuButton = !isMobile || (isMobile && sidebarOpen);
 
   const handleLogout = async () => {
     try {
@@ -66,17 +72,37 @@ export const Header: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 24px',
-        background: '#fff',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        background: 'var(--header-gradient)',
+        boxShadow: 'var(--shadow-md)',
+        height: '64px',
+        lineHeight: '64px',
+        backdropFilter: 'blur(10px)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <Button
-          type="text"
-          icon={<MenuOutlined />}
-          onClick={toggleSidebar}
-        />
-        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {shouldShowMenuButton && (
+          <Button
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={toggleSidebar}
+            style={{
+              color: '#fff',
+              fontSize: '18px',
+            }}
+          />
+        )}
+        <div style={{ marginRight: '12px' }}>
+          <Logo size={40} />
+        </div>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: '20px',
+            fontWeight: 'bold',
+            color: '#fff',
+            textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+          }}
+        >
           CozyChat
         </h1>
       </div>
@@ -85,12 +111,28 @@ export const Header: React.FC = () => {
         {user ? (
           <Dropdown menu={userMenu} placement="bottomRight">
             <Space style={{ cursor: 'pointer' }}>
-              <Avatar icon={<UserOutlined />} />
-              <span>{user.username}</span>
+              <Avatar
+                icon={<UserOutlined />}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                }}
+              />
+              <span style={{ color: '#fff', fontWeight: 500 }}>
+                {user.username}
+              </span>
             </Space>
           </Dropdown>
         ) : (
-          <Button type="primary" onClick={() => navigate('/login')}>
+          <Button
+            type="primary"
+            onClick={() => navigate('/login')}
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              borderColor: 'rgba(255,255,255,0.3)',
+              color: '#fff',
+            }}
+          >
             登录
           </Button>
         )}

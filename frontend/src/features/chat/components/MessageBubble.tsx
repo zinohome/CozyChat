@@ -167,7 +167,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           gap: '6px',
           marginBottom: '6px',
           fontSize: '13px',
-          color: '#666',
+          color: 'var(--text-secondary)',
           paddingLeft: isUser ? '0' : '4px',
           paddingRight: isUser ? '4px' : '0',
           justifyContent: isUser ? 'flex-end' : 'flex-start',
@@ -192,9 +192,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           maxWidth: isMobile ? '85%' : '75%',
           padding: isMobile ? '10px 12px' : '12px 16px',
           borderRadius: '12px',
-          backgroundColor: isUser ? '#1890ff' : '#f0f0f0',
-          color: isUser ? '#fff' : '#000',
+          backgroundColor: isUser ? 'var(--message-user-bg)' : 'var(--message-assistant-bg)',
+          color: isUser ? 'var(--message-user-text)' : 'var(--message-assistant-text)',
           position: 'relative',
+          boxShadow: 'var(--shadow-sm)',
+          transition: 'background-color 0.3s ease, color 0.3s ease',
         }}
       >
         {/* Markdown内容 */}
@@ -230,11 +232,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <code
                     className={className}
                     style={{
-                      backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : '#e6f7ff',
+                      backgroundColor: isUser 
+                        ? 'rgba(255,255,255,0.2)' 
+                        : 'var(--bg-secondary)',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '13px',
                       fontFamily: 'monospace',
+                      color: isUser ? 'inherit' : 'var(--text-primary)',
                     }}
                     {...props}
                   >
@@ -250,7 +255,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
-                      color: isUser ? '#fff' : '#1890ff',
+                      color: isUser ? 'var(--message-user-text)' : 'var(--primary-color)',
                       textDecoration: 'underline',
                     }}
                   />
@@ -306,7 +311,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   icon={copied ? <CheckOutlined /> : <CopyOutlined />}
                   onClick={handleCopy}
                   style={{
-                    color: isUser ? 'rgba(255,255,255,0.8)' : '#666',
+                    color: isUser ? 'rgba(255,255,255,0.8)' : 'var(--text-secondary)',
                     padding: '0 4px',
                     minWidth: 'auto',
                     height: 'auto',
@@ -322,7 +327,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     onClick={handleDelete}
                     danger
                     style={{
-                      color: isUser ? 'rgba(255,255,255,0.8)' : '#ff4d4f',
+                      color: isUser ? 'rgba(255,255,255,0.8)' : 'var(--error-color)',
                       padding: '0 4px',
                       minWidth: 'auto',
                       height: 'auto',

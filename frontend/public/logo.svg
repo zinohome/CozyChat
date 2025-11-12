@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 40 40">
+  <defs>
+    <linearGradient id="favicon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5e6ad2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4c56c4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 简洁的对话气泡 - 优雅设计 -->
+  <path
+    d="M8 12C8 9.79 9.79 8 12 8H20C22.21 8 24 9.79 24 12V18C24 20.21 22.21 22 20 22H16L12 26V22C9.79 22 8 20.21 8 18V12Z"
+    fill="url(#favicon-gradient)"
+    rx="4"
+  />
+  
+  <!-- 内部装饰 - 三个小圆点 -->
+  <circle cx="14" cy="15" r="1.5" fill="white" opacity="0.9" />
+  <circle cx="16" cy="15" r="1.5" fill="white" opacity="0.9" />
+  <circle cx="18" cy="15" r="1.5" fill="white" opacity="0.9" />
+</svg>

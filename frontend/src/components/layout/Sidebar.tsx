@@ -1,47 +1,55 @@
-import React, { useState } from 'react';
-import { Layout, Menu, Tabs } from 'antd';
-import {
-  MessageOutlined,
-  SettingOutlined,
-} from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Layout, Button, Space } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { SessionList } from '@/features/chat/components/SessionList';
+import { useSessions } from '@/features/chat/hooks/useSessions';
+import { personalityApi } from '@/services/personality';
+import { showError } from '@/utils/errorHandler';
 
 const { Sider } = Layout;
 
 /**
  * 侧边栏组件
  *
- * 显示导航菜单和会话列表。
+ * 显示会话列表（已简化，移除重复菜单）。
  */
 export const Sidebar: React.FC = () => {
-  const navigate = useNavigate();
   const location = useLocation();
+  const navigate = useNavigate();
   const { sidebarOpen } = useUIStore();
-  const [activeTab, setActiveTab] = useState('sessions');
+  const { createSession } = useSessions();
   
   // 从URL路径中提取sessionId
   const sessionId = location.pathname.startsWith('/chat/')
     ? location.pathname.split('/chat/')[1] || undefined
     : undefined;
 
-  const menuItems = [
-    {
-      key: '/chat',
-      icon: <MessageOutlined />,
-      label: '聊天',
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: '设置',
-    },
-  ];
+  const [personalityId, setPersonalityId] = useState<string>('default');
+  const [isLoadingPersonality, setIsLoadingPersonality] = useState(true);
 
-  const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key);
-  };
+  // 获取默认人格ID（优先使用 health_assistant）
+  useEffect(() => {
+    const loadDefaultPersonality = async () => {
+      try {
+        setIsLoadingPersonality(true);
+        const personalities = await personalityApi.getPersonalities();
+        if (personalities.length > 0) {
+          const healthAssistant = personalities.find(p => p.id === 'health_assistant');
+          setPersonalityId(healthAssistant?.id || personalities[0].id);
+        } else {
+          setPersonalityId('default');
+        }
+      } catch (error) {
+        console.warn('Failed to load personalities, using default:', error);
+        setPersonalityId('default');
+      } finally {
+        setIsLoadingPersonality(false);
+      }
+    };
+    loadDefaultPersonality();
+  }, []);
 
   const handleSessionSelect = (selectedSessionId: string) => {
     if (selectedSessionId) {
@@ -51,53 +59,86 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  /**
+   * 创建新会话
+   */
+  const handleCreateSession = async () => {
+    if (isLoadingPersonality) {
+      showError(new Error('正在加载人格信息，请稍候...'), '创建会话失败');
+      return;
+    }
+
+    if (!personalityId) {
+      showError(new Error('未找到可用的人格，无法创建会话'), '创建会话失败');
+      return;
+    }
+
+    try {
+      const newSession = await createSession({
+        title: '新会话',
+        personality_id: personalityId,
+      });
+      if (newSession.id) {
+        handleSessionSelect(newSession.id);
+      }
+    } catch (error) {
+      showError(error, '创建会话失败');
+    }
+  };
+
   if (!sidebarOpen) {
     return null;
   }
-
-  const tabItems = [
-    {
-      key: 'sessions',
-      label: '会话',
-      children: (
-        <SessionList
-          currentSessionId={sessionId}
-          onSessionSelect={handleSessionSelect}
-        />
-      ),
-    },
-    {
-      key: 'menu',
-      label: '菜单',
-      children: (
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          onClick={handleMenuClick}
-          style={{ borderRight: 0 }}
-        />
-      ),
-    },
-  ];
 
   return (
     <Sider
       width={280}
       style={{
-        background: '#fff',
-        borderRight: '1px solid #e8e8e8',
+        background: 'var(--bg-primary)',
+        borderRight: '1px solid var(--border-color)',
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
+        transition: 'background-color 0.3s ease, border-color 0.3s ease',
       }}
     >
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
-        tabBarStyle={{ margin: 0, padding: '0 16px' }}
-      />
+      <div
+        style={{
+          padding: '16px',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          transition: 'border-color 0.3s ease',
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 'bold',
+            fontSize: '16px',
+            color: 'var(--text-primary)',
+            transition: 'color 0.3s ease',
+          }}
+        >
+          会话列表
+        </span>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreateSession}
+          size="small"
+          loading={isLoadingPersonality}
+          disabled={isLoadingPersonality || !personalityId}
+        >
+          新建
+        </Button>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <SessionList
+          currentSessionId={sessionId}
+          onSessionSelect={handleSessionSelect}
+        />
+      </div>
     </Sider>
   );
 };

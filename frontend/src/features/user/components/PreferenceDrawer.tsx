@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from '@/services/user';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { showError, showSuccess } from '@/utils/errorHandler';
+import { ThemeSwitcher } from './ThemeSwitcher';
 import type { UserPreferences } from '@/types/user';
 
 /**
@@ -97,11 +98,7 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
         loading={isLoading}
       >
         <Form.Item name="theme" label="主题">
-          <Select>
-            <Select.Option value="light">亮色</Select.Option>
-            <Select.Option value="dark">暗色</Select.Option>
-            <Select.Option value="auto">跟随系统</Select.Option>
-          </Select>
+          <ThemeSwitcher />
         </Form.Item>
 
         <Form.Item name="language" label="语言">

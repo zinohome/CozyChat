@@ -39,6 +39,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -55,12 +56,13 @@ body {
 }
 
 .chat-messages-container::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--border-color);
   border-radius: 3px;
+  transition: background 0.2s ease;
 }
 
 .chat-messages-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--text-tertiary);
 }
 
 /* 链接样式 */

@@ -4,7 +4,9 @@ import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
+import { ThemeProvider } from './components/ThemeProvider';
 import './styles/globals.css';
+import './styles/themes.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,11 +19,13 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ConfigProvider locale={zhCN}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </ConfigProvider>
+    <ThemeProvider>
+      <ConfigProvider locale={zhCN}>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </ConfigProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
 

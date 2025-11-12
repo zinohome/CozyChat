@@ -117,15 +117,16 @@ export const SessionItem: React.FC<SessionItemProps> = ({
         style={{
           padding: '12px 16px',
           cursor: 'pointer',
-          backgroundColor: isActive ? '#f0f0f0' : 'transparent',
-          borderLeft: isActive ? '3px solid #1890ff' : '3px solid transparent',
+          backgroundColor: isActive ? 'var(--bg-secondary)' : 'transparent',
+          borderLeft: isActive ? '3px solid var(--primary-color)' : '3px solid transparent',
+          transition: 'background-color 0.2s ease, border-color 0.2s ease',
         }}
         onClick={onSelect}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#f5f5f5';
+          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = isActive ? '#f0f0f0' : 'transparent';
+          e.currentTarget.style.backgroundColor = isActive ? 'var(--bg-secondary)' : 'transparent';
         }}
       >
         <div style={{ width: '100%' }}>

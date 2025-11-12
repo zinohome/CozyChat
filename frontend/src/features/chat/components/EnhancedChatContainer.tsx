@@ -331,8 +331,9 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#fff',
+        backgroundColor: 'var(--bg-primary)',
         overflow: 'hidden', // 防止外层出现滚动条
+        transition: 'background-color 0.3s ease',
       }}
     >
       {/* 消息列表 */}
@@ -360,7 +361,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             style={{
               textAlign: 'center',
               padding: '40px',
-              color: '#999',
+              color: 'var(--text-tertiary)',
             }}
           >
             开始对话吧！
@@ -389,9 +390,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       {/* 输入区域 */}
       <div
         style={{
-          borderTop: '1px solid #e8e8e8',
+          borderTop: '1px solid var(--border-color)',
           padding: '12px 16px',
-          backgroundColor: '#fafafa',
+          backgroundColor: 'var(--bg-secondary)',
+          transition: 'background-color 0.3s ease, border-color 0.3s ease',
         }}
       >
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>

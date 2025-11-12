@@ -7,17 +7,6 @@
   --warning-color: #f59e0b;
   --info-color: #3b82f6;
   
-  /* Backgrounds */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-tertiary: #f1f5f9;
-  --hover-bg: #f1f5f9;
-  
-  /* Text */
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-tertiary: #94a3b8;
-  
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -30,12 +19,6 @@
   --border-radius: 8px;
   --border-radius-sm: 4px;
   --border-radius-lg: 12px;
-  --border-color: #e2e8f0;
-  
-  /* Shadow */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
   
   /* Z-index */
   --z-dropdown: 1000;
@@ -47,17 +30,5 @@
   --z-tooltip: 1070;
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --hover-bg: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-tertiary: #64748b;
-    --border-color: #334155;
-  }
-}
+/* 注意：主题相关的变量已移至 themes.css */
 
