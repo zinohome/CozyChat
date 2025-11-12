@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import get_current_active_user
 from app.engines.ai import AIEngineFactory, AIEngineRegistry
 from app.models.user import User
+from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
 
 router = APIRouter(tags=["models"])
@@ -60,6 +61,10 @@ async def list_models(
         ModelsListResponse: 模型列表
     """
     try:
+        # 清除配置缓存，确保获取最新配置
+        config_loader = get_config_loader()
+        config_loader.clear_cache()
+        
         # 获取所有已注册的引擎
         engines = AIEngineRegistry.list_engines()
         

@@ -6,13 +6,19 @@ engine:
   
   # 默认配置
   default:
-    model: "gpt-3.5-turbo"
+    model: "gpt-4.1"
     temperature: 0.7
     max_tokens: 2048
-    base_url: null  # 使用默认，或自定义如 "https://api.openai.com/v1"
+    base_url: "https://oneapi.naivehero.top/v1"  # 使用默认，或自定义如 "https://api.openai.com/v1"
   
   # 支持的模型列表
   models:
+    - name: "gpt-4.1"
+      display_name: "GPT-4"
+      max_tokens: 8192
+      supports_streaming: true
+      supports_function_calling: true
+
     - name: "gpt-4"
       display_name: "GPT-4"
       max_tokens: 8192

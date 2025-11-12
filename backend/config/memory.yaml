@@ -19,7 +19,7 @@ memory:
   # Qdrant配置（待实现）
   qdrant:
     engine: "qdrant"
-    url: "http://localhost:6333"
+    url: "http://192.168.66.10:6333"
     collection_name: "cozychat_memories"
     # 向量化配置
     embedding:

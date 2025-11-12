@@ -20,8 +20,6 @@ from app.schemas.chat import (
     ChatCompletionResponse,
     ChatCompletionUsage,
     EngineListResponse,
-    ModelInfo,
-    ModelListResponse,
 )
 from app.utils.logger import logger
 
@@ -166,48 +164,6 @@ async def list_engines() -> EngineListResponse:
         )
 
 
-@router.get("/models", response_model=ModelListResponse)
-async def list_models() -> ModelListResponse:
-    """列出所有可用模型（OpenAI兼容接口）
-    
-    Returns:
-        ModelListResponse: 模型列表
-    """
-    # 定义可用模型
-    models = [
-        ModelInfo(
-            id="gpt-4",
-            engine_type="openai",
-            description="GPT-4模型，最强大的语言模型",
-            context_window=8192,
-            supports_tools=True,
-            supports_vision=True
-        ),
-        ModelInfo(
-            id="gpt-3.5-turbo",
-            engine_type="openai",
-            description="GPT-3.5 Turbo模型，快速且经济",
-            context_window=4096,
-            supports_tools=True,
-            supports_vision=False
-        ),
-        ModelInfo(
-            id="llama2",
-            engine_type="ollama",
-            description="Llama2本地模型",
-            context_window=4096,
-            supports_tools=False,
-            supports_vision=False
-        ),
-        ModelInfo(
-            id="mistral",
-            engine_type="ollama",
-            description="Mistral本地模型",
-            context_window=8192,
-            supports_tools=False,
-            supports_vision=False
-        ),
-    ]
-    
-    return ModelListResponse(data=models)
+# 注意：模型列表端点已移至 /v1/models（models.py）
+# 这里不再提供 /v1/chat/models 端点，请使用 /v1/models
 

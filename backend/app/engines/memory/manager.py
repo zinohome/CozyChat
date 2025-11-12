@@ -69,8 +69,8 @@ class MemoryManager:
                 engine_config = memory_config.get(default_engine, {})
                 
                 if default_engine == "chromadb":
-                    persist_directory = engine_config.get("persist_directory", "./data/chroma")
-                    engine = ChromaDBMemoryEngine(persist_directory=persist_directory)
+                    # ChromaDBMemoryEngine 接受 config 字典，不是 persist_directory 关键字参数
+                    engine = ChromaDBMemoryEngine(config=engine_config)
                 else:
                     # 其他引擎待实现
                     logger.warning(f"Engine {default_engine} not implemented, using ChromaDB")

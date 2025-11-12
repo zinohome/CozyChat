@@ -13,6 +13,7 @@ from openai import AsyncOpenAI, APIError, OpenAIError
 
 # 本地库
 from app.config.config import settings
+from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
 from .base import AIEngineBase, ChatMessage, ChatResponse, StreamChunk
 
@@ -55,10 +56,38 @@ class OpenAIEngine(AIEngineBase):
             base_url=self.base_url
         )
         
+        # 加载配置以获取支持的模型列表
+        self._supported_models: Optional[List[str]] = None
+        try:
+            config_loader = get_config_loader()
+            engine_config = config_loader.load_engine_config("openai")
+            models_config = engine_config.get("models", [])
+            if models_config:
+                # 从配置中提取模型名称列表
+                self._supported_models = [
+                    model_item.get("name") 
+                    for model_item in models_config 
+                    if isinstance(model_item, dict) and "name" in model_item
+                ]
+        except Exception as e:
+            logger.warning(f"Failed to load model list from config: {e}")
+            self._supported_models = None
+        
         logger.info(
             f"OpenAI engine initialized with model {model}",
             extra={"model": model, "base_url": self.base_url}
         )
+    
+    def list_models(self) -> List[str]:
+        """获取支持的模型列表
+        
+        Returns:
+            List[str]: 支持的模型名称列表
+        """
+        if self._supported_models:
+            return self._supported_models
+        # 如果没有配置，返回当前模型
+        return [self.model] if self.model else []
     
     async def chat(
         self,

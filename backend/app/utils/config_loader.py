@@ -93,7 +93,8 @@ class ConfigLoader:
         """
         file_path = self.config_dir / "models" / f"{engine_name}.yaml"
         config = self.load_yaml(file_path)
-        return config.get("engine", {})
+        # 返回 engine 配置，如果没有则返回整个配置
+        return config.get("engine", config)
     
     def load_tool_config(self) -> Dict[str, Any]:
         """加载工具配置

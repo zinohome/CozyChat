@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 # 本地库
 from app.config.config import settings
+from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
 from .base import AIEngineBase
 from .ollama_engine import OllamaEngine

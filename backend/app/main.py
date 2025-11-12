@@ -11,7 +11,8 @@ from pathlib import Path
 # 第三方库
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 # 本地库
@@ -111,58 +112,23 @@ async def global_exception_handler(request, exc: Exception):
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     """自定义 Swagger UI，使用本地静态文件"""
-    return HTMLResponse(
-        content=f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{settings.app_name} - API Documentation</title>
-    <link rel="stylesheet" type="text/css" href="/static/swagger-ui/swagger-ui.css" />
-    <style>
-        html {{
-            box-sizing: border-box;
-            overflow: -moz-scrollbars-vertical;
-            overflow-y: scroll;
-        }}
-        *, *:before, *:after {{
-            box-sizing: inherit;
-        }}
-        body {{
-            margin:0;
-            background: #fafafa;
-        }}
-    </style>
-</head>
-<body>
-    <div id="swagger-ui"></div>
-    <script src="/static/swagger-ui/swagger-ui-bundle.js"></script>
-    <script>
-        window.onload = function() {{
-            window.ui = SwaggerUIBundle({{
-                url: "/openapi.json",
-                dom_id: '#swagger-ui',
-                presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIBundle.presets.standalone
-                ],
-                layout: "StandaloneLayout",
-                deepLinking: true,
-                showExtensions: true,
-                showCommonExtensions: true
-            }});
-        }};
-    </script>
-</body>
-</html>
-        """,
-        status_code=200
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{settings.app_name} - API Documentation",
+        swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger-ui/swagger-ui.css",
+        swagger_ui_parameters={
+            "deepLinking": True,
+            "showExtensions": True,
+            "showCommonExtensions": True,
+        }
     )
 
 
 # ===== 自定义 ReDoc 路由 =====
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc_html():
-    """自定义 ReDoc，使用本地静态文件"""
+    """自定义 ReDoc，使用本地静态文件，完全禁用字体加载"""
     return HTMLResponse(
         content=f"""
 <!DOCTYPE html>
@@ -171,13 +137,61 @@ async def custom_redoc_html():
     <title>{settings.app_name} - API Documentation</title>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- 使用系统默认字体，避免依赖外部 CDN -->
     <style>
         body {{
             margin: 0;
             padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }}
+        /* 覆盖 ReDoc 的字体设置，使用系统字体 */
+        * {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
         }}
     </style>
+    <script>
+        // 在 ReDoc 加载之前拦截所有字体文件请求
+        (function() {{
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {{
+                const url = args[0];
+                if (typeof url === 'string' && (url.includes('.woff') || url.includes('.woff2'))) {{
+                    console.warn('Font file request blocked:', url);
+                    return Promise.reject(new Error('Font loading disabled'));
+                }}
+                return originalFetch.apply(this, args);
+            }};
+            
+            // 拦截动态创建的 link 标签
+            const originalCreateElement = document.createElement;
+            document.createElement = function(tagName) {{
+                const element = originalCreateElement.call(document, tagName);
+                if (tagName.toLowerCase() === 'link') {{
+                    const originalSetAttribute = element.setAttribute;
+                    element.setAttribute = function(name, value) {{
+                        if (name === 'href' && (value.includes('.woff') || value.includes('.woff2'))) {{
+                            console.warn('Font link blocked:', value);
+                            return;
+                        }}
+                        return originalSetAttribute.call(this, name, value);
+                    }};
+                }}
+                return element;
+            }};
+            
+            // 拦截错误事件，忽略字体加载错误
+            window.addEventListener('error', function(e) {{
+                if (e.target && (
+                    (e.target.tagName === 'LINK' && e.target.href && (e.target.href.includes('.woff') || e.target.href.includes('.woff2'))) ||
+                    (e.target.tagName === 'STYLE' && e.target.textContent && (e.target.textContent.includes('.woff') || e.target.textContent.includes('.woff2')))
+                )) {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }}
+            }}, true);
+        }})();
+    </script>
 </head>
 <body>
     <redoc spec-url="/openapi.json"></redoc>
@@ -187,6 +201,17 @@ async def custom_redoc_html():
         """,
         status_code=200
     )
+
+
+# ===== Favicon 路由 =====
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """提供 favicon 图标"""
+    favicon_path = STATIC_DIR / "favicon" / "favicon.ico"
+    if favicon_path.exists():
+        return FileResponse(str(favicon_path))
+    # 如果没有 favicon，返回 204 No Content
+    return JSONResponse(content=None, status_code=204)
 
 
 # ===== 注册路由 =====
