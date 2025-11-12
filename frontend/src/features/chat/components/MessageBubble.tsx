@@ -4,7 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button, Space, Tooltip, message } from 'antd';
-import { CopyOutlined, DeleteOutlined, CheckOutlined, UserOutlined, RobotOutlined, SoundOutlined, PauseOutlined } from '@ant-design/icons';
+import { CopyOutlined, DeleteOutlined, CheckOutlined, UserOutlined, SoundOutlined, PauseOutlined } from '@ant-design/icons';
 import { format } from 'date-fns';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { showSuccess, showError } from '@/utils/errorHandler';
@@ -279,7 +279,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </>
         ) : (
           <>
-            <RobotOutlined style={{ fontSize: '14px' }} />
+            <img
+              src="/assistant-icon.ico"
+              alt="助手"
+              style={{
+                width: '24px',
+                height: '24px',
+                objectFit: 'contain',
+                backgroundColor: 'transparent',
+                background: 'transparent',
+                mixBlendMode: 'multiply',
+              }}
+            />
             <span>助手</span>
           </>
         )}

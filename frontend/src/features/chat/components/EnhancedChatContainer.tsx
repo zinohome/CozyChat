@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Input, Spin } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { SendOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { useStreamChat } from '../hooks/useStreamChat';
@@ -659,6 +659,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 flex: 1,
                 minWidth: 0,
                 maxWidth: '100%',
+                minHeight: '36px',
+                height: '36px',
+                lineHeight: '24px',
+                paddingTop: '6px',
+                paddingBottom: '6px',
+                boxSizing: 'border-box',
               }}
             />
           )}
@@ -709,6 +715,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 flex: 1,
                 minWidth: 0,
                 maxWidth: '100%',
+                minHeight: '36px',
+                height: '36px',
+                lineHeight: '24px',
+                paddingTop: '6px',
+                paddingBottom: '6px',
+                boxSizing: 'border-box',
                 cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
                 backgroundColor: isRecording 
                   ? 'var(--error-color)' 
@@ -771,6 +783,40 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             ) : (
               <SendOutlined style={{ fontSize: '18px', color: 'white' }} />
             )}
+          </button>
+
+          {/* 语音通话按钮 */}
+          <button
+            type="button"
+            onClick={() => {
+              // TODO: 实现语音通话功能
+              console.log('语音通话功能待实现');
+            }}
+            style={{
+              flexShrink: 0,
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '8px',
+              backgroundColor: 'var(--primary-color)',
+              cursor: 'pointer',
+              color: 'white',
+              transition: 'background-color 0.2s ease',
+              padding: 0,
+              outline: 'none',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--primary-color)';
+            }}
+            title="语音通话"
+          >
+            <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
           </button>
         </div>
       </div>
