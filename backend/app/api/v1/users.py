@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 # 本地库
 from app.api.deps import get_current_active_user, get_sync_session
+from app.config.config import settings
 from app.core.user.manager import UserManager
 from app.core.user.profile import UserProfileManager
 from app.core.user.stats import UserStatsManager
@@ -93,7 +94,21 @@ async def register_user(
         
     Returns:
         Dict[str, Any]: 注册结果
+        
+    Raises:
+        HTTPException: 如果注册被禁用或注册失败
     """
+    # 检查是否允许注册
+    if not settings.allow_registration:
+        logger.warning(
+            "Registration attempt blocked",
+            extra={"username": request.username, "email": request.email}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="用户注册功能已禁用，请联系管理员"
+        )
+    
     try:
         manager = UserManager(db)
         user = await manager.register_user(

@@ -87,32 +87,43 @@ export const chatApi = {
 
   /**
    * 获取历史消息
+   * 
+   * 注意：后端没有单独的消息列表接口，消息通过会话详情接口返回
+   * 这里使用会话API获取消息
    */
   async getHistory(sessionId: string): Promise<Message[]> {
-    return apiClient.get<Message[]>(
-      `/v1/chat/sessions/${sessionId}/messages`
-    );
+    const { sessionApi } = await import('./session');
+    const session = await sessionApi.getSession(sessionId);
+    // 将 MessageInfo 转换为 Message 格式
+    return (session.messages || []).map((msg) => ({
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: msg.content,
+      created_at: msg.created_at,
+      metadata: msg.metadata,
+    }));
   },
 
   /**
    * 更新消息
+   * 
+   * 注意：后端暂未提供消息更新接口，此方法暂未实现
    */
   async updateMessage(
     sessionId: string,
     messageId: string,
     content: string
   ): Promise<Message> {
-    return apiClient.put<Message>(
-      `/v1/chat/sessions/${sessionId}/messages/${messageId}`,
-      { content }
-    );
+    throw new Error('Message update is not supported by the backend API');
   },
 
   /**
    * 删除消息
+   * 
+   * 注意：后端暂未提供消息删除接口，此方法暂未实现
    */
   async deleteMessage(sessionId: string, messageId: string): Promise<void> {
-    return apiClient.delete(`/v1/chat/sessions/${sessionId}/messages/${messageId}`);
+    throw new Error('Message deletion is not supported by the backend API');
   },
 };
 

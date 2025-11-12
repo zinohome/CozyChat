@@ -78,13 +78,25 @@ class Settings(BaseSettings):
     app_secret_key: str = Field(..., alias="APP_SECRET_KEY")
     jwt_secret_key: str = Field(..., alias="JWT_SECRET_KEY")
     
+    # ===== 安全配置 =====
+    allow_registration: bool = Field(
+        default=True,
+        alias="ALLOW_REGISTRATION",
+        description="是否允许开放注册（true=允许，false=禁止）"
+    )
+    
     # ===== CORS配置 =====
     # 使用 List[str] 类型，通过 field_validator 处理各种输入格式
     # 注意：pydantic_settings 会自动尝试将 List 类型解析为 JSON
     # 如果环境变量是逗号分隔的字符串，需要先转换为 JSON 格式
     # 或者使用 field_validator 在解析前处理
     cors_origins: List[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000"],
+        default=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
         alias="CORS_ORIGINS"
     )
     
@@ -155,9 +167,14 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(origin).strip() for origin in v if origin]
         
-        # 如果是None或空字符串，返回默认值
+        # 如果是None或空字符串，返回默认值（包含常见本地地址）
         if v is None or (isinstance(v, str) and not v.strip()):
-            return ["http://localhost:5173", "http://localhost:3000"]
+            return [
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+            ]
         
         # 如果是字符串，尝试解析
         if isinstance(v, str):
@@ -167,14 +184,29 @@ class Settings(BaseSettings):
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
                     origins = [str(origin).strip() for origin in parsed if origin]
-                    return origins if origins else ["http://localhost:5173", "http://localhost:3000"]
+                    return origins if origins else [
+                        "http://localhost:5173",
+                        "http://localhost:3000",
+                        "http://127.0.0.1:5173",
+                        "http://127.0.0.1:3000",
+                    ]
             except (json.JSONDecodeError, ValueError):
                 # 如果不是JSON，按逗号分隔处理
                 origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-                return origins if origins else ["http://localhost:5173", "http://localhost:3000"]
+                return origins if origins else [
+                    "http://localhost:5173",
+                    "http://localhost:3000",
+                    "http://127.0.0.1:5173",
+                    "http://127.0.0.1:3000",
+                ]
         
         # 其他情况返回默认值
-        return ["http://localhost:5173", "http://localhost:3000"]
+        return [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ]
     
     @field_validator("chroma_persist_directory")
     @classmethod
@@ -196,7 +228,12 @@ class Settings(BaseSettings):
     def ensure_cors_origins_type(self):
         """确保 cors_origins 是 List[str] 类型"""
         if not isinstance(self.cors_origins, list):
-            self.cors_origins = ["http://localhost:5173", "http://localhost:3000"]
+            self.cors_origins = [
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+            ]
         return self
     
     @property

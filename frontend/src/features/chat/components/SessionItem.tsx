@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { List, Button, Space, Typography, Modal, Input, message } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { sessionApi } from '@/services/session';
+import { useSessions } from '../hooks/useSessions';
+import { showError, showSuccess } from '@/utils/errorHandler';
 import type { Session } from '@/types/session';
 import { format } from 'date-fns';
 
@@ -35,23 +36,33 @@ export const SessionItem: React.FC<SessionItemProps> = ({
   onDelete,
   onUpdate,
 }) => {
+  const { updateSession } = useSessions();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(session.title || '');
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // 格式化时间，处理可能的无效日期
+  const formatTime = (dateValue: Date | string | undefined): string => {
+    if (!dateValue) {
+      return '--';
+    }
+    
+    try {
+      const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+      // 检查日期是否有效
+      if (isNaN(date.getTime())) {
+        return '--';
+      }
+      return format(date, 'MM-dd HH:mm');
+    } catch (error) {
+      console.warn('Failed to format date:', dateValue, error);
+      return '--';
+    }
+  };
+
   const formattedTime = session.last_message_at
-    ? format(
-        typeof session.last_message_at === 'string'
-          ? new Date(session.last_message_at)
-          : session.last_message_at,
-        'MM-dd HH:mm'
-      )
-    : format(
-        typeof session.created_at === 'string'
-          ? new Date(session.created_at)
-          : session.created_at,
-        'MM-dd HH:mm'
-      );
+    ? formatTime(session.last_message_at)
+    : formatTime(session.created_at);
 
   /**
    * 处理编辑
@@ -64,10 +75,16 @@ export const SessionItem: React.FC<SessionItemProps> = ({
 
     setIsUpdating(true);
     try {
-      const updatedSession = await sessionApi.updateSession(session.id, {
+      const sessionId = session.id || session.session_id;
+      if (!sessionId) {
+        message.error('会话ID不存在');
+        return;
+      }
+      // 使用 useSessions hook 的 updateSession 方法，会自动更新缓存
+      const updatedSession = await updateSession(sessionId, {
         title: editTitle.trim(),
       });
-      showSuccess('会话标题已更新');
+      showSuccess('会话已改名');
       setIsEditModalOpen(false);
       onUpdate?.(updatedSession);
     } catch (error: any) {

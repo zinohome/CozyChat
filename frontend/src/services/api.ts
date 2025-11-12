@@ -4,10 +4,10 @@ import axios, {
   AxiosResponse,
   AxiosError,
 } from 'axios';
-import type { ApiResponse, ApiError } from '@/types/api';
+import type { ApiResponse } from '@/types/api';
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  import.meta.env.VITE_API_BASE_URL || 'http://192.168.32.155:8000';
 
 /**
  * API客户端类

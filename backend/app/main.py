@@ -69,10 +69,19 @@ app = FastAPI(
 
 
 # ===== 配置CORS中间件 =====
+# 开发环境下允许所有来源，生产环境使用配置的 origins
+# 注意：使用 ["*"] 时，allow_credentials 必须为 False
+if settings.is_development:
+    cors_origins = ["*"]
+    cors_allow_credentials = False
+else:
+    cors_origins = settings.cors_origins
+    cors_allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

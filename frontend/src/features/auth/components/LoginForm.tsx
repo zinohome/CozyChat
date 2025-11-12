@@ -1,7 +1,8 @@
 import React from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
+import { showError, showSuccess } from '@/utils/errorHandler';
 import type { LoginRequest } from '@/types/user';
 
 /**

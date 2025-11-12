@@ -46,6 +46,7 @@ cp ../.env.example ../.env
 # - DATABASE_URL
 # - APP_SECRET_KEY
 # - JWT_SECRET_KEY
+# - ALLOW_REGISTRATION (可选，默认true，false时禁止开放注册)
 ```
 
 ### 3. 启动数据库（使用Docker）
@@ -89,6 +90,8 @@ python -m app.main
 ### 7. API认证使用
 
 系统**没有预设的默认用户名和密码**，需要先注册账号，然后登录获取token。
+
+> **注意**：如果 `ALLOW_REGISTRATION=false`，注册功能将被禁用，只能通过管理员手动创建用户。
 
 #### 7.1 注册新用户
 

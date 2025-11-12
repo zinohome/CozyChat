@@ -17,7 +17,7 @@ export const authApi = {
    */
   async login(request: LoginRequest): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>(
-      '/v1/auth/login',
+      '/v1/users/login',
       request
     );
     // 保存token
@@ -35,7 +35,7 @@ export const authApi = {
    */
   async register(request: RegisterRequest): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>(
-      '/v1/auth/register',
+      '/v1/users/register',
       request
     );
     // 保存token
@@ -85,20 +85,18 @@ export const authApi = {
    * 获取当前用户信息
    */
   async getCurrentUser(): Promise<User> {
-    return apiClient.get<User>('/v1/auth/me');
+    return apiClient.get<User>('/v1/users/me');
   },
 
   /**
    * 用户登出
+   * 
+   * 注意：后端没有专门的登出接口，这里只是清除本地token
    */
   async logout(): Promise<void> {
-    try {
-      await apiClient.post('/v1/auth/logout');
-    } finally {
-      // 清除本地token
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-    }
+    // 清除本地token
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
   },
 };
 
