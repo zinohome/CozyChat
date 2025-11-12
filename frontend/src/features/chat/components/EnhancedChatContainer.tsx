@@ -10,6 +10,8 @@ import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
 import { MessageBubble } from './MessageBubble';
 import { showError } from '@/utils/errorHandler';
+import { userApi } from '@/services/user';
+import { playTTS } from '@/utils/tts';
 import type { Message } from '@/types/chat';
 
 const { TextArea } = Input;
@@ -45,6 +47,13 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const isMobile = useIsMobile();
   const [currentSessionId, setCurrentSessionIdLocal] = useState(sessionId);
   const { chatBackgroundStyle } = useUIStore();
+  const lastAutoPlayedMessageIdRef = useRef<string | null>(null);
+  
+  // 获取用户偏好（用于自动播放语音）
+  const { data: preferences } = useQuery({
+    queryKey: ['user', 'preferences'],
+    queryFn: () => userApi.getCurrentUserPreferences(),
+  });
   
   // 使用动态的 sessionId 创建 sendStreamMessage
   const { sendStreamMessage, isStreaming } = useStreamChat(currentSessionId, personalityId);
@@ -61,6 +70,69 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 自动播放语音（当收到新的助手消息时）
+  useEffect(() => {
+    // 检查是否启用了自动播放
+    if (!preferences?.auto_tts) {
+      return;
+    }
+
+    // 如果还在流式传输中，等待完成
+    if (isStreaming || isLoading) {
+      return;
+    }
+
+    // 找到最新的助手消息
+    const assistantMessages = messages.filter(
+      (msg) => msg.role === 'assistant' && msg.content
+    );
+    if (assistantMessages.length === 0) {
+      return;
+    }
+
+    // 获取最新的助手消息
+    const latestMessage = assistantMessages[assistantMessages.length - 1];
+    
+    // 如果这条消息已经自动播放过，跳过
+    if (lastAutoPlayedMessageIdRef.current === latestMessage.id) {
+      return;
+    }
+
+    // 检查消息内容是否完整（不是空字符串）
+    const content = typeof latestMessage.content === 'string'
+      ? latestMessage.content
+      : (latestMessage.content as any)?.text || '';
+    
+    if (!content.trim() || content.length < 3) {
+      // 内容太短，可能是占位符，跳过
+      return;
+    }
+
+    // 延迟一小段时间，确保消息已经完全更新
+    const timer = setTimeout(() => {
+      // 再次检查是否还在流式传输中或加载中
+      const currentState = useChatStore.getState();
+      if (currentState.isLoading || isStreaming) {
+        return;
+      }
+
+      // 自动播放语音
+      playTTS(content, personalityId).then((audio) => {
+        if (audio) {
+          // 标记这条消息已经自动播放过
+          lastAutoPlayedMessageIdRef.current = latestMessage.id;
+        }
+      }).catch((error) => {
+        // 静默失败，不显示错误提示（因为是自动播放）
+        console.warn('自动播放语音失败:', error);
+      });
+    }, 1500); // 延迟1.5秒，确保消息完成
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [messages, preferences?.auto_tts, personalityId, isStreaming, isLoading]);
 
   // 同步 currentSessionId 状态
   useEffect(() => {
@@ -267,6 +339,17 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         }
         
         setMessages(updated);
+        
+        // 触发自动播放（如果启用）
+        // 使用 setTimeout 确保消息状态已更新
+        setTimeout(() => {
+          const prefs = queryClient.getQueryData<UserPreferences>(['user', 'preferences']);
+          if (prefs?.auto_tts) {
+            playTTS(accumulatedContent, personalityId).catch((error) => {
+              console.warn('自动播放语音失败:', error);
+            });
+          }
+        }, 500);
 
         setLoading(false);
       } catch (error: any) {
@@ -390,6 +473,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 }
                 timestamp={msg.timestamp}
                 onDelete={handleDeleteMessage}
+                personalityId={personalityId}
               />
             ))}
             <div ref={messagesEndRef} />

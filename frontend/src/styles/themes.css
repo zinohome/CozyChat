@@ -389,3 +389,31 @@ body {
 .ant-input::placeholder {
   color: var(--text-tertiary);
 }
+
+/* Switch 组件主题色 */
+.ant-switch-checked {
+  background-color: var(--primary-color) !important;
+}
+
+.ant-switch-checked:hover:not(.ant-switch-disabled) {
+  background-color: var(--primary-hover) !important;
+}
+
+.ant-switch-checked:active:not(.ant-switch-disabled) {
+  background-color: var(--primary-active) !important;
+}
+
+/* Select 组件主题色 */
+.ant-select-focused .ant-select-selector,
+.ant-select-selector:hover {
+  border-color: var(--primary-color) !important;
+}
+
+.ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background-color: var(--primary-color) !important;
+  color: var(--text-inverse) !important;
+}
+
+.ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background-color: var(--bg-tertiary) !important;
+}

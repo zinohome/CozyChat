@@ -52,7 +52,11 @@ class UserPreferencesUpdateRequest(BaseModel):
     """用户偏好更新请求"""
     default_personality: Optional[str] = Field(None, description="默认人格ID")
     language: Optional[str] = Field(None, description="语言")
-    theme: Optional[str] = Field(None, description="主题")
+    theme: Optional[str] = Field(
+        None, 
+        description="主题",
+        pattern="^(blue|green|purple|orange|pink|cyan)$"
+    )
     auto_tts: Optional[bool] = Field(None, description="自动TTS")
     show_reasoning: Optional[bool] = Field(None, description="显示推理过程")
 
@@ -292,6 +296,18 @@ async def update_user_preferences(
         manager = UserManager(db)
         updates = request.model_dump(exclude_unset=True)
         
+        # 验证主题值（如果提供）
+        if "theme" in updates and updates["theme"]:
+            valid_themes = ["blue", "green", "purple", "orange", "pink", "cyan"]
+            if updates["theme"] not in valid_themes:
+                logger.warning(
+                    f"Invalid theme value: {updates['theme']}, using default 'blue'",
+                    extra={"user_id": str(current_user.id), "invalid_theme": updates["theme"]}
+                )
+                updates["theme"] = "blue"  # 使用默认主题
+        
+        logger.info(f"Updating user preferences: user_id={current_user.id}, updates={updates}")
+        
         user = await manager.update_user(
             user_id=str(current_user.id),
             updates={"preferences": updates}
@@ -303,9 +319,15 @@ async def update_user_preferences(
                 detail="用户不存在"
             )
         
+        # 刷新数据库会话，确保获取最新数据
+        db.refresh(user)
+        
+        updated_preferences = user.get_preferences()
+        logger.info(f"User preferences updated: user_id={current_user.id}, preferences={updated_preferences}")
+        
         return {
             "message": "偏好更新成功",
-            "preferences": user.get_preferences()
+            "preferences": updated_preferences
         }
         
     except HTTPException:

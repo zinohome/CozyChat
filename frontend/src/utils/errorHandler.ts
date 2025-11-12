@@ -44,14 +44,29 @@ export function getErrorMessage(error: any): string {
     }
   }
 
-  // 网络错误
-  if (error?.message === 'Network Error' || error?.code === 'ECONNABORTED') {
+  // 网络错误（包括 Failed to fetch）
+  if (
+    error?.message === 'Network Error' ||
+    error?.message === 'Failed to fetch' ||
+    error?.code === 'ECONNABORTED' ||
+    error?.code === 'ERR_NETWORK'
+  ) {
+    // 检查是否是微信浏览器
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    if (isWeChat) {
+      return '网络连接失败，请检查：1) 网络是否正常 2) 后端服务是否可访问 3) 是否使用 HTTPS';
+    }
     return '网络连接失败，请检查网络设置';
   }
 
   // 超时错误
-  if (error?.code === 'ETIMEDOUT') {
+  if (error?.code === 'ETIMEDOUT' || error?.code === 'ECONNABORTED') {
     return '请求超时，请稍后重试';
+  }
+
+  // CORS 错误
+  if (error?.message?.includes('CORS') || error?.message?.includes('cross-origin')) {
+    return '跨域请求被阻止，请联系管理员';
   }
 
   // 其他错误

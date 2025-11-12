@@ -63,7 +63,15 @@ export const userApi = {
    * 获取当前用户偏好
    */
   async getCurrentUserPreferences(): Promise<UserPreferences> {
-    return apiClient.get<UserPreferences>('/v1/users/me/preferences');
+    // 后端返回格式：{ "preferences": {...} }
+    // 使用原始客户端直接获取，避免 handleResponse 处理
+    const rawClient = apiClient.getRawClient();
+    const response = await rawClient.get<{ preferences: UserPreferences }>('/v1/users/me/preferences');
+    console.log('userApi: 获取偏好设置, 响应数据:', response.data);
+    // 直接返回 preferences 字段
+    const result = response.data.preferences || {};
+    console.log('userApi: 返回偏好设置:', result);
+    return result;
   },
 
   /**
@@ -72,7 +80,16 @@ export const userApi = {
   async updateCurrentUserPreferences(
     preferences: UserPreferences
   ): Promise<UserPreferences> {
-    return apiClient.put<UserPreferences>('/v1/users/me/preferences', preferences);
+    // 后端返回格式：{ "message": "...", "preferences": {...} }
+    // 使用原始客户端直接获取，避免 handleResponse 处理
+    const rawClient = apiClient.getRawClient();
+    console.log('userApi: 更新偏好设置, 请求数据:', preferences);
+    const response = await rawClient.put<{ preferences: UserPreferences }>('/v1/users/me/preferences', preferences);
+    console.log('userApi: 更新偏好设置, 响应数据:', response.data);
+    // 直接返回 preferences 字段
+    const result = response.data.preferences || preferences;
+    console.log('userApi: 返回偏好设置:', result);
+    return result;
   },
 
   /**

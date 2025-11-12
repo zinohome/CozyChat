@@ -111,9 +111,8 @@ class OpenAITTSEngine(TTSEngineBase):
             )
             
             # 读取音频数据
-            audio_data = b""
-            async for chunk in response.iter_bytes():
-                audio_data += chunk
+            # HttpxBinaryResponseContent 对象可以直接访问 content 属性
+            audio_data = response.content
             
             logger.info(
                 f"OpenAI TTS synthesis completed",
@@ -184,8 +183,14 @@ class OpenAITTSEngine(TTSEngineBase):
             )
             
             # 流式返回音频数据
-            async for chunk in response.iter_bytes():
-                yield chunk
+            # HttpxBinaryResponseContent 的 iter_bytes() 是同步生成器
+            if hasattr(response, 'content'):
+                # 如果有 content 属性，直接返回
+                yield response.content
+            else:
+                # 否则使用同步迭代
+                for chunk in response.iter_bytes():
+                    yield chunk
             
             logger.info(
                 f"OpenAI TTS stream synthesis completed",

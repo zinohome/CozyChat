@@ -251,7 +251,9 @@ class UserManager:
             
             # 更新偏好
             if "preferences" in updates:
+                logger.info(f"Updating preferences: user_id={user_id}, updates={updates['preferences']}")
                 user.update_preferences(updates["preferences"])
+                logger.info(f"Preferences after update: {user.get_preferences()}")
             
             # 更新密码（如果提供）
             if "password" in updates:
@@ -259,6 +261,10 @@ class UserManager:
             
             self.db.commit()
             self.db.refresh(user)
+            
+            # 验证更新后的偏好
+            final_preferences = user.get_preferences()
+            logger.info(f"Final preferences after commit and refresh: user_id={user_id}, preferences={final_preferences}")
             
             logger.info(f"User updated: {user_id}", extra={"user_id": user_id})
             

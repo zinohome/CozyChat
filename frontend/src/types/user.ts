@@ -47,6 +47,7 @@ export interface UserPreferences {
   theme?: 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'cyan';
   language?: string;
   chatBackgroundStyle?: ChatBackgroundStyle;
+  auto_tts?: boolean; // 自动播放语音
   notifications?: {
     email?: boolean;
     push?: boolean;

@@ -159,25 +159,23 @@ async def create_speech(
         if request.personality_id:
             personality_manager = PersonalityManager()
             personality = personality_manager.get_personality(request.personality_id)
-            if personality:
-                voice_config = personality.voice
-                if voice_config and voice_config.get("tts"):
-                    tts_config = voice_config["tts"]
-                    provider = tts_config.get("provider", "openai")
-                    # 使用人格配置的voice和speed，但允许请求参数覆盖
-                    if "voice" not in tts_config:
-                        tts_config["voice"] = request.voice
-                    if "speed" not in tts_config:
-                        tts_config["speed"] = request.speed
-                    if "model" not in tts_config:
-                        tts_config["model"] = request.model
-                else:
-                    provider = "openai"
-                    tts_config = {
-                        "model": request.model,
-                        "voice": request.voice,
-                        "speed": request.speed
-                    }
+            if personality and personality.voice and personality.voice.tts:
+                # VoiceConfig 是 dataclass，使用属性访问
+                tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置
+                provider = tts_config.get("provider", "openai")
+                # 使用人格配置的voice和speed，但允许请求参数覆盖
+                if request.voice:
+                    tts_config["voice"] = request.voice
+                elif "voice" not in tts_config:
+                    tts_config["voice"] = "alloy"
+                if request.speed:
+                    tts_config["speed"] = request.speed
+                elif "speed" not in tts_config:
+                    tts_config["speed"] = 1.0
+                if request.model:
+                    tts_config["model"] = request.model
+                elif "model" not in tts_config:
+                    tts_config["model"] = "tts-1"
             else:
                 provider = "openai"
                 tts_config = {
@@ -199,8 +197,8 @@ async def create_speech(
         # 执行语音合成
         audio_data = await tts_engine.synthesize(
             request.input,
-            voice=request.voice,
-            speed=request.speed
+            voice=tts_config.get("voice", request.voice),
+            speed=tts_config.get("speed", request.speed)
         )
         
         logger.info(
@@ -255,24 +253,23 @@ async def create_speech_stream(
         if request.personality_id:
             personality_manager = PersonalityManager()
             personality = personality_manager.get_personality(request.personality_id)
-            if personality:
-                voice_config = personality.voice
-                if voice_config and voice_config.get("tts"):
-                    tts_config = voice_config["tts"]
-                    provider = tts_config.get("provider", "openai")
-                    if "voice" not in tts_config:
-                        tts_config["voice"] = request.voice
-                    if "speed" not in tts_config:
-                        tts_config["speed"] = request.speed
-                    if "model" not in tts_config:
-                        tts_config["model"] = request.model
-                else:
-                    provider = "openai"
-                    tts_config = {
-                        "model": request.model,
-                        "voice": request.voice,
-                        "speed": request.speed
-                    }
+            if personality and personality.voice and personality.voice.tts:
+                # VoiceConfig 是 dataclass，使用属性访问
+                tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置
+                provider = tts_config.get("provider", "openai")
+                # 使用人格配置的voice和speed，但允许请求参数覆盖
+                if request.voice:
+                    tts_config["voice"] = request.voice
+                elif "voice" not in tts_config:
+                    tts_config["voice"] = "alloy"
+                if request.speed:
+                    tts_config["speed"] = request.speed
+                elif "speed" not in tts_config:
+                    tts_config["speed"] = 1.0
+                if request.model:
+                    tts_config["model"] = request.model
+                elif "model" not in tts_config:
+                    tts_config["model"] = "tts-1"
             else:
                 provider = "openai"
                 tts_config = {
@@ -295,8 +292,8 @@ async def create_speech_stream(
         async def generate_audio_stream():
             async for chunk in tts_engine.stream_synthesize(
                 request.input,
-                voice=request.voice,
-                speed=request.speed
+                voice=tts_config.get("voice", request.voice),
+                speed=tts_config.get("speed", request.speed)
             ):
                 yield chunk
         

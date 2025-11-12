@@ -56,11 +56,13 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
       form.setFieldsValue({
         ...preferences,
         chatBackgroundStyle: preferences.chatBackgroundStyle || chatBackgroundStyle,
+        auto_tts: preferences.auto_tts || false,
       });
     } else {
       // 如果没有偏好设置，使用当前UI状态
       form.setFieldsValue({
         chatBackgroundStyle,
+        auto_tts: false,
       });
     }
   }, [preferences, form, chatBackgroundStyle]);
@@ -147,6 +149,15 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
           name={['notifications', 'sound']}
           label="声音提示"
           valuePropName="checked"
+        >
+          <Switch />
+        </Form.Item>
+
+        <Form.Item
+          name="auto_tts"
+          label="自动播放语音"
+          valuePropName="checked"
+          tooltip="开启后，收到助手回复时自动播放语音"
         >
           <Switch />
         </Form.Item>

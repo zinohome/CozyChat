@@ -21,6 +21,7 @@ import uuid
 # 本地库
 from sqlalchemy.orm import DeclarativeBase
 from .base import Base
+from app.utils.logger import logger
 
 
 # User模型使用独立的基类，因为id字段类型不同（UUID vs Integer）
@@ -96,7 +97,7 @@ class User(UserBase):
         default=lambda: {
             "default_personality": "health_assistant",
             "language": "zh-CN",
-            "theme": "light",
+            "theme": "blue",  # 使用颜色主题系统：blue, green, purple, orange, pink, cyan
             "auto_tts": False,
             "show_reasoning": False
         }
@@ -180,7 +181,16 @@ class User(UserBase):
             updates: 更新的偏好设置
         """
         current_prefs = self.get_preferences()
-        current_prefs.update(updates)
-        self.preferences = current_prefs
+        logger.info(f"User.update_preferences: current_prefs={current_prefs}, updates={updates}")
+        
+        # 创建新的字典，确保更新生效
+        updated_prefs = {**current_prefs, **updates}
+        logger.info(f"User.update_preferences: merged_prefs={updated_prefs}")
+        
+        # 直接赋值，确保 SQLAlchemy 检测到变化
+        self.preferences = updated_prefs
+        
+        # 验证更新后的偏好
+        logger.info(f"User.update_preferences: self.preferences={self.preferences}, get_preferences()={self.get_preferences()}")
 
 

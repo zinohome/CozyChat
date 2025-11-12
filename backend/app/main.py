@@ -71,6 +71,7 @@ app = FastAPI(
 # ===== 配置CORS中间件 =====
 # 开发环境下允许所有来源，生产环境使用配置的 origins
 # 注意：使用 ["*"] 时，allow_credentials 必须为 False
+# 微信浏览器需要特殊处理
 if settings.is_development:
     cors_origins = ["*"]
     cors_allow_credentials = False
@@ -82,8 +83,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=cors_allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRFToken",
+    ],
+    expose_headers=["*"],
+    max_age=3600,  # 预检请求缓存时间
 )
 
 # ===== 配置性能监控中间件 =====

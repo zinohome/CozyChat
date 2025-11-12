@@ -24,6 +24,9 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      // 微信浏览器兼容性配置
+      withCredentials: false, // 微信浏览器中避免 credentials 问题
+      validateStatus: (status) => status < 500, // 允许 4xx 状态码不抛出异常
     });
 
     this.setupInterceptors();
@@ -115,6 +118,21 @@ class ApiClient {
       (response: AxiosResponse) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config as any;
+
+        // 处理网络错误（包括 Failed to fetch）
+        if (!error.response && error.request) {
+          // 网络错误，可能是 CORS、超时或连接失败
+          const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+          if (isWeChat) {
+            console.error('微信浏览器网络错误:', {
+              message: error.message,
+              code: error.code,
+              baseURL: API_BASE_URL,
+              url: originalRequest?.url,
+            });
+          }
+          return Promise.reject(error);
+        }
 
         // 如果是401错误且不是刷新token的请求
         if (error.response?.status === 401 && !originalRequest._retry) {
