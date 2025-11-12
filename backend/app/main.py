@@ -6,11 +6,13 @@ FastAPI主应用入口
 
 # 标准库
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 # 第三方库
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # 本地库
 from app import __version__
@@ -50,13 +52,16 @@ async def lifespan(app: FastAPI):
     await close_db()
 
 
+# 静态文件目录路径
+STATIC_DIR = Path(__file__).parent / "static"
+
 # 创建FastAPI应用实例
 app = FastAPI(
     title=settings.app_name,
     description="CozyChat - AI对话应用后端服务",
     version=__version__,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,  # 禁用默认的 Swagger UI，使用自定义的
+    redoc_url=None,  # 禁用默认的 ReDoc，使用自定义的
     openapi_url="/openapi.json",
     lifespan=lifespan
 )
@@ -73,6 +78,11 @@ app.add_middleware(
 
 # ===== 配置性能监控中间件 =====
 app.add_middleware(PerformanceMiddleware)
+
+# ===== 配置静态文件路由 =====
+# 挂载静态文件目录，提供 Swagger UI 和 ReDoc 的 JS 文件
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ===== 全局异常处理器 =====
@@ -94,6 +104,88 @@ async def global_exception_handler(request, exc: Exception):
             "detail": "Internal server error",
             "message": str(exc) if settings.is_development else "An error occurred"
         }
+    )
+
+
+# ===== 自定义 Swagger UI 路由 =====
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    """自定义 Swagger UI，使用本地静态文件"""
+    return HTMLResponse(
+        content=f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{settings.app_name} - API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="/static/swagger-ui/swagger-ui.css" />
+    <style>
+        html {{
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }}
+        *, *:before, *:after {{
+            box-sizing: inherit;
+        }}
+        body {{
+            margin:0;
+            background: #fafafa;
+        }}
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="/static/swagger-ui/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {{
+            window.ui = SwaggerUIBundle({{
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.presets.standalone
+                ],
+                layout: "StandaloneLayout",
+                deepLinking: true,
+                showExtensions: true,
+                showCommonExtensions: true
+            }});
+        }};
+    </script>
+</body>
+</html>
+        """,
+        status_code=200
+    )
+
+
+# ===== 自定义 ReDoc 路由 =====
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc_html():
+    """自定义 ReDoc，使用本地静态文件"""
+    return HTMLResponse(
+        content=f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{settings.app_name} - API Documentation</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- 使用系统默认字体，避免依赖外部 CDN -->
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+        }}
+    </style>
+</head>
+<body>
+    <redoc spec-url="/openapi.json"></redoc>
+    <script src="/static/redoc/redoc.standalone.js"></script>
+</body>
+</html>
+        """,
+        status_code=200
     )
 
 

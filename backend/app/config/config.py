@@ -7,10 +7,10 @@
 # 标准库
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 # 第三方库
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(..., alias="JWT_SECRET_KEY")
     
     # ===== CORS配置 =====
+    # 使用 List[str] 类型，通过 field_validator 处理各种输入格式
+    # 注意：pydantic_settings 会自动尝试将 List 类型解析为 JSON
+    # 如果环境变量是逗号分隔的字符串，需要先转换为 JSON 格式
+    # 或者使用 field_validator 在解析前处理
     cors_origins: List[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],
         alias="CORS_ORIGINS"
@@ -136,14 +140,41 @@ class Settings(BaseSettings):
     
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v):
+    def parse_cors_origins(cls, v) -> List[str]:
         """解析CORS origins，支持逗号分隔的字符串
         
         Pydantic 2.x 使用 field_validator 替代 validator
+        
+        支持多种格式：
+        - 逗号分隔的字符串: "http://localhost:5173,http://localhost:3000"
+        - JSON数组字符串: '["http://localhost:5173","http://localhost:3000"]'
+        - 空字符串或None: 使用默认值
+        - 已经是列表: 直接返回
         """
+        # 如果已经是列表，直接返回
+        if isinstance(v, list):
+            return [str(origin).strip() for origin in v if origin]
+        
+        # 如果是None或空字符串，返回默认值
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return ["http://localhost:5173", "http://localhost:3000"]
+        
+        # 如果是字符串，尝试解析
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+            # 尝试解析为JSON
+            import json
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    origins = [str(origin).strip() for origin in parsed if origin]
+                    return origins if origins else ["http://localhost:5173", "http://localhost:3000"]
+            except (json.JSONDecodeError, ValueError):
+                # 如果不是JSON，按逗号分隔处理
+                origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+                return origins if origins else ["http://localhost:5173", "http://localhost:3000"]
+        
+        # 其他情况返回默认值
+        return ["http://localhost:5173", "http://localhost:3000"]
     
     @field_validator("chroma_persist_directory")
     @classmethod
@@ -160,6 +191,13 @@ class Settings(BaseSettings):
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
         return v
+    
+    @model_validator(mode="after")
+    def ensure_cors_origins_type(self):
+        """确保 cors_origins 是 List[str] 类型"""
+        if not isinstance(self.cors_origins, list):
+            self.cors_origins = ["http://localhost:5173", "http://localhost:3000"]
+        return self
     
     @property
     def is_development(self) -> bool:
