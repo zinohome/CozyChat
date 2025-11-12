@@ -66,8 +66,9 @@ class CalculatorTool(Tool):
     def description(self) -> str:
         """工具描述"""
         return (
-            "执行数学计算。支持基本运算（加减乘除）、科学计算（三角函数、对数等）、"
+            "执行数学计算和数值运算。支持基本运算（加减乘除）、科学计算（三角函数、对数等）、"
             "以及复杂表达式计算。适用于需要数值计算、数学运算的场景。"
+            "注意：此工具仅用于数学计算，不用于查询时间、日期等非数值信息。"
         )
     
     @property
@@ -76,7 +77,7 @@ class CalculatorTool(Tool):
         return {
             "expression": {
                 "type": "string",
-                "description": "数学表达式，例如：'2 + 3 * 4'、'sqrt(16)'、'sin(pi/2)'",
+                "description": "数学表达式，例如：'2 + 3 * 4'、'sqrt(16)'、'sin(pi/2)'、'124^5'（幂运算可以使用^或**）。支持基本运算、科学计算和幂运算。",
                 "required": True
             }
         }
@@ -91,6 +92,10 @@ class CalculatorTool(Tool):
             str: 计算结果或错误信息
         """
         try:
+            # 将常见的数学符号转换为Python支持的格式
+            # 将 ^ 转换为 ** (幂运算)
+            expression = expression.replace('^', '**')
+            
             # 验证表达式安全性
             if not self._is_safe_expression(expression):
                 return "错误：表达式包含不安全的字符或操作"

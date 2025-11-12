@@ -45,6 +45,24 @@ body {
   background: var(--text-tertiary);
 }
 
+/* 聊天消息容器的滚动条样式 - 更细更美观 */
+.chat-messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.chat-messages-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 /* 链接样式 */
 a {
   color: var(--primary-color);

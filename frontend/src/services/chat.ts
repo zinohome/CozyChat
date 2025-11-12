@@ -92,16 +92,25 @@ export const chatApi = {
    * 这里使用会话API获取消息
    */
   async getHistory(sessionId: string): Promise<Message[]> {
-    const { sessionApi } = await import('./session');
-    const session = await sessionApi.getSession(sessionId);
-    // 将 MessageInfo 转换为 Message 格式
-    return (session.messages || []).map((msg) => ({
-      id: msg.id,
-      role: msg.role as 'user' | 'assistant' | 'system',
-      content: msg.content,
-      created_at: msg.created_at,
-      metadata: msg.metadata,
-    }));
+    try {
+      const { sessionApi } = await import('./session');
+      const session = await sessionApi.getSession(sessionId);
+      // 将 MessageInfo 转换为 Message 格式
+      return (session.messages || []).map((msg) => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content,
+        created_at: msg.created_at,
+        metadata: msg.metadata,
+      }));
+    } catch (error: any) {
+      // 如果是404错误（会话不存在或已删除），返回空数组，不抛出错误
+      if (error?.response?.status === 404) {
+        console.warn(`Session ${sessionId} not found, returning empty message list`);
+        return [];
+      }
+      throw error;
+    }
   },
 
   /**

@@ -72,11 +72,23 @@ class PersonalityManager:
     def list_personalities(self) -> List[Dict[str, Any]]:
         """列出所有可用人格
         
+        返回顺序：
+        1. health_assistant（如果存在）
+        2. default（如果存在）
+        3. 其他人格（按ID排序）
+        
         Returns:
             List[Dict[str, Any]]: 人格信息列表
         """
-        return [
-            {
+        # 定义优先级顺序
+        priority_order = ["health_assistant", "default"]
+        
+        # 分离优先级人格和其他人格
+        priority_personalities = []
+        other_personalities = []
+        
+        for p in self.personalities.values():
+            personality_dict = {
                 "id": p.id,
                 "name": p.name,
                 "description": p.description,
@@ -84,8 +96,21 @@ class PersonalityManager:
                 "icon": p.metadata.get("icon", ""),
                 "tags": p.metadata.get("tags", [])
             }
-            for p in self.personalities.values()
-        ]
+            
+            if p.id in priority_order:
+                priority_personalities.append((priority_order.index(p.id), personality_dict))
+            else:
+                other_personalities.append(personality_dict)
+        
+        # 按优先级排序
+        priority_personalities.sort(key=lambda x: x[0])
+        priority_list = [p[1] for p in priority_personalities]
+        
+        # 其他人格按ID排序
+        other_personalities.sort(key=lambda x: x["id"])
+        
+        # 合并列表：优先级人格 + 其他人格
+        return priority_list + other_personalities
     
     def create_personality(self, config: Dict[str, Any]) -> Personality:
         """动态创建人格（用户自定义人格）

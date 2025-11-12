@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Input, Button, Spin, Alert } from 'antd';
+import { Input, Button, Spin } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
@@ -32,7 +32,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { messages, setMessages, isLoading, error, setError, removeMessage, setCurrentSessionId, addMessage, updateMessage, setLoading } = useChatStore();
+  const { messages: storeMessages, setMessages, isLoading, error, setError, removeMessage, setCurrentSessionId, addMessage, updateMessage, setLoading } = useChatStore();
+  
+  // 确保 messages 始终是数组
+  const messages = Array.isArray(storeMessages) ? storeMessages : [];
   const { sessions, createSession } = useSessions();
   const queryClient = useQueryClient();
   const [inputValue, setInputValue] = useState('');
@@ -69,9 +72,27 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       if (!currentSessionId || currentSessionId === 'default') return [];
       try {
         const response = await chatApi.getHistory(currentSessionId);
-        setMessages(response);
-        return response;
+        // 确保 response 是数组
+        const responseArray = Array.isArray(response) ? response : [];
+        // 使用 getState() 获取最新消息，避免依赖项导致的重建
+        const currentMessages = useChatStore.getState().messages;
+        const localMessages = currentMessages.filter(m => m.session_id === currentSessionId);
+        if (localMessages.length > 0 && responseArray.length === 0) {
+          // 如果后端返回空但本地有消息，保留本地消息
+          return localMessages;
+        }
+        // 只在有实际变化时才更新
+        if (responseArray.length > 0) {
+        setMessages(responseArray);
+        }
+        return responseArray.length > 0 ? responseArray : localMessages;
       } catch (error) {
+        // 如果查询失败，保留本地消息
+        const currentMessages = useChatStore.getState().messages;
+        const localMessages = currentMessages.filter(m => m.session_id === currentSessionId);
+        if (localMessages.length > 0) {
+          return localMessages;
+        }
         showError(error, '加载历史消息失败');
         return [];
       }
@@ -86,31 +107,40 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const handleSend = useCallback(async () => {
     if (!inputValue.trim() || isLoading || isStreaming) return;
 
-    let actualSessionId = currentSessionId;
+    let actualSessionId: string | undefined = currentSessionId;
 
     // 如果没有有效会话（sessionId 为 'default' 或会话列表为空），自动创建新会话
     if (!actualSessionId || actualSessionId === 'default' || sessions.length === 0) {
       try {
         const newSession = await createSession({
-          title: inputValue.trim().slice(0, 30) || '新会话', // 使用消息前30个字符作为标题
+          title: '新会话', // 使用默认标题
           personality_id: personalityId,
         });
         actualSessionId = newSession.id || newSession.session_id;
-        if (actualSessionId) {
-          setCurrentSessionIdLocal(actualSessionId);
-          setCurrentSessionId(actualSessionId);
-          // 更新 URL
-          if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', `/chat/${actualSessionId}`);
-          }
-        } else {
+        if (!actualSessionId) {
           showError(new Error('创建会话失败：未返回会话ID'), '创建会话失败');
           return;
         }
+        // 先清空当前消息，避免消息混乱
+        setMessages([]);
+        setCurrentSessionIdLocal(actualSessionId);
+        setCurrentSessionId(actualSessionId);
+        // 更新 URL
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', `/chat/${actualSessionId}`);
+        }
+        // 使查询失效，但不立即重新查询（避免覆盖即将添加的消息）
+        queryClient.invalidateQueries({ queryKey: ['chat', 'messages', actualSessionId] });
       } catch (error) {
         showError(error, '创建会话失败');
         return;
       }
+    }
+    
+    // 确保 actualSessionId 不为 undefined
+    if (!actualSessionId) {
+      showError(new Error('会话ID不存在'), '发送消息失败');
+      return;
     }
 
     const content = inputValue.trim();
@@ -144,7 +174,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         };
         addMessage(aiMessage);
 
-        // 构建请求
+        // 构建请求（不传model，让后端根据personality_id自动选择）
         const request = {
           messages: [{ role: 'user' as const, content }],
           personality_id: personalityId,
@@ -174,22 +204,67 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           timestamp: new Date(),
         });
 
-        // 更新React Query缓存
+        // 更新React Query缓存，确保用户消息和AI消息都在缓存中
         queryClient.setQueryData(
           ['chat', 'messages', actualSessionId],
           (old: Message[] = []) => {
-            const updated = old.map((msg) => 
-              msg.id === aiMessageId 
-                ? { ...msg, content: accumulatedContent, timestamp: new Date() }
-                : msg
-            );
-            const hasUserMessage = updated.some((msg) => msg.id === userMessage.id);
+            // 检查是否已有用户消息
+            const hasUserMessage = old.some((msg) => msg.id === userMessage.id);
+            // 检查是否已有AI消息
+            const hasAiMessage = old.some((msg) => msg.id === aiMessageId);
+            
+            let updated = [...old];
+            
+            // 添加用户消息（如果不存在）
             if (!hasUserMessage) {
-              return [...updated, userMessage];
+              updated.push(userMessage);
             }
+            
+            // 更新或添加AI消息
+            if (hasAiMessage) {
+              updated = updated.map((msg) => 
+                msg.id === aiMessageId 
+                  ? { ...msg, content: accumulatedContent, timestamp: new Date() }
+                  : msg
+              );
+            } else {
+              updated.push({
+                ...aiMessage,
+                content: accumulatedContent,
+                timestamp: new Date(),
+              });
+            }
+            
             return updated;
           }
         );
+        
+        // 使用 getState() 获取最新消息，避免依赖项导致的重建
+        const currentMessages = useChatStore.getState().messages;
+        const hasUserMessage = currentMessages.some((msg) => msg.id === userMessage.id);
+        const hasAiMessage = currentMessages.some((msg) => msg.id === aiMessageId);
+        
+        let updated = [...currentMessages];
+        
+        if (!hasUserMessage) {
+          updated.push(userMessage);
+        }
+        
+        if (hasAiMessage) {
+          updated = updated.map((msg) => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: accumulatedContent, timestamp: new Date() }
+              : msg
+          );
+        } else {
+          updated.push({
+            ...aiMessage,
+            content: accumulatedContent,
+            timestamp: new Date(),
+          });
+        }
+        
+        setMessages(updated);
 
         setLoading(false);
       } catch (error: any) {
@@ -205,7 +280,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     setTimeout(() => {
       inputRef.current?.focus();
     }, 100);
-  }, [inputValue, isLoading, isStreaming, sendStreamMessage, currentSessionId, sessions, createSession, personalityId, setCurrentSessionId, addMessage, updateMessage, setLoading, setError, queryClient]);
+  }, [inputValue, isLoading, isStreaming, sendStreamMessage, currentSessionId, sessions, createSession, personalityId, setCurrentSessionId, queryClient]);
 
   /**
    * 处理键盘事件
@@ -225,6 +300,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
    */
   const handleDeleteMessage = useCallback(
     async (messageId: string) => {
+      // 使用 getState() 获取最新消息，保存被删除的消息以便恢复
+      const currentMessages = useChatStore.getState().messages;
+      const deletedMessage = currentMessages.find((msg) => msg.id === messageId);
+      
       // 先更新UI
       removeMessage(messageId);
 
@@ -234,41 +313,17 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           await chatApi.deleteMessage(sessionId, messageId);
         } catch (error) {
           // 如果删除失败，恢复消息
-          const message = messages.find((msg) => msg.id === messageId);
-          if (message) {
-            setMessages([...messages, message]);
+          if (deletedMessage) {
+            const currentMessagesAfterDelete = useChatStore.getState().messages;
+            setMessages([...currentMessagesAfterDelete, deletedMessage]);
           }
           showError(error, '删除消息失败');
         }
       }
     },
-    [removeMessage, sessionId, messages, setMessages]
+    [removeMessage, sessionId, setMessages]
   );
 
-  /**
-   * 处理编辑消息
-   */
-  const handleEditMessage = useCallback(
-    async (messageId: string, newContent: string) => {
-      // 先更新UI
-      const updatedMessages = messages.map((msg) =>
-        msg.id === messageId ? { ...msg, content: newContent } : msg
-      );
-      setMessages(updatedMessages);
-
-      // 调用API更新后端消息
-      if (sessionId && sessionId !== 'default') {
-        try {
-          await chatApi.updateMessage(sessionId, messageId, newContent);
-        } catch (error) {
-          // 如果更新失败，恢复原内容
-          setMessages(messages);
-          showError(error, '更新消息失败');
-        }
-      }
-    },
-    [messages, setMessages, sessionId]
-  );
 
   return (
     <div
@@ -277,6 +332,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: '#fff',
+        overflow: 'hidden', // 防止外层出现滚动条
       }}
     >
       {/* 消息列表 */}
@@ -284,11 +340,16 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         style={{
           flex: 1,
           overflowY: 'auto',
+          overflowX: 'hidden', // 防止横向滚动条
           padding: isMobile ? '12px' : '16px',
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
+          // 自定义滚动条样式（隐藏滚动条但保持功能）
+          scrollbarWidth: 'thin', // Firefox
+          scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent', // Firefox
         }}
+        className="chat-messages-container" // 用于CSS样式
       >
         {isLoadingHistory ? (
           <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -310,7 +371,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               <MessageBubble
                 key={msg.id}
                 id={msg.id}
-                role={msg.role}
+                role={msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'user'}
                 content={
                   typeof msg.content === 'string'
                     ? msg.content
@@ -318,7 +379,6 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 }
                 timestamp={msg.timestamp}
                 onDelete={handleDeleteMessage}
-                onEdit={handleEditMessage}
               />
             ))}
             <div ref={messagesEndRef} />

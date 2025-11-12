@@ -58,7 +58,7 @@ personality:
     enabled: true
     allowed_tools:
       - "calculator"
-      - "time_tool"
+      - "time"
     
     mcp_servers: []
     

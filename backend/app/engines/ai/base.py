@@ -42,12 +42,35 @@ class ChatMessage:
     tool_calls: Optional[List[Dict[str, Any]]] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式"""
+        """转换为字典格式
+        
+        注意：
+        - assistant 消息必须有 content 字段（即使为空字符串），除非有 tool_calls
+        - 如果有 tool_calls，content 可以为 null
+        """
         result = {"role": self.role}
-        if self.content:
-            result["content"] = self.content
-        if self.name:
+        
+        # 处理 content 字段
+        if self.role == "assistant":
+            # assistant 消息：如果有 tool_calls，content 可以为 null；否则必须有 content（即使是空字符串）
+            if self.tool_calls:
+                # 有 tool_calls 时，content 可以为 null，不包含在字典中
+                if self.content is not None:
+                    result["content"] = self.content
+            else:
+                # 没有 tool_calls 时，content 必须存在（即使是空字符串）
+                result["content"] = self.content if self.content is not None else ""
+        else:
+            # 其他角色：只有当 content 不为 None 时才添加
+            if self.content is not None:
+                result["content"] = self.content
+        
+        # 处理 name 字段（对于 tool 角色，使用 tool_call_id）
+        if self.role == "tool" and self.name:
+            result["tool_call_id"] = self.name
+        elif self.name:
             result["name"] = self.name
+        
         if self.function_call:
             result["function_call"] = self.function_call
         if self.tool_calls:

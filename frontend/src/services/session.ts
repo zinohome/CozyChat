@@ -71,7 +71,27 @@ export const sessionApi = {
    * 获取单个会话
    */
   async getSession(sessionId: string): Promise<Session> {
-    return apiClient.get<Session>(`/v1/sessions/${sessionId}`);
+    try {
+      return await apiClient.get<Session>(`/v1/sessions/${sessionId}`);
+    } catch (error: any) {
+      // 如果是404错误（会话不存在或已删除），返回一个默认的会话对象，避免抛出错误
+      if (error?.response?.status === 404) {
+        console.warn(`Session ${sessionId} not found, returning empty session`);
+        return {
+          id: sessionId,
+          session_id: sessionId,
+          title: '会话不存在',
+          personality_id: 'default',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          message_count: 0,
+          total_messages: 0,
+          messages: [],
+          metadata: {},
+        } as Session;
+      }
+      throw error;
+    }
   },
 
   /**
@@ -113,17 +133,29 @@ export const sessionApi = {
       updated_at: string;
     }>(`/v1/sessions/${sessionId}`, request);
     
-    // 获取原有会话信息以保留其他字段（如 created_at, personality_id）
-    const existingSession = await this.getSession(sessionId);
-    
-    // 合并更新后的字段和原有字段
-    return {
-      ...existingSession,
-      id: response.session_id,
-      session_id: response.session_id,
-      title: response.title,
-      updated_at: response.updated_at,
-    };
+    // 尝试获取原有会话信息以保留其他字段，如果失败则只返回更新后的字段
+    try {
+      const existingSession = await this.getSession(sessionId);
+      // 合并更新后的字段和原有字段
+      return {
+        ...existingSession,
+        id: response.session_id,
+        session_id: response.session_id,
+        title: response.title,
+        updated_at: response.updated_at,
+      };
+    } catch (error) {
+      // 如果获取失败（如会话刚创建），只返回更新后的字段
+      console.warn('Failed to get existing session, returning update response only:', error);
+      return {
+        id: response.session_id,
+        session_id: response.session_id,
+        title: response.title,
+        updated_at: response.updated_at,
+        created_at: new Date().toISOString(),
+        message_count: 0,
+      };
+    }
   },
 
   /**

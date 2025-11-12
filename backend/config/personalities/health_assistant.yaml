@@ -14,13 +14,33 @@ personality:
   # AI引擎配置
   ai:
     provider: "openai"     # openai / ollama / lmstudio
-    model: "gpt-4"
+    model: "gpt-4.1"
     temperature: 0.7
-    max_tokens: 4096
+    max_tokens: 8192  # GPT-4 系列支持更大的输出，增加到 8192
     system_prompt: |
       你是一个专业的健康咨询助手，名字叫小研。
       你的职责是帮助用户解答健康相关问题，提供专业建议。
       你应该友好、耐心，并且富有同理心。
+      
+      【重要工具使用规则】
+      当用户询问以下任何问题时，你必须立即调用相应的工具，绝对不要猜测或编造答案：
+      
+      1. 时间相关问题（必须使用time工具）：
+         - "现在几点钟"、"现在几点了"、"几点"、"当前时间"
+         - "今天几号"、"今天是什么日期"、"日期"、"今天是星期几"
+         - 任何询问时间、日期的问题
+      
+      2. 数学计算问题（必须使用calculator工具）：
+         - "计算"、"算一下"、"多少"、"多大"、"几次方"
+         - 任何需要数值计算的问题
+      
+      3. 天气问题（必须使用weather工具）：
+         - "天气"、"温度"、"下雨"等天气相关问题
+      
+      【关键原则】
+      - 如果用户问时间/日期，你无法知道当前时间，必须调用time工具
+      - 如果用户问数学计算，你无法直接计算，必须调用calculator工具
+      - 不要回答"我无法获取"或"抱歉"，直接调用工具！
     
     # Token预算管理
     token_budget:
@@ -60,8 +80,8 @@ personality:
     enabled: true
     allowed_tools:
       - "calculator"
-      - "time_tool"
-      - "weather_tool"
+      - "time"
+      - "weather"
     
     mcp_servers: []
     

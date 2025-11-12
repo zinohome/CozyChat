@@ -32,10 +32,15 @@ export const SessionList: React.FC<SessionListProps> = ({
   defaultPersonalityId,
 }) => {
   const { sessions, isLoading, createSession, deleteSession, updateSession } = useSessions();
+  
+  // 调试：输出会话列表状态
+  useEffect(() => {
+    console.log('SessionList - sessions:', sessions, 'isLoading:', isLoading);
+  }, [sessions, isLoading]);
   const [personalityId, setPersonalityId] = useState<string>(defaultPersonalityId || 'default');
   const [isLoadingPersonality, setIsLoadingPersonality] = useState(!defaultPersonalityId);
 
-  // 获取默认人格ID
+  // 获取默认人格ID（优先使用 health_assistant）
   useEffect(() => {
     if (!defaultPersonalityId) {
       const loadDefaultPersonality = async () => {
@@ -43,7 +48,9 @@ export const SessionList: React.FC<SessionListProps> = ({
           setIsLoadingPersonality(true);
           const personalities = await personalityApi.getPersonalities();
           if (personalities.length > 0) {
-            setPersonalityId(personalities[0].id);
+            // 优先选择 health_assistant，如果不存在则使用第一个
+            const healthAssistant = personalities.find(p => p.id === 'health_assistant');
+            setPersonalityId(healthAssistant?.id || personalities[0].id);
           } else {
             // 如果没有可用人格，使用 'default'
             setPersonalityId('default');

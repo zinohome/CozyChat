@@ -131,6 +131,8 @@ class OpenAIEngine(AIEngineBase):
             
             if tools:
                 request_params["tools"] = tools
+                # 设置 tool_choice 为 "auto" 以允许模型选择是否使用工具
+                request_params["tool_choice"] = "auto"
             
             # 合并额外参数
             request_params.update(kwargs)
@@ -140,7 +142,9 @@ class OpenAIEngine(AIEngineBase):
                 extra={
                     "model": self.model,
                     "message_count": len(messages),
-                    "temperature": temperature
+                    "temperature": temperature,
+                    "has_tools": bool(tools),
+                    "tools_count": len(tools) if tools else 0
                 }
             )
             
@@ -242,15 +246,31 @@ class OpenAIEngine(AIEngineBase):
             
             if tools:
                 request_params["tools"] = tools
+                # 设置 tool_choice 为 "auto" 以允许模型选择是否使用工具
+                request_params["tool_choice"] = "auto"
             
             # 合并额外参数
             request_params.update(kwargs)
             
-            logger.debug(
+            logger.info(
                 "Calling OpenAI streaming API",
                 extra={
                     "model": self.model,
-                    "message_count": len(messages)
+                    "message_count": len(messages),
+                    "has_tools": bool(tools),
+                    "tools_count": len(tools) if tools else 0,
+                    "first_message_role": messages[0].role if messages else None,
+                    "system_prompt_length": len(messages[0].content) if messages and messages[0].role == "system" else 0,
+                    "tool_choice": "auto" if tools else None
+                }
+            )
+            
+            # 调试：打印工具列表
+            if tools:
+                logger.info(
+                    "Tools passed to OpenAI API",
+                    extra={
+                        "tools": [t.get("function", {}).get("name") for t in tools]
                 }
             )
             

@@ -5,7 +5,7 @@
 """
 
 # 标准库
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone as tz_class, timedelta
 from typing import Any, Dict, Optional
 
 # 本地库
@@ -32,8 +32,11 @@ class TimeTool(Tool):
     def description(self) -> str:
         """工具描述"""
         return (
-            "查询当前时间、日期和时间信息。支持不同时区、时间格式化。"
-            "适用于需要获取当前时间、日期、星期等信息的场景。"
+            "获取当前时间、日期和时间信息。"
+            "当用户询问以下任何问题时，你必须使用此工具，不要猜测或编造时间："
+            "'现在几点钟'、'现在几点了'、'当前时间'、'现在是什么时间'、'几点'、"
+            "'今天是几号'、'今天几号'、'现在是什么日期'、'今天是星期几'、'今天星期几'、'日期'。"
+            "此工具返回的是真实的当前时间和日期信息。支持不同时区、时间格式化。"
         )
     
     @property
@@ -42,12 +45,12 @@ class TimeTool(Tool):
         return {
             "timezone": {
                 "type": "string",
-                "description": "时区名称（可选），例如：'UTC'、'Asia/Shanghai'、'America/New_York'。默认为UTC",
+                "description": "时区名称（可选），例如：'UTC'、'Asia/Shanghai'、'America/New_York'。默认为Asia/Shanghai（上海时区，UTC+8）",
                 "required": False
             },
             "format": {
                 "type": "string",
-                "description": "时间格式（可选），例如：'iso'、'datetime'、'date'、'time'。默认为'iso'",
+                "description": "时间格式（可选）。当用户问'几点钟'、'几点了'时使用'time_chinese'（默认，返回几点几分）。当用户问'今天几号'、'日期'时使用'date_chinese'（返回年月日和星期）。其他格式：'iso'、'datetime'、'date'、'time'、'full'。",
                 "required": False
             }
         }
@@ -60,7 +63,7 @@ class TimeTool(Tool):
         """执行时间查询
         
         Args:
-            timezone: 时区名称（可选）
+            timezone: 时区名称（可选，默认为Asia/Shanghai）
             format: 时间格式（可选）
             
         Returns:
@@ -74,17 +77,17 @@ class TimeTool(Tool):
                 if tz:
                     now = datetime.now(tz)
                 else:
-                    # 如果时区解析失败，使用UTC
-                    logger.warning(f"Invalid timezone '{timezone}', using UTC")
-                    from datetime import timezone as tz_module
-                    now = datetime.now(tz_module.utc)
+                    # 如果时区解析失败，使用上海时区
+                    logger.warning(f"Invalid timezone '{timezone}', using Asia/Shanghai")
+                    shanghai_tz = tz_class(timedelta(hours=8))
+                    now = datetime.now(shanghai_tz)
             else:
-                # 使用UTC时区
-                from datetime import timezone as tz_module
-                now = datetime.now(tz_module.utc)
+                # 默认使用上海时区（UTC+8）
+                shanghai_tz = tz_class(timedelta(hours=8))
+                now = datetime.now(shanghai_tz)
             
-            # 格式化输出
-            format = format or "iso"
+            # 格式化输出（默认使用"几点几分"格式）
+            format = format or "time_chinese"
             result = self._format_time(now, format)
             
             logger.info(
@@ -99,7 +102,7 @@ class TimeTool(Tool):
             logger.error(f"Time tool error: {error_msg}", exc_info=True)
             return error_msg
     
-    def _parse_timezone(self, tz_str: str) -> Optional[timezone]:
+    def _parse_timezone(self, tz_str: str) -> Optional[tz_class]:
         """解析时区字符串
         
         Args:
@@ -110,17 +113,17 @@ class TimeTool(Tool):
         """
         # 常见时区映射
         timezone_map = {
-            "utc": timezone.utc,
-            "gmt": timezone.utc,
-            "asia/shanghai": timezone(timedelta(hours=8)),
-            "beijing": timezone(timedelta(hours=8)),
-            "cst": timezone(timedelta(hours=8)),
-            "america/new_york": timezone(timedelta(hours=-5)),
-            "est": timezone(timedelta(hours=-5)),
-            "america/los_angeles": timezone(timedelta(hours=-8)),
-            "pst": timezone(timedelta(hours=-8)),
-            "europe/london": timezone(timedelta(hours=0)),
-            "jst": timezone(timedelta(hours=9)),
+            "utc": tz_class.utc,
+            "gmt": tz_class.utc,
+            "asia/shanghai": tz_class(timedelta(hours=8)),
+            "beijing": tz_class(timedelta(hours=8)),
+            "cst": tz_class(timedelta(hours=8)),
+            "america/new_york": tz_class(timedelta(hours=-5)),
+            "est": tz_class(timedelta(hours=-5)),
+            "america/los_angeles": tz_class(timedelta(hours=-8)),
+            "pst": tz_class(timedelta(hours=-8)),
+            "europe/london": tz_class(timedelta(hours=0)),
+            "jst": tz_class(timedelta(hours=9)),
         }
         
         tz_lower = tz_str.lower().replace(" ", "_")
@@ -136,7 +139,25 @@ class TimeTool(Tool):
         Returns:
             str: 格式化后的时间字符串
         """
-        if format == "iso":
+        if format == "time_chinese":
+            # 几点几分格式（中文）
+            hour = dt.hour
+            minute = dt.minute
+            return f"{hour}点{minute:02d}分"
+        elif format == "date_chinese":
+            # 日期格式（中文）：今天几号
+            weekday_map = {
+                0: "星期一",
+                1: "星期二",
+                2: "星期三",
+                3: "星期四",
+                4: "星期五",
+                5: "星期六",
+                6: "星期日",
+            }
+            weekday = weekday_map[dt.weekday()]
+            return f"{dt.strftime('%Y年%m月%d日')} {weekday}"
+        elif format == "iso":
             return dt.isoformat()
         elif format == "datetime":
             return dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -157,6 +178,8 @@ class TimeTool(Tool):
             weekday = weekday_map[dt.weekday()]
             return f"{dt.strftime('%Y年%m月%d日')} {weekday} {dt.strftime('%H:%M:%S')}"
         else:
-            # 默认使用ISO格式
-            return dt.isoformat()
+            # 默认使用"几点几分"格式
+            hour = dt.hour
+            minute = dt.minute
+            return f"{hour}点{minute:02d}分"
 

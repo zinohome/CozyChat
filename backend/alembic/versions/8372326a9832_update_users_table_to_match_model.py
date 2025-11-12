@@ -176,6 +176,6 @@ def downgrade() -> None:
     try:
         op.drop_constraint('check_role', 'users', type_='check')
     except Exception:
-        pass
+    pass
 
 

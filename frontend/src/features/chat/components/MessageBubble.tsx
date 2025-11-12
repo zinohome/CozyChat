@@ -3,8 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
-import { Button, Space, Tooltip, message, Input } from 'antd';
-import { CopyOutlined, DeleteOutlined, CheckOutlined, EditOutlined } from '@ant-design/icons';
+import { Button, Space, Tooltip, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, CheckOutlined, UserOutlined, RobotOutlined } from '@ant-design/icons';
 import { format } from 'date-fns';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { showSuccess } from '@/utils/errorHandler';
@@ -25,8 +25,6 @@ interface MessageBubbleProps {
   showActions?: boolean;
   /** 删除回调 */
   onDelete?: (id: string) => void;
-  /** 编辑回调 */
-  onEdit?: (id: string, newContent: string) => void;
 }
 
 /**
@@ -41,11 +39,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   timestamp,
   showActions = true,
   onDelete,
-  onEdit,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(content);
   const isMobile = useIsMobile();
   const copyTimerRef = useRef<number | null>(null);
 
@@ -59,11 +54,61 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }, []);
 
   /**
-   * 复制消息内容
+   * 复制消息内容（支持降级方案）
    */
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      // 确保 content 是字符串
+      const textToCopy = typeof content === 'string' ? content : String(content || '');
+      
+      if (!textToCopy.trim()) {
+        message.warning('消息内容为空，无法复制');
+        return;
+      }
+      
+      // 优先使用现代 Clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+        } catch (clipboardError) {
+          // Clipboard API 失败，尝试降级方案
+          throw new Error('Clipboard API failed, trying fallback');
+        }
+      } else {
+        // 降级方案：使用传统的 execCommand 方法
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        textArea.style.opacity = '0';
+        textArea.setAttribute('readonly', '');
+        document.body.appendChild(textArea);
+        
+        // 对于 iOS Safari，需要特殊处理
+        if (navigator.userAgent.match(/ipad|iphone/i)) {
+          const range = document.createRange();
+          range.selectNodeContents(textArea);
+          const selection = window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+          textArea.setSelectionRange(0, 999999);
+        } else {
+          textArea.select();
+        }
+        
+        try {
+          const successful = document.execCommand('copy');
+          if (!successful) {
+            throw new Error('execCommand copy failed');
+          }
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      }
+      
       setCopied(true);
       showSuccess('已复制到剪贴板');
       if (copyTimerRef.current) {
@@ -71,7 +116,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       }
       copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      message.error('复制失败');
+      console.error('复制失败:', error);
+      // 提供更详细的错误信息
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      message.error(`复制失败: ${errorMessage}，请手动选择文本复制`);
     }
   };
 
@@ -82,32 +130,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (onDelete) {
       onDelete(id);
     }
-  };
-
-  /**
-   * 开始编辑
-   */
-  const handleStartEdit = () => {
-    setIsEditing(true);
-    setEditContent(content);
-  };
-
-  /**
-   * 保存编辑
-   */
-  const handleSaveEdit = () => {
-    if (onEdit && editContent.trim() && editContent !== content) {
-      onEdit(id, editContent.trim());
-    }
-    setIsEditing(false);
-  };
-
-  /**
-   * 取消编辑
-   */
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditContent(content);
   };
 
   /**
@@ -137,6 +159,34 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         marginBottom: '16px',
       }}
     >
+      {/* 角色标识 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginBottom: '6px',
+          fontSize: '13px',
+          color: '#666',
+          paddingLeft: isUser ? '0' : '4px',
+          paddingRight: isUser ? '4px' : '0',
+          justifyContent: isUser ? 'flex-end' : 'flex-start',
+          width: isMobile ? '85%' : '75%',
+        }}
+      >
+        {isUser ? (
+          <>
+            <UserOutlined style={{ fontSize: '14px' }} />
+            <span>我</span>
+          </>
+        ) : (
+          <>
+            <RobotOutlined style={{ fontSize: '14px' }} />
+            <span>助手</span>
+          </>
+        )}
+      </div>
+
       <div
         style={{
           maxWidth: isMobile ? '85%' : '75%',
@@ -147,38 +197,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           position: 'relative',
         }}
       >
-        {/* 编辑模式 */}
-        {isEditing ? (
-          <div>
-            <Input.TextArea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              autoSize={{ minRows: 2, maxRows: 10 }}
-              style={{
-                marginBottom: '8px',
-                backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : '#fff',
-                color: isUser ? '#fff' : '#000',
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  handleSaveEdit();
-                } else if (e.key === 'Escape') {
-                  handleCancelEdit();
-                }
-              }}
-            />
-            <Space>
-              <Button size="small" type="primary" onClick={handleSaveEdit}>
-                保存
-              </Button>
-              <Button size="small" onClick={handleCancelEdit}>
-                取消
-              </Button>
-            </Space>
-          </div>
-        ) : (
-          /* Markdown内容 */
-          <div
+        {/* Markdown内容 */}
+        <div
             style={{
               fontSize: '14px',
               lineHeight: '1.6',
@@ -263,8 +283,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           >
             {content}
           </ReactMarkdown>
-          </div>
-        )}
+        </div>
 
         {/* 时间戳和操作按钮 */}
         <div
@@ -294,22 +313,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   }}
                 />
               </Tooltip>
-              {onEdit && role === 'user' && (
-                <Tooltip title="编辑">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={handleStartEdit}
-                    style={{
-                      color: isUser ? 'rgba(255,255,255,0.8)' : '#666',
-                      padding: '0 4px',
-                      minWidth: 'auto',
-                      height: 'auto',
-                    }}
-                  />
-                </Tooltip>
-              )}
               {onDelete && (
                 <Tooltip title="删除">
                   <Button

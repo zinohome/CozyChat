@@ -24,7 +24,7 @@ class ChatCompletionRequest(BaseModel):
     """聊天补全请求模型（OpenAI兼容）"""
     
     # ===== OpenAI标准字段 =====
-    model: str = Field(..., description="模型名称")
+    model: Optional[str] = Field(default=None, description="模型名称（可选，如果提供了personality_id，将使用personality配置的模型）")
     messages: List[ChatMessage] = Field(..., description="消息列表")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="温度参数")
     max_tokens: Optional[int] = Field(default=None, gt=0, description="最大token数")
