@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Input, Button, Spin } from 'antd';
+import { Input, Spin } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
@@ -579,18 +579,28 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               disabled={isLoading || isStreaming || isTranscribing}
               style={{
                 flexShrink: 0,
-                width: '32px',
-                height: '32px',
+                width: '36px',
+                height: '36px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 border: 'none',
-                background: 'transparent',
+                borderRadius: '8px',
+                backgroundColor: 'var(--primary-color)',
                 cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
-                color: isVoiceInputMode ? 'var(--primary-color)' : 'var(--text-secondary)',
-                transition: 'color 0.2s ease',
+                color: 'white',
+                transition: 'background-color 0.2s ease, opacity 0.2s ease',
                 padding: 0,
                 outline: 'none',
+                opacity: (isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading && !isStreaming && !isTranscribing) {
+                  e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--primary-color)';
               }}
               title={isVoiceInputMode ? '切换到文本输入' : '切换到语音输入'}
             >
@@ -601,7 +611,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   height="20"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="currentColor"
+                  stroke="white"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -621,7 +631,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   height="20"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="currentColor"
+                  stroke="white"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -718,15 +728,50 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           )}
 
           {/* 发送按钮 */}
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
+          <button
+            type="button"
             onClick={handleSend}
-            loading={isLoading || isStreaming}
             disabled={!inputValue.trim() || isLoading || isStreaming || isTranscribing}
+            style={{
+              flexShrink: 0,
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '8px',
+              backgroundColor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+                ? 'var(--text-tertiary)'
+                : 'var(--primary-color)',
+              cursor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+                ? 'not-allowed'
+                : 'pointer',
+              color: 'white',
+              transition: 'background-color 0.2s ease, opacity 0.2s ease',
+              padding: 0,
+              outline: 'none',
+              opacity: (!inputValue.trim() || isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
+            }}
+            onMouseEnter={(e) => {
+              if (inputValue.trim() && !isLoading && !isStreaming && !isTranscribing) {
+                e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 
+                (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+                  ? 'var(--text-tertiary)'
+                  : 'var(--primary-color)';
+            }}
+            title="发送"
           >
-            发送
-          </Button>
+            {isLoading || isStreaming ? (
+              <Spin size="small" style={{ color: 'white' }} />
+            ) : (
+              <SendOutlined style={{ fontSize: '18px', color: 'white' }} />
+            )}
+          </button>
         </div>
       </div>
     </div>
