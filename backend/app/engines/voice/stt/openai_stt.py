@@ -64,7 +64,7 @@ class OpenAISTTEngine(STTEngineBase):
         
         Args:
             audio_data: 音频数据（bytes）
-            language: 语言代码（可选）
+            language: 语言代码（可选，支持 zh-CN、en-US 等格式，会自动转换为 ISO-639-1）
             **kwargs: 其他参数
             
         Returns:
@@ -83,23 +83,56 @@ class OpenAISTTEngine(STTEngineBase):
             audio_file = io.BytesIO(audio_data)
             audio_file.name = "audio.wav"
             
+            # 转换语言代码为 ISO-639-1 格式（OpenAI Whisper API 要求）
+            # 例如：zh-CN -> zh, en-US -> en
+            def normalize_language_code(lang: Optional[str]) -> Optional[str]:
+                """将语言代码转换为 ISO-639-1 格式"""
+                if not lang:
+                    return None
+                # 转换为小写并提取前两位（ISO-639-1 格式）
+                lang_lower = lang.lower()
+                # 如果包含连字符，取第一部分
+                if '-' in lang_lower:
+                    lang_lower = lang_lower.split('-')[0]
+                # 只取前两位字母
+                return lang_lower[:2] if len(lang_lower) >= 2 else lang_lower
+            
+            language_code = normalize_language_code(language or self.language)
+            
             # 调用Whisper API
             response = await self.client.audio.transcriptions.create(
                 model=self.model,
                 file=audio_file,
-                language=language or self.language,
+                language=language_code,
                 response_format="text",
                 **kwargs
             )
             
             # OpenAI API返回的是字符串（当response_format="text"时）
-            text = response if isinstance(response, str) else str(response)
+            # 注意：当response_format="text"时，response直接是字符串
+            # 当response_format="json"时，response是Transcription对象，需要访问.text属性
+            if isinstance(response, str):
+                text = response
+            elif hasattr(response, 'text'):
+                text = response.text
+            else:
+                text = str(response)
+            
+            logger.debug(
+                f"OpenAI STT raw response",
+                extra={
+                    "response_type": type(response).__name__,
+                    "response": str(response)[:100],  # 只记录前100个字符
+                    "text": text[:100] if text else None
+                }
+            )
             
             logger.info(
                 f"OpenAI STT transcription completed",
                 extra={
                     "model": self.model,
-                    "language": language or self.language,
+                    "language": language_code,
+                    "original_language": language or self.language,
                     "text_length": len(text)
                 }
             )

@@ -12,6 +12,7 @@ import { MessageBubble } from './MessageBubble';
 import { showError } from '@/utils/errorHandler';
 import { userApi } from '@/services/user';
 import { playTTS } from '@/utils/tts';
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import type { Message } from '@/types/chat';
 
 const { TextArea } = Input;
@@ -48,6 +49,14 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const [currentSessionId, setCurrentSessionIdLocal] = useState(sessionId);
   const { chatBackgroundStyle } = useUIStore();
   const lastAutoPlayedMessageIdRef = useRef<string | null>(null);
+  const isAutoPlayingRef = useRef<boolean>(false); // 防止重复播放
+  
+  // 语音输入模式状态（仅在小屏幕下可用）
+  const [isVoiceInputMode, setIsVoiceInputMode] = useState(false);
+  const { isRecording, isTranscribing, startRecording, stopRecording, transcribe } = useVoiceRecorder();
+  
+  // 跟踪用户是否已经有过交互（发送过消息）
+  const hasUserInteractedRef = useRef(false);
   
   // 获取用户偏好（用于自动播放语音）
   const { data: preferences } = useQuery({
@@ -72,9 +81,15 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   }, [messages]);
 
   // 自动播放语音（当收到新的助手消息时）
+  // 注意：只在用户发送消息后才自动播放，避免页面加载时触发
   useEffect(() => {
     // 检查是否启用了自动播放
     if (!preferences?.auto_tts) {
+      return;
+    }
+
+    // 如果用户还没有交互过（发送过消息），不自动播放
+    if (!hasUserInteractedRef.current) {
       return;
     }
 
@@ -99,6 +114,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       return;
     }
 
+    // 如果正在播放，跳过（防止重复播放）
+    if (isAutoPlayingRef.current) {
+      return;
+    }
+
     // 检查消息内容是否完整（不是空字符串）
     const content = typeof latestMessage.content === 'string'
       ? latestMessage.content
@@ -117,15 +137,52 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         return;
       }
 
+      // 再次检查消息ID，防止在延迟期间消息已变化
+      const currentMessages = useChatStore.getState().messages;
+      const currentAssistantMessages = currentMessages.filter(
+        (msg) => msg.role === 'assistant' && msg.content
+      );
+      if (currentAssistantMessages.length === 0) {
+        return;
+      }
+      const currentLatestMessage = currentAssistantMessages[currentAssistantMessages.length - 1];
+      
+      // 如果消息ID已变化或已播放过，跳过
+      if (currentLatestMessage.id !== latestMessage.id || 
+          lastAutoPlayedMessageIdRef.current === currentLatestMessage.id) {
+        return;
+      }
+
+      // 如果正在播放，跳过
+      if (isAutoPlayingRef.current) {
+        return;
+      }
+
+      // 标记正在播放
+      isAutoPlayingRef.current = true;
+      lastAutoPlayedMessageIdRef.current = currentLatestMessage.id;
+
       // 自动播放语音
       playTTS(content, personalityId).then((audio) => {
         if (audio) {
-          // 标记这条消息已经自动播放过
-          lastAutoPlayedMessageIdRef.current = latestMessage.id;
+          // 监听播放结束，重置播放状态
+          audio.addEventListener('ended', () => {
+            isAutoPlayingRef.current = false;
+          });
+          audio.addEventListener('error', () => {
+            isAutoPlayingRef.current = false;
+          });
+        } else {
+          isAutoPlayingRef.current = false;
         }
       }).catch((error) => {
+        // 播放失败，重置状态
+        isAutoPlayingRef.current = false;
         // 静默失败，不显示错误提示（因为是自动播放）
-        console.warn('自动播放语音失败:', error);
+        // 浏览器可能阻止自动播放，这是正常的
+        if (error.name !== 'NotAllowedError') {
+          console.warn('自动播放语音失败:', error);
+        }
       });
     }, 1500); // 延迟1.5秒，确保消息完成
 
@@ -180,6 +237,9 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
    */
   const handleSend = useCallback(async () => {
     if (!inputValue.trim() || isLoading || isStreaming) return;
+
+    // 标记用户已经交互过（发送了消息）
+    hasUserInteractedRef.current = true;
 
     let actualSessionId: string | undefined = currentSessionId;
 
@@ -340,13 +400,19 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         
         setMessages(updated);
         
+        // 标记用户已经交互过（发送了消息）
+        hasUserInteractedRef.current = true;
+        
         // 触发自动播放（如果启用）
         // 使用 setTimeout 确保消息状态已更新
         setTimeout(() => {
           const prefs = queryClient.getQueryData<UserPreferences>(['user', 'preferences']);
           if (prefs?.auto_tts) {
             playTTS(accumulatedContent, personalityId).catch((error) => {
-              console.warn('自动播放语音失败:', error);
+              // 静默失败，浏览器可能阻止自动播放
+              if (error.name !== 'NotAllowedError') {
+                console.warn('自动播放语音失败:', error);
+              }
             });
           }
         }, 500);
@@ -379,6 +445,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     },
     [handleSend]
   );
+
 
   /**
    * 处理删除消息
@@ -504,26 +571,159 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             boxSizing: 'border-box',
           }}
         >
-          <TextArea
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入消息... (Shift+Enter换行)"
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            disabled={isLoading || isStreaming}
-            style={{ 
-              flex: 1,
-              minWidth: 0, // 关键：允许 flex 子元素缩小
-              maxWidth: '100%',
-            }}
-          />
+          {/* 语音输入切换按钮（仅在小屏幕下显示） */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setIsVoiceInputMode(!isVoiceInputMode)}
+              disabled={isLoading || isStreaming || isTranscribing}
+              style={{
+                flexShrink: 0,
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                background: 'transparent',
+                cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
+                color: isVoiceInputMode ? 'var(--primary-color)' : 'var(--text-secondary)',
+                transition: 'color 0.2s ease',
+                padding: 0,
+                outline: 'none',
+              }}
+              title={isVoiceInputMode ? '切换到文本输入' : '切换到语音输入'}
+            >
+              {isVoiceInputMode ? (
+                // 键盘图标（切换到文本输入）
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                  <line x1="6" y1="8" x2="6" y2="8" />
+                  <line x1="10" y1="8" x2="10" y2="8" />
+                  <line x1="14" y1="8" x2="14" y2="8" />
+                  <line x1="18" y1="8" x2="18" y2="8" />
+                  <line x1="6" y1="12" x2="18" y2="12" />
+                  <line x1="6" y1="16" x2="16" y2="16" />
+                </svg>
+              ) : (
+                // 麦克风图标（切换到语音输入）
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              )}
+            </button>
+          )}
+
+          {/* 文本输入模式 */}
+          {!isVoiceInputMode && (
+            <TextArea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息... (Shift+Enter换行)"
+              autoSize={{ minRows: 1, maxRows: 4 }}
+              disabled={isLoading || isStreaming}
+              style={{ 
+                flex: 1,
+                minWidth: 0,
+                maxWidth: '100%',
+              }}
+            />
+          )}
+
+          {/* 语音输入模式 */}
+          {isVoiceInputMode && (
+            <TextArea
+              ref={inputRef}
+              value={isRecording ? '正在录音...' : isTranscribing ? '识别中...' : '点击说话'}
+              readOnly
+              onClick={async () => {
+                if (isRecording) {
+                  // 如果正在录音，停止并转录
+                  stopRecording();
+                  // 等待一小段时间确保录音数据已收集
+                  setTimeout(async () => {
+                    try {
+                      const text = await transcribe({
+                        personality_id: personalityId,
+                        language: 'zh-CN',
+                      });
+                      console.log('STT识别结果:', text);
+                      if (text && text.trim()) {
+                        // 直接发送识别后的文本，不切换回文本输入模式
+                        // 标记用户已经交互过（发送了消息）
+                        hasUserInteractedRef.current = true;
+                        // 直接调用 sendStreamMessage 发送
+                        await sendStreamMessage(text.trim());
+                        // 保持语音输入模式，方便继续语音输入
+                        // setIsVoiceInputMode(false); // 不切换回文本输入模式
+                      } else {
+                        console.warn('STT返回空文本或无效文本:', text);
+                        // 如果识别结果为空，保持语音输入模式，显示提示
+                        showError(new Error('未识别到有效语音，请重试'), '识别失败');
+                      }
+                    } catch (error) {
+                      console.error('STT转录错误:', error);
+                      showError(error, '语音识别失败');
+                    }
+                  }, 100);
+                } else if (!isTranscribing) {
+                  // 如果未在录音且未在识别，开始录音
+                  await startRecording();
+                }
+              }}
+              disabled={isLoading || isStreaming || isTranscribing}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                maxWidth: '100%',
+                cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
+                backgroundColor: isRecording 
+                  ? 'var(--error-color)' 
+                  : isTranscribing
+                    ? 'var(--bg-tertiary)'
+                    : 'var(--bg-primary)',
+                color: isRecording 
+                  ? 'var(--text-inverse)' 
+                  : 'var(--text-primary)',
+                borderColor: isRecording 
+                  ? 'var(--error-color)' 
+                  : 'var(--border-color)',
+                textAlign: 'center',
+              }}
+              autoSize={{ minRows: 1, maxRows: 1 }}
+            />
+          )}
+
+          {/* 发送按钮 */}
           <Button
             type="primary"
             icon={<SendOutlined />}
             onClick={handleSend}
             loading={isLoading || isStreaming}
-            disabled={!inputValue.trim() || isLoading || isStreaming}
+            disabled={!inputValue.trim() || isLoading || isStreaming || isTranscribing}
           >
             发送
           </Button>

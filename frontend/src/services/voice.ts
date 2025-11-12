@@ -31,7 +31,7 @@ export const voiceApi = {
     }
 
     return apiClient.post<TranscriptionResponse>(
-      '/v1/audio/transcribe',
+      '/v1/audio/transcriptions',
       formData,
       {
         headers: {

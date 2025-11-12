@@ -76,11 +76,26 @@ export async function playTTS(
     });
 
     // 开始播放
-    await audio.play();
-    return audio;
-  } catch (error) {
+    // 注意：浏览器可能阻止自动播放，需要用户交互后才能播放
+    try {
+      await audio.play();
+      return audio;
+    } catch (playError: any) {
+      // 如果是自动播放被阻止，静默失败（不显示错误）
+      if (playError.name === 'NotAllowedError') {
+        console.warn('音频自动播放被浏览器阻止，需要用户交互后才能播放');
+        URL.revokeObjectURL(audioUrl);
+        return null;
+      }
+      // 其他错误，抛出
+      throw playError;
+    }
+  } catch (error: any) {
     console.error('TTS播放失败:', error);
-    showError(error, '语音合成失败');
+    // 如果是自动播放被阻止，不显示错误提示
+    if (error.name !== 'NotAllowedError') {
+      showError(error, '语音合成失败');
+    }
     return null;
   }
 }

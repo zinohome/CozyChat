@@ -87,19 +87,19 @@ async def create_transcription(
         if personality_id:
             personality_manager = PersonalityManager()
             personality = personality_manager.get_personality(personality_id)
-            if personality:
-                voice_config = personality.voice
-                if voice_config and voice_config.get("stt"):
-                    stt_config = voice_config["stt"]
-                    # 使用人格配置的provider和model
-                    provider = stt_config.get("provider", "openai")
-                    if "model" not in stt_config:
-                        stt_config["model"] = model
-                    if "language" not in stt_config and language:
-                        stt_config["language"] = language
-                else:
-                    provider = "openai"
-                    stt_config = {"model": model, "language": language}
+            if personality and personality.voice and personality.voice.stt:
+                # VoiceConfig 是 dataclass，使用属性访问
+                stt_config = personality.voice.stt.copy()  # 复制字典避免修改原配置
+                provider = stt_config.get("provider", "openai")
+                # 使用人格配置的model和language，但允许请求参数覆盖
+                if model:
+                    stt_config["model"] = model
+                elif "model" not in stt_config:
+                    stt_config["model"] = "whisper-1"
+                if language:
+                    stt_config["language"] = language
+                elif "language" not in stt_config:
+                    stt_config["language"] = None
             else:
                 provider = "openai"
                 stt_config = {"model": model, "language": language}
@@ -110,8 +110,14 @@ async def create_transcription(
         # 创建STT引擎
         stt_engine = STTEngineFactory.create_engine(provider, stt_config)
         
-        # 执行转录
-        text = await stt_engine.transcribe(audio_data, **stt_config)
+        # 执行转录（只传递实际需要的参数，排除引擎配置项）
+        transcribe_kwargs = {}
+        if "language" in stt_config:
+            transcribe_kwargs["language"] = stt_config["language"]
+        # 移除不应该传递给 transcribe 的配置项
+        # model、provider、api_key、base_url 等是引擎配置，不是 transcribe 参数
+        
+        text = await stt_engine.transcribe(audio_data, **transcribe_kwargs)
         
         logger.info(
             "STT transcription completed",
