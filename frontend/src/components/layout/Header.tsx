@@ -71,7 +71,7 @@ export const Header: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: '0 16px 0 12px',
         background: 'var(--header-gradient)',
         boxShadow: 'var(--shadow-md)',
         height: '64px',
@@ -79,7 +79,7 @@ export const Header: React.FC = () => {
         backdropFilter: 'blur(10px)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         {shouldShowMenuButton && (
         <Button
           type="text"
@@ -91,7 +91,7 @@ export const Header: React.FC = () => {
             }}
         />
         )}
-        <div style={{ marginRight: '12px' }}>
+        <div style={{ marginRight: '4px' }}>
           <Logo size={40} />
         </div>
         <h1
