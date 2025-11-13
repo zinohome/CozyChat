@@ -856,13 +856,14 @@ export const useVoiceAgent = (
           // 根据 New API 文档：浏览器环境使用子协议（subprotocols）传递认证信息
           // 参考：https://docs.newapi.pro/api/openai-realtime/#websocket_1
           // 格式：["realtime", "openai-insecure-api-key." + API_KEY, "openai-beta.realtime-v1"]
+          // 注意：即使无法获取 ephemeral client key，也可以使用 API key 通过子协议认证
           const protocols = [
             'realtime',
             `openai-insecure-api-key.${realtimeToken.token}`,
             'openai-beta.realtime-v1',
           ];
           
-          console.log('使用子协议认证（隐藏 token）');
+          console.log('使用子协议认证（useInsecureApiKey 方式）');
           
           const ws = new WebSocket(wsUrl, protocols);
           wsRef.current = ws;

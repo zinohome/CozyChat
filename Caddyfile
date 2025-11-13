@@ -1,0 +1,96 @@
+# Caddy 反向代理配置 - OpenAI API
+# 域名: oneapi.naivehero.top
+# 用途: 代理 OpenAI API 以绕过 GFW 限制，并保护真实的 OpenAI API Key
+
+# 自定义 API Key（对外暴露的Key，可以硬编码，因为这是公开的）
+# 真实的生产环境建议也使用环境变量：export CUSTOM_API_KEY="sk-xxx"
+{$CUSTOM_API_KEY:sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH}
+
+# 真实的 OpenAI API Key（必须从环境变量读取）
+# 设置方式：export OPENAI_API_KEY="sk-your-real-openai-key"
+{$OPENAI_API_KEY}
+
+oneapi.naivehero.top {
+    # 启用日志记录
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+
+    # 处理 CORS 预检请求（必须在其他处理之前）
+    @cors_preflight {
+        method OPTIONS
+    }
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
+        header Access-Control-Max-Age "86400"
+        respond 204
+    }
+
+    # 匹配使用自定义 API Key 的请求（使用正则表达式匹配）
+    @custom_key {
+        header Authorization =~ "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+    }
+
+    # 处理自定义 Key 的请求：替换为真实的 OpenAI Key
+    handle @custom_key {
+        reverse_proxy https://api.openai.com {
+            # 替换 Authorization header 为真实的 OpenAI API Key
+            # 这会覆盖客户端发送的自定义Key，保护真实Key不被暴露
+            header_up Authorization "Bearer {$OPENAI_API_KEY}"
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # 支持 WebSocket 升级（用于 Realtime API）
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 健康检查
+            health_uri /v1/models
+            health_interval 30s
+            health_timeout 5s
+            
+            # 超时设置
+            flush_interval -1
+        }
+    }
+
+    # 处理其他请求：拒绝未授权的请求（推荐，更安全）
+    # 只允许使用自定义Key的请求通过
+    handle {
+        respond "Unauthorized: Invalid API Key. Please use the provided custom API key." 401
+    }
+
+    # 为所有响应添加 CORS 头（可选，如果需要前端直接访问）
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
+    }
+
+    # 选项2：如果允许直接使用真实Key（不推荐，会暴露真实Key）
+    # 取消注释下面的代码，并注释掉上面的 handle 拒绝处理
+    # reverse_proxy https://api.openai.com {
+    #     header_up Host {upstream_hostport}
+    #     header_up X-Real-IP {remote_host}
+    #     header_up X-Forwarded-For {remote_host}
+    #     header_up X-Forwarded-Proto {scheme}
+    #     transport http {
+    #         versions 1.1 2
+    #     }
+    #     health_uri /v1/models
+    #     health_interval 30s
+    #     health_timeout 5s
+    #     flush_interval -1
+    # }
+}
+

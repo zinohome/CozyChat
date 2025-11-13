@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # Caddy 反向代理服务
+  caddy:
+    image: caddy:2-alpine
+    container_name: cozychat_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      # Caddy 配置文件
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy 数据目录（证书、缓存等）
+      - caddy_data:/data
+      - caddy_config:/config
+      # 日志目录
+      - ./logs/caddy:/var/log/caddy
+    environment:
+      # 真实的 OpenAI API Key（从 .env 文件读取）
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # 可选：自定义 API Key（如果使用环境变量）
+      - CUSTOM_API_KEY=${CUSTOM_API_KEY:-sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH}
+    networks:
+      - cozychat_network
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  cozychat_network:
+    driver: bridge
+

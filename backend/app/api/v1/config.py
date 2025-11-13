@@ -122,21 +122,21 @@ async def get_realtime_token(
                 }
             )
             
-            # 构建 New API 的 sessions 端点
+            # 构建 New API 的 client_secrets 端点
             if base_url.endswith('/v1'):
-                sessions_url = base_url.replace('/v1', '/v1/realtime/sessions')
+                client_secrets_url = base_url.replace('/v1', '/v1/realtime/client_secrets')
             elif base_url.endswith('/v1/'):
-                sessions_url = base_url.replace('/v1/', '/v1/realtime/sessions')
+                client_secrets_url = base_url.replace('/v1/', '/v1/realtime/client_secrets')
             else:
-                sessions_url = f"{base_url.rstrip('/')}/v1/realtime/sessions"
+                client_secrets_url = f"{base_url.rstrip('/')}/v1/realtime/client_secrets"
             
             client_secret = None
             
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    # New API 请求格式：直接传递 model 和 voice
+                    # New API 请求格式：使用 /v1/realtime/client_secrets 端点
                     response = await client.post(
-                        sessions_url,
+                        client_secrets_url,
                         headers={
                             'Authorization': f'Bearer {settings.openai_api_key}',
                             'Content-Type': 'application/json',
@@ -176,7 +176,7 @@ async def get_realtime_token(
                             f"Failed to generate ephemeral client key (New API): {response.status_code}",
                             extra={
                                 "user_id": str(user.id),
-                                "sessions_url": sessions_url,
+                                "client_secrets_url": client_secrets_url,
                                 "error": response.text[:200]
                             }
                         )
@@ -189,8 +189,12 @@ async def get_realtime_token(
             # 如果无法获取临时秘钥，返回 API key（前端会使用 useInsecureApiKey）
             if not client_secret:
                 logger.info(
-                    "New API ephemeral token not available, returning API key for useInsecureApiKey",
-                    extra={"user_id": str(user.id)}
+                    "New API ephemeral token not available, using API key with useInsecureApiKey subprotocol",
+                    extra={
+                        "user_id": str(user.id),
+                        "method": "useInsecureApiKey",
+                        "note": "Frontend will use 'openai-insecure-api-key.{api_key}' subprotocol"
+                    }
                 )
                 client_secret = settings.openai_api_key
         else:

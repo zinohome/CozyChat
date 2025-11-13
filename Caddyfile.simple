@@ -1,0 +1,27 @@
+# Caddy 反向代理配置 - OpenAI API (简化版，无 CORS)
+# 域名: oneapi.naivehero.top
+# 用途: 代理 OpenAI API 以绕过 GFW 限制
+
+oneapi.naivehero.top {
+    # 反向代理到 OpenAI API
+    reverse_proxy https://api.openai.com {
+        # 保持原始主机头
+        header_up Host {upstream_hostport}
+        
+        # 转发必要的请求头
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # 支持 WebSocket 升级（用于 Realtime API）
+        transport http {
+            versions 1.1 2
+        }
+        
+        # 健康检查
+        health_uri /v1/models
+        health_interval 30s
+        health_timeout 5s
+    }
+}
+
