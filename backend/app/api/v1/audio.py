@@ -45,7 +45,7 @@ class SpeechRequest(BaseModel):
     """TTS语音合成请求"""
     model: Optional[str] = Field(default="tts-1", description="模型名称")
     input: str = Field(..., description="要合成的文本")
-    voice: Optional[str] = Field(default="alloy", description="语音类型")
+    voice: Optional[str] = Field(default=None, description="语音类型（如果不指定，将从personality配置中获取）")
     speed: Optional[float] = Field(default=1.0, description="语速（0.25-4.0）")
     personality_id: Optional[str] = Field(default=None, description="人格ID")
 
@@ -166,14 +166,35 @@ async def create_speech(
             personality_manager = PersonalityManager()
             personality = personality_manager.get_personality(request.personality_id)
             if personality and personality.voice and personality.voice.tts:
-                # VoiceConfig 是 dataclass，使用属性访问
+                # VoiceConfig.tts 是 Dict[str, Any]，直接使用
                 tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置
                 provider = tts_config.get("provider", "openai")
+                
                 # 使用人格配置的voice和speed，但允许请求参数覆盖
+                # 注意：如果请求中没有指定 voice（request.voice 为 None），使用 personality 配置中的 voice
                 if request.voice:
+                    # 请求中明确指定了 voice，使用请求中的值
                     tts_config["voice"] = request.voice
-                elif "voice" not in tts_config:
-                    tts_config["voice"] = "alloy"
+                    logger.debug(
+                        f"使用请求中指定的 voice: {request.voice}",
+                        extra={"personality_id": request.personality_id, "request_voice": request.voice}
+                    )
+                else:
+                    # 请求中没有指定 voice，使用 personality 配置中的 voice
+                    personality_voice = tts_config.get("voice")
+                    if personality_voice:
+                        # personality 配置中有 voice，使用它
+                        logger.debug(
+                            f"使用 personality 配置中的 voice: {personality_voice}",
+                            extra={"personality_id": request.personality_id, "personality_voice": personality_voice}
+                        )
+                    else:
+                        # personality 配置中也没有 voice，使用默认值
+                        tts_config["voice"] = "alloy"
+                        logger.debug(
+                            f"personality 配置中没有 voice，使用默认值: alloy",
+                            extra={"personality_id": request.personality_id}
+                        )
                 if request.speed:
                     tts_config["speed"] = request.speed
                 elif "speed" not in tts_config:
@@ -260,14 +281,35 @@ async def create_speech_stream(
             personality_manager = PersonalityManager()
             personality = personality_manager.get_personality(request.personality_id)
             if personality and personality.voice and personality.voice.tts:
-                # VoiceConfig 是 dataclass，使用属性访问
+                # VoiceConfig.tts 是 Dict[str, Any]，直接使用
                 tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置
                 provider = tts_config.get("provider", "openai")
+                
                 # 使用人格配置的voice和speed，但允许请求参数覆盖
+                # 注意：如果请求中没有指定 voice（request.voice 为 None），使用 personality 配置中的 voice
                 if request.voice:
+                    # 请求中明确指定了 voice，使用请求中的值
                     tts_config["voice"] = request.voice
-                elif "voice" not in tts_config:
-                    tts_config["voice"] = "alloy"
+                    logger.debug(
+                        f"使用请求中指定的 voice: {request.voice}",
+                        extra={"personality_id": request.personality_id, "request_voice": request.voice}
+                    )
+                else:
+                    # 请求中没有指定 voice，使用 personality 配置中的 voice
+                    personality_voice = tts_config.get("voice")
+                    if personality_voice:
+                        # personality 配置中有 voice，使用它
+                        logger.debug(
+                            f"使用 personality 配置中的 voice: {personality_voice}",
+                            extra={"personality_id": request.personality_id, "personality_voice": personality_voice}
+                        )
+                    else:
+                        # personality 配置中也没有 voice，使用默认值
+                        tts_config["voice"] = "alloy"
+                        logger.debug(
+                            f"personality 配置中没有 voice，使用默认值: alloy",
+                            extra={"personality_id": request.personality_id}
+                        )
                 if request.speed:
                     tts_config["speed"] = request.speed
                 elif "speed" not in tts_config:
@@ -296,11 +338,14 @@ async def create_speech_stream(
         
         # 执行流式语音合成
         async def generate_audio_stream():
-            async for chunk in tts_engine.stream_synthesize(
+            # stream_synthesize 返回 AsyncIterator[bytes]，可以直接迭代
+            # 使用 type: ignore 忽略类型检查器的误报（stream_synthesize 确实是异步生成器）
+            stream: AsyncIterator[bytes] = tts_engine.stream_synthesize(  # type: ignore
                 request.input,
                 voice=tts_config.get("voice", request.voice),
                 speed=tts_config.get("speed", request.speed)
-            ):
+            )
+            async for chunk in stream:
                 yield chunk
         
         logger.info(

@@ -130,7 +130,7 @@ async function playTTSSegmented(
       const request: SpeechRequest = {
         input: segment,
         model: 'tts-1',
-        voice: 'alloy',
+        // voice 不指定，让后端从 personality 配置中获取
         speed: 1.0,
         personality_id: personalityId,
       };
@@ -218,6 +218,8 @@ async function playTTSSegmented(
 
 /**
  * 使用流式TTS播放语音（适用于长文本，但等待全部完成）
+ * 
+ * 注意：此函数目前未使用，保留用于未来可能的流式播放需求
  *
  * @param text 要播放的文本
  * @param personalityId 人格ID
@@ -225,6 +227,8 @@ async function playTTSSegmented(
  * @param onProgress 进度回调（可选）
  * @returns Audio对象，可用于控制播放
  */
+// @ts-expect-error - 此函数保留用于未来可能的流式播放需求
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function playTTSStream(
   text: string,
   personalityId?: string,
@@ -236,7 +240,7 @@ async function playTTSStream(
     const request: SpeechRequest = {
       input: text,
       model: 'tts-1',
-      voice: 'alloy',
+      // voice 不指定，让后端从 personality 配置中获取
       speed: 1.0,
       personality_id: personalityId,
     };
@@ -339,7 +343,7 @@ export async function playTTS(
       const request: SpeechRequest = {
         input: textToSpeak,
         model: 'tts-1',
-        voice: 'alloy',
+        // voice 不指定，让后端从 personality 配置中获取
         speed: 1.0,
         personality_id: personalityId,
       };

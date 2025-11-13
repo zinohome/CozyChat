@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { PhoneOutlined } from '@ant-design/icons';
 import { useChatStore, getVoiceCallDuration } from '@/store/slices/chatSlice';
 import './VoiceCallIndicator.css';
@@ -56,13 +56,20 @@ const VoiceWaveform: React.FC<{ frequencyData: Uint8Array | null; color: string 
 
     // 计算音频强度
     const getAudioIntensity = (): number => {
-      if (!frequencyData || frequencyData.length === 0) return 0;
-      
-      let totalIntensity = 0;
-      for (let i = 0; i < frequencyData.length; i++) {
-        totalIntensity += frequencyData[i];
+      if (!frequencyData || !(frequencyData instanceof Uint8Array) || frequencyData.length === 0) {
+        return 0;
       }
-      return totalIntensity / frequencyData.length / 255; // 0-1
+      
+      try {
+        let totalIntensity = 0;
+        for (let i = 0; i < frequencyData.length; i++) {
+          totalIntensity += frequencyData[i];
+        }
+        return totalIntensity / frequencyData.length / 255; // 0-1
+      } catch (err) {
+        console.error('VoiceWaveform: 计算音频强度失败:', err);
+        return 0;
+      }
     };
 
     const draw = () => {
@@ -154,22 +161,41 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
 
   // 计算音频强度，判断是否有声音
   const getAudioIntensity = useCallback((frequencyData: Uint8Array | null | undefined): number => {
-    if (!frequencyData || frequencyData.length === 0) return 0;
-    let totalIntensity = 0;
-    for (let i = 0; i < frequencyData.length; i++) {
-      totalIntensity += frequencyData[i];
+    if (!frequencyData || !(frequencyData instanceof Uint8Array) || frequencyData.length === 0) {
+      return 0;
     }
-    return totalIntensity / frequencyData.length / 255; // 0-1
+    try {
+      let totalIntensity = 0;
+      for (let i = 0; i < frequencyData.length; i++) {
+        totalIntensity += frequencyData[i];
+      }
+      return totalIntensity / frequencyData.length / 255; // 0-1
+    } catch (err) {
+      console.error('计算音频强度失败:', err);
+      return 0;
+    }
   }, []);
   
-  const userIntensity = getAudioIntensity(userFrequencyData);
-  const assistantIntensity = getAudioIntensity(assistantFrequencyData);
-  const hasUserSound = userIntensity > 0.05; // 阈值 5%
-  const hasAssistantSound = assistantIntensity > 0.05; // 阈值 5%
-  
-  // 决定显示哪个声纹：优先显示有声音的，如果都有声音则显示用户的
-  const activeFrequencyData = hasUserSound ? userFrequencyData : (hasAssistantSound ? assistantFrequencyData : null);
-  const activeColor = hasUserSound ? '#52c41a' : (hasAssistantSound ? '#ff4d4f' : '#52c41a');
+  // 使用 useMemo 计算音频强度和声纹显示
+  const { userIntensity, assistantIntensity, hasUserSound, hasAssistantSound, activeFrequencyData, activeColor } = useMemo(() => {
+    const userInt = getAudioIntensity(userFrequencyData);
+    const assistantInt = getAudioIntensity(assistantFrequencyData);
+    const hasUser = userInt > 0.05; // 阈值 5%
+    const hasAssistant = assistantInt > 0.05; // 阈值 5%
+    
+    // 决定显示哪个声纹：优先显示有声音的，如果都有声音则显示用户的
+    const activeData = hasUser ? userFrequencyData : (hasAssistant ? assistantFrequencyData : null);
+    const activeCol = hasUser ? '#52c41a' : (hasAssistant ? '#ff4d4f' : '#52c41a');
+    
+    return {
+      userIntensity: userInt,
+      assistantIntensity: assistantInt,
+      hasUserSound: hasUser,
+      hasAssistantSound: hasAssistant,
+      activeFrequencyData: activeData,
+      activeColor: activeCol,
+    };
+  }, [userFrequencyData, assistantFrequencyData, getAudioIntensity]);
 
   // 更新通话时长
   useEffect(() => {

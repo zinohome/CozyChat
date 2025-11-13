@@ -65,6 +65,80 @@ export function useVoiceRecorder() {
   }, [isRecording]);
 
   /**
+   * 将 WebM 音频转换为 WAV 格式
+   */
+  const convertWebMToWAV = useCallback(async (webmBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      // 创建音频上下文
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // 读取 WebM Blob
+      const fileReader = new FileReader();
+      fileReader.onload = async () => {
+        try {
+          // 解码音频数据
+          const audioBuffer = await audioContext.decodeAudioData(fileReader.result as ArrayBuffer);
+          
+          // 获取音频参数
+          const sampleRate = audioBuffer.sampleRate;
+          const numberOfChannels = audioBuffer.numberOfChannels;
+          const length = audioBuffer.length;
+          
+          // 创建 WAV 文件头
+          const wavHeader = new ArrayBuffer(44);
+          const view = new DataView(wavHeader);
+          
+          // RIFF chunk descriptor
+          const writeString = (offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+              view.setUint8(offset + i, string.charCodeAt(i));
+            }
+          };
+          
+          writeString(0, 'RIFF');
+          view.setUint32(4, 36 + length * numberOfChannels * 2, true); // File size - 8
+          writeString(8, 'WAVE');
+          
+          // FMT sub-chunk
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true); // Sub-chunk size
+          view.setUint16(20, 1, true); // Audio format (PCM)
+          view.setUint16(22, numberOfChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * numberOfChannels * 2, true); // Byte rate
+          view.setUint16(32, numberOfChannels * 2, true); // Block align
+          view.setUint16(34, 16, true); // Bits per sample
+          
+          // Data sub-chunk
+          writeString(36, 'data');
+          view.setUint32(40, length * numberOfChannels * 2, true);
+          
+          // 转换音频数据为 PCM16
+          const pcmData = new Int16Array(length * numberOfChannels);
+          for (let channel = 0; channel < numberOfChannels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+              const sample = Math.max(-1, Math.min(1, channelData[i]));
+              pcmData[i * numberOfChannels + channel] = sample < 0 
+                ? sample * 0x8000 
+                : sample * 0x7FFF;
+            }
+          }
+          
+          // 合并 WAV 头和数据
+          const wavBlob = new Blob([wavHeader, pcmData.buffer], { type: 'audio/wav' });
+          resolve(wavBlob);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      fileReader.onerror = reject;
+      fileReader.readAsArrayBuffer(webmBlob);
+    });
+  }, []);
+
+  /**
    * 转录录音
    */
   const transcribe = useCallback(
@@ -77,13 +151,18 @@ export function useVoiceRecorder() {
         setIsTranscribing(true);
 
         // 合并音频块
-        const audioBlob = new Blob(audioChunksRef.current, {
+        const webmBlob = new Blob(audioChunksRef.current, {
           type: 'audio/webm;codecs=opus',
         });
 
+        // 将 WebM 转换为 WAV（New API 需要 WAV 格式）
+        console.log('开始转换 WebM 到 WAV，原始大小:', webmBlob.size, 'bytes');
+        const wavBlob = await convertWebMToWAV(webmBlob);
+        console.log('转换完成，WAV 大小:', wavBlob.size, 'bytes');
+
         // 转换为 File 对象
-        const audioFile = new File([audioBlob], 'recording.webm', {
-          type: 'audio/webm;codecs=opus',
+        const audioFile = new File([wavBlob], 'recording.wav', {
+          type: 'audio/wav',
         });
 
         // 调用 STT API
@@ -105,7 +184,7 @@ export function useVoiceRecorder() {
         setIsTranscribing(false);
       }
     },
-    []
+    [convertWebMToWAV]
   );
 
   /**
