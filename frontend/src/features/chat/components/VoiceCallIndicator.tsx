@@ -32,115 +32,224 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * 声纹可视化组件 - 水波纹样式
+ * 声纹可视化组件 - SVG 波形路径样式（基于 FastRTC）
  * 
- * 根据音频强度绘制水波纹效果
+ * 使用 SVG 路径绘制多层波形，支持渐变和发光效果
  */
-const VoiceWaveform: React.FC<{ frequencyData: Uint8Array | null; color: string }> = ({ frequencyData, color }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+const VoiceWaveform: React.FC<{ 
+  frequencyData: Uint8Array | null; 
+  color: string;
+  isActive?: boolean;
+}> = ({ frequencyData, color, isActive = true }) => {
+  const waveContainerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const rippleRef = useRef<{ radius: number; opacity: number; speed: number }[]>([]);
+  const idleAnimationFrameRef = useRef<number | null>(null);
+  const timeRef = useRef<number>(0);
+  
+  // 波形参数
+  const numBands = 16; // 波形条数
+  const waveAmplitudesRef = useRef<number[]>(new Array(numBands).fill(0));
+  const waveOffsetsRef = useRef<number[]>(new Array(numBands).fill(0));
+
+  // 生成波形路径
+  const generateWavePath = useCallback((waveIndex: number, width: number, height: number): string => {
+    const centerY = height / 2;
+    const points = 100;
+    let path = `M 0 ${centerY}`;
+
+    for (let i = 0; i <= points; i++) {
+      const x = (i / points) * width;
+      const normalizedX = (i / points) * Math.PI * 4;
+
+      const frequency = 1 + waveIndex * 0.3;
+      const phase = waveOffsetsRef.current[waveIndex] || 0;
+      const baseAmplitude = 20;
+
+      // 计算振幅（使用多个波形的加权平均）
+      let amplitude = 0;
+      for (let j = 0; j < Math.min(4, waveAmplitudesRef.current.length); j++) {
+        const weight = 1 / (j + 1);
+        amplitude += (waveAmplitudesRef.current[j] || 0) * weight;
+      }
+      amplitude = amplitude * baseAmplitude * (0.6 + waveIndex * 0.1);
+
+      // 正弦波 + 余弦波组合
+      const sineWave = Math.sin(normalizedX * frequency + phase) * amplitude;
+      const cosineWave = Math.cos(normalizedX * frequency * 1.3 + phase * 0.7) * amplitude * 0.3;
+
+      const y = centerY + sineWave + cosineWave;
+
+      if (i === 0) {
+        path = `M ${x} ${y}`;
+      } else {
+        path += ` L ${x} ${y}`;
+      }
+    }
+
+    return path;
+  }, []);
+
+  // 更新波形路径
+  const updateWavePaths = useCallback(() => {
+    if (!waveContainerRef.current) return;
+
+    const waves = waveContainerRef.current.querySelectorAll('.wave-path');
+    const width = waveContainerRef.current.clientWidth || 200;
+    const height = 64;
+
+    waves.forEach((wave, waveIndex) => {
+      const path = generateWavePath(waveIndex, width, height);
+      (wave as SVGPathElement).setAttribute('d', path);
+    });
+  }, [generateWavePath]);
+
+  // Idle 动画（等待连接时）
+  const updateIdleVisualization = useCallback(() => {
+    timeRef.current += 0.012;
+
+    for (let i = 0; i < numBands; i++) {
+      const baseAmplitude = 0.15 + Math.sin(timeRef.current * 0.5 + i * 0.3) * 0.05;
+      waveAmplitudesRef.current[i] = baseAmplitude;
+      waveOffsetsRef.current[i] = timeRef.current * (0.3 + i * 0.05);
+    }
+
+    updateWavePaths();
+
+    if (!isActive || !frequencyData) {
+      idleAnimationFrameRef.current = requestAnimationFrame(updateIdleVisualization);
+    }
+  }, [isActive, frequencyData, updateWavePaths, numBands]);
+
+  // 实时音频可视化
+  const updateVisualization = useCallback(() => {
+    if (!frequencyData || !(frequencyData instanceof Uint8Array) || frequencyData.length === 0) {
+      // 没有数据时，切换到 idle 动画
+      if (isActive) {
+        updateIdleVisualization();
+      }
+      return;
+    }
+
+    timeRef.current += 0.016;
+
+    // 根据频率数据更新波形振幅
+    for (let i = 0; i < numBands; i++) {
+      const freqIndex = Math.floor((i / numBands) * frequencyData.length);
+      const amplitude = (frequencyData[freqIndex] / 255) * 0.8 + 0.2;
+      waveAmplitudesRef.current[i] = amplitude;
+      waveOffsetsRef.current[i] = timeRef.current * (0.5 + i * 0.1);
+    }
+
+    updateWavePaths();
+
+    if (isActive) {
+      animationFrameRef.current = requestAnimationFrame(updateVisualization);
+    }
+  }, [frequencyData, isActive, updateWavePaths, numBands, updateIdleVisualization]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const maxRadius = Math.min(width, height) / 2 - 2;
-
-    // 计算音频强度
-    const getAudioIntensity = (): number => {
-      if (!frequencyData || !(frequencyData instanceof Uint8Array) || frequencyData.length === 0) {
-        return 0;
+    if (!isActive) {
+      // 停止所有动画
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-      
-      try {
-        let totalIntensity = 0;
-        for (let i = 0; i < frequencyData.length; i++) {
-          totalIntensity += frequencyData[i];
-        }
-        return totalIntensity / frequencyData.length / 255; // 0-1
-      } catch (err) {
-        console.error('VoiceWaveform: 计算音频强度失败:', err);
-        return 0;
+      if (idleAnimationFrameRef.current) {
+        cancelAnimationFrame(idleAnimationFrameRef.current);
+        idleAnimationFrameRef.current = null;
       }
-    };
+      return;
+    }
 
-    const draw = () => {
-      ctx.clearRect(0, 0, width, height);
+    // 初始化波形数据
+    waveAmplitudesRef.current = new Array(numBands).fill(0);
+    waveOffsetsRef.current = new Array(numBands).fill(0);
 
-      const intensity = getAudioIntensity();
-      const hasSound = intensity > 0.05; // 阈值，低于此值认为没有声音
-
-      if (hasSound) {
-        // 有声音时，创建新的波纹
-        if (rippleRef.current.length === 0 || rippleRef.current[rippleRef.current.length - 1].radius > 10) {
-          rippleRef.current.push({
-            radius: 0,
-            opacity: 0.8,
-            speed: 2 + intensity * 3, // 根据强度调整速度
-          });
-        }
-
-        // 限制波纹数量
-        if (rippleRef.current.length > 3) {
-          rippleRef.current.shift();
-        }
-
-        // 更新和绘制波纹
-        for (let i = rippleRef.current.length - 1; i >= 0; i--) {
-          const ripple = rippleRef.current[i];
-          
-          // 更新波纹
-          ripple.radius += ripple.speed;
-          ripple.opacity = Math.max(0, 0.8 - (ripple.radius / maxRadius) * 0.8);
-
-          // 如果波纹超出范围，移除
-          if (ripple.radius > maxRadius || ripple.opacity <= 0) {
-            rippleRef.current.splice(i, 1);
-            continue;
-          }
-
-          // 绘制波纹
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, ripple.radius, 0, Math.PI * 2);
-          ctx.strokeStyle = color;
-          ctx.globalAlpha = ripple.opacity;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-
-        ctx.globalAlpha = 1;
-      } else {
-        // 没有声音时，清空波纹
-        rippleRef.current = [];
+    if (frequencyData && frequencyData.length > 0) {
+      // 有音频数据，启动实时可视化
+      if (idleAnimationFrameRef.current) {
+        cancelAnimationFrame(idleAnimationFrameRef.current);
+        idleAnimationFrameRef.current = null;
       }
-
-      animationFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    draw();
+      updateVisualization();
+    } else {
+      // 没有音频数据，启动 idle 动画
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      updateIdleVisualization();
+    }
 
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (idleAnimationFrameRef.current) {
+        cancelAnimationFrame(idleAnimationFrameRef.current);
+        idleAnimationFrameRef.current = null;
       }
     };
-  }, [frequencyData, color]);
+  }, [isActive, frequencyData, updateVisualization, updateIdleVisualization, numBands]);
+
+  // 生成渐变 ID（基于颜色）
+  const gradientId1 = `waveGradient1-${color.replace('#', '')}`;
+  const gradientId2 = `waveGradient2-${color.replace('#', '')}`;
+  const gradientId3 = `waveGradient3-${color.replace('#', '')}`;
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={120}
-      height={16}
-      style={{ display: 'block' }}
-    />
+    <div className="voice-waveform-container" ref={waveContainerRef}>
+      <svg className="voice-waveform-svg" viewBox="0 0 200 64" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradientId1} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.8" />
+            <stop offset="50%" stopColor={color} stopOpacity="0.9" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.8" />
+          </linearGradient>
+          <linearGradient id={gradientId2} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.6" />
+            <stop offset="50%" stopColor={color} stopOpacity="0.7" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.6" />
+          </linearGradient>
+          <linearGradient id={gradientId3} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="50%" stopColor={color} stopOpacity="0.5" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.4" />
+          </linearGradient>
+          <filter id={`glow-${color.replace('#', '')}`}>
+            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* 3层波形叠加，创建深度效果 */}
+        <path
+          className="wave-path wave-layer-3"
+          stroke={`url(#${gradientId3})`}
+          strokeWidth="1.5"
+          fill="none"
+          filter={`url(#glow-${color.replace('#', '')})`}
+        />
+        <path
+          className="wave-path wave-layer-2"
+          stroke={`url(#${gradientId2})`}
+          strokeWidth="2"
+          fill="none"
+          filter={`url(#glow-${color.replace('#', '')})`}
+        />
+        <path
+          className="wave-path wave-layer-1"
+          stroke={`url(#${gradientId1})`}
+          strokeWidth="2.5"
+          fill="none"
+          filter={`url(#glow-${color.replace('#', '')})`}
+        />
+      </svg>
+    </div>
   );
 };
 
@@ -151,8 +260,6 @@ const VoiceWaveform: React.FC<{ frequencyData: Uint8Array | null; color: string 
  */
 export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
   onEndCall,
-  sessionId,
-  personalityId,
   userFrequencyData,
   assistantFrequencyData,
 }) => {
@@ -177,7 +284,7 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
   }, []);
   
   // 使用 useMemo 计算音频强度和声纹显示
-  const { userIntensity, assistantIntensity, hasUserSound, hasAssistantSound, activeFrequencyData, activeColor } = useMemo(() => {
+  const { activeFrequencyData, activeColor } = useMemo(() => {
     const userInt = getAudioIntensity(userFrequencyData);
     const assistantInt = getAudioIntensity(assistantFrequencyData);
     const hasUser = userInt > 0.05; // 阈值 5%
@@ -187,11 +294,20 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
     const activeData = hasUser ? userFrequencyData : (hasAssistant ? assistantFrequencyData : null);
     const activeCol = hasUser ? '#52c41a' : (hasAssistant ? '#ff4d4f' : '#52c41a');
     
+    // 调试日志
+    if (process.env.NODE_ENV === 'development') {
+      console.log('VoiceCallIndicator: 音频强度', {
+        userIntensity: userInt.toFixed(3),
+        assistantIntensity: assistantInt.toFixed(3),
+        hasUserSound: hasUser,
+        hasAssistantSound: hasAssistant,
+        hasActiveData: !!activeData,
+        userDataLength: userFrequencyData?.length || 0,
+        assistantDataLength: assistantFrequencyData?.length || 0,
+      });
+    }
+    
     return {
-      userIntensity: userInt,
-      assistantIntensity: assistantInt,
-      hasUserSound: hasUser,
-      hasAssistantSound: hasAssistant,
       activeFrequencyData: activeData,
       activeColor: activeCol,
     };
@@ -224,9 +340,11 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
         {/* 中间：声纹和通话时长 */}
         <div className="voice-call-indicator-center">
           <div className="voice-waveforms">
-            {activeFrequencyData && (
-              <VoiceWaveform frequencyData={activeFrequencyData} color={activeColor} />
-            )}
+            <VoiceWaveform 
+              frequencyData={activeFrequencyData || null} 
+              color={activeColor}
+              isActive={true}
+            />
           </div>
           <span className="voice-call-duration">{formatDuration(duration)}</span>
         </div>

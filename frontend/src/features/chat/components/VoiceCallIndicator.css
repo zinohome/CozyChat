@@ -54,6 +54,44 @@
   gap: 3px;
   align-items: center;
   margin-bottom: 2px;
+  width: 200px;
+  height: 64px;
+}
+
+.voice-waveform-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.voice-waveform-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wave-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 0.2s ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.wave-layer-1 {
+  opacity: 1;
+}
+
+.wave-layer-2 {
+  opacity: 0.8;
+  transform: translateX(10px);
+}
+
+.wave-layer-3 {
+  opacity: 0.6;
+  transform: translateX(-8px);
 }
 
 .voice-call-duration {
