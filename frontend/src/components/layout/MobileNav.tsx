@@ -28,7 +28,7 @@ export const MobileNav: React.FC = () => {
     {
       key: '/settings',
       icon: <SettingOutlined />,
-      label: '设置',
+      label: '偏好设置',
     },
   ];
 

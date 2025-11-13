@@ -12,21 +12,18 @@ import type { ChatRequest, Message } from '@/types/chat';
 export const useChat = (sessionId: string, personalityId: string) => {
   const queryClient = useQueryClient();
   const { 
-    messages, 
-    setMessages, 
-    addMessage, 
+    isLoading: isLoadingStore, 
     setLoading, 
     setError 
   } = useChatStore();
 
-  // 获取历史消息
-  const { data: historyMessages = [], isLoading: isLoadingHistory } = useQuery({
+  // 从 React Query 获取消息（自动按 sessionId 隔离）
+  const { data: messages = [], isLoading: isLoadingHistory } = useQuery({
     queryKey: ['chat', 'messages', sessionId],
     queryFn: async () => {
       if (!sessionId) return [];
       const response = await chatApi.getHistory(sessionId);
-      setMessages(response);
-      return response;
+      return Array.isArray(response) ? response : [];
     },
     enabled: !!sessionId,
     staleTime: 5 * 60 * 1000, // 5分钟
@@ -58,7 +55,7 @@ export const useChat = (sessionId: string, personalityId: string) => {
 
       const response = await chatApi.send(request);
 
-      // 添加用户消息
+      // 创建用户消息
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -66,9 +63,8 @@ export const useChat = (sessionId: string, personalityId: string) => {
         timestamp: new Date(),
         session_id: sessionId,
       };
-      addMessage(userMessage);
 
-      // 添加AI消息
+      // 创建AI消息
       const aiMessage: Message = {
         id: response.id || `assistant-${Date.now()}`,
         role: 'assistant',
@@ -76,9 +72,8 @@ export const useChat = (sessionId: string, personalityId: string) => {
         timestamp: new Date(response.created * 1000),
         session_id: sessionId,
       };
-      addMessage(aiMessage);
 
-      // 更新缓存
+      // 更新 React Query 缓存
       queryClient.setQueryData(
         ['chat', 'messages', sessionId],
         (old: Message[] = []) => [...old, userMessage, aiMessage]
@@ -103,8 +98,8 @@ export const useChat = (sessionId: string, personalityId: string) => {
   };
 
   return {
-    messages: messages.length > 0 ? messages : historyMessages,
-    isLoading: isLoadingHistory || sendMutation.isPending,
+    messages,
+    isLoading: isLoadingStore || isLoadingHistory || sendMutation.isPending,
     sendMessage,
     isSending: sendMutation.isPending,
     error: useChatStore.getState().error,

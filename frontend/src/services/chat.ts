@@ -93,6 +93,18 @@ export const chatApi = {
    */
   async getHistory(sessionId: string): Promise<Message[]> {
     try {
+      // 验证 sessionId 格式（UUID）
+      if (!sessionId || sessionId === 'default') {
+        return [];
+      }
+      
+      // 验证 UUID 格式
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(sessionId)) {
+        console.warn(`Invalid session ID format: ${sessionId}`);
+        return [];
+      }
+      
       const { sessionApi } = await import('./session');
       const session = await sessionApi.getSession(sessionId);
       // 将 MessageInfo 转换为 Message 格式
@@ -100,7 +112,8 @@ export const chatApi = {
         id: msg.id,
         role: msg.role as 'user' | 'assistant' | 'system',
         content: msg.content,
-        created_at: msg.created_at,
+        timestamp: msg.created_at, // 将 created_at 映射为 timestamp
+        session_id: sessionId,
         metadata: msg.metadata,
       }));
     } catch (error: any) {
@@ -109,6 +122,12 @@ export const chatApi = {
         console.warn(`Session ${sessionId} not found, returning empty message list`);
         return [];
       }
+      // 如果是400错误（无效的session ID格式），返回空数组，不抛出错误
+      if (error?.response?.status === 400) {
+        console.warn(`Invalid session ID format: ${sessionId}, returning empty message list`);
+        return [];
+      }
+      console.error(`Failed to get history for session ${sessionId}:`, error);
       throw error;
     }
   },
@@ -133,6 +152,27 @@ export const chatApi = {
    */
   async deleteMessage(sessionId: string, messageId: string): Promise<void> {
     throw new Error('Message deletion is not supported by the backend API');
+  },
+
+  /**
+   * 保存语音通话消息
+   */
+  async saveVoiceCallMessages(
+    sessionId: string,
+    messages: Array<{
+      role: 'user' | 'assistant';
+      content: string;
+      timestamp?: string;
+    }>
+  ): Promise<{ message: string; saved_count: number; session_id: string }> {
+    return apiClient.post('/v1/chat/voice-call-messages', {
+      session_id: sessionId,
+      messages: messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp || new Date().toISOString(),
+      })),
+    });
   },
 };
 

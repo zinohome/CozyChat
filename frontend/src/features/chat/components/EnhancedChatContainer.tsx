@@ -3,16 +3,19 @@ import { Input, Spin } from 'antd';
 import { SendOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
+import { useAuthStore } from '@/store/slices/authSlice';
 import { useStreamChat } from '../hooks/useStreamChat';
 import { useSessions } from '../hooks/useSessions';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
 import { MessageBubble } from './MessageBubble';
+import { VoiceCallIndicator } from './VoiceCallIndicator';
 import { showError } from '@/utils/errorHandler';
 import { userApi } from '@/services/user';
 import { playTTS } from '@/utils/tts';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
+import { useVoiceAgent } from '@/hooks/useVoiceAgent';
 import type { Message } from '@/types/chat';
 
 const { TextArea } = Input;
@@ -36,24 +39,80 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { messages: storeMessages, setMessages, isLoading, error, setError, removeMessage, setCurrentSessionId, addMessage, updateMessage, setLoading } = useChatStore();
-  
-  // 确保 messages 始终是数组
-  const messages = Array.isArray(storeMessages) ? storeMessages : [];
+  const { 
+    isLoading: isLoadingStore, 
+    error, 
+    setError, 
+    setCurrentSessionId,
+    isVoiceCallActive,
+    voiceCallMessages,
+    startVoiceCall,
+    endVoiceCall,
+    addVoiceCallMessage,
+    clearVoiceCallMessages,
+  } = useChatStore();
   const { sessions, createSession } = useSessions();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const userId = user?.id || null;
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<any>(null);
   const isMobile = useIsMobile();
-  const [currentSessionId, setCurrentSessionIdLocal] = useState(sessionId);
+  // 使用 sessionId prop 作为当前会话ID（确保切换时立即更新）
+  const currentSessionId = sessionId === 'default' ? null : sessionId;
   const { chatBackgroundStyle } = useUIStore();
   const lastAutoPlayedMessageIdRef = useRef<string | null>(null);
   const isAutoPlayingRef = useRef<boolean>(false); // 防止重复播放
+  const autoPlayingAudioRef = useRef<HTMLAudioElement | null>(null); // 当前自动播放的音频对象
+  const [autoPlayingMessageId, setAutoPlayingMessageId] = React.useState<string | null>(null); // 当前正在自动播放的消息ID
   
   // 语音输入模式状态（仅在小屏幕下可用）
   const [isVoiceInputMode, setIsVoiceInputMode] = useState(false);
   const { isRecording, isTranscribing, startRecording, stopRecording, transcribe } = useVoiceRecorder();
+  
+  // 语音通话Hook
+  const {
+    isCalling,
+    error: voiceCallError,
+    userFrequencyData,
+    assistantFrequencyData,
+    startCall,
+    endCall,
+  } = useVoiceAgent(
+    currentSessionId || undefined,
+    personalityId,
+    {
+      // 用户语音转文本回调
+      onUserTranscript: (text: string) => {
+        if (text.trim()) {
+          const message: Message = {
+            id: `voice-user-${Date.now()}`,
+            role: 'user',
+            content: text,
+            timestamp: new Date(),
+            session_id: currentSessionId || undefined,
+            user_id: userId || undefined,
+          };
+          addVoiceCallMessage(message);
+        }
+      },
+      // 助手回复文本回调
+      onAssistantTranscript: (text: string) => {
+        if (text.trim()) {
+          const message: Message = {
+            id: `voice-assistant-${Date.now()}`,
+            role: 'assistant',
+            content: text,
+            timestamp: new Date(),
+            session_id: currentSessionId || undefined,
+            user_id: userId || undefined,
+          };
+          addVoiceCallMessage(message);
+        }
+      },
+    }
+  );
   
   // 跟踪用户是否已经有过交互（发送过消息）
   const hasUserInteractedRef = useRef(false);
@@ -65,7 +124,66 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   });
   
   // 使用动态的 sessionId 创建 sendStreamMessage
-  const { sendStreamMessage, isStreaming } = useStreamChat(currentSessionId, personalityId);
+  const { sendStreamMessage, isStreaming } = useStreamChat(currentSessionId || '', personalityId);
+
+  // 从 React Query 获取消息（自动按 sessionId 隔离）
+  // 直接使用 sessionId prop，确保切换时立即查询
+  const { data: messages = [], isLoading: isLoadingHistory, refetch: refetchMessages } = useQuery({
+    queryKey: ['chat', 'messages', currentSessionId],
+    queryFn: async () => {
+      if (!currentSessionId || currentSessionId === 'default') {
+        return [];
+      }
+      try {
+        console.log('Loading messages for session:', currentSessionId);
+        const response = await chatApi.getHistory(currentSessionId);
+        // 确保 response 是数组
+        const responseArray = Array.isArray(response) ? response : [];
+        console.log('Loaded messages:', responseArray.length, 'for session:', currentSessionId);
+        return responseArray;
+      } catch (error) {
+        console.error('Failed to load messages for session:', currentSessionId, error);
+        showError(error, '加载历史消息失败');
+        return [];
+      }
+    },
+    enabled: !!currentSessionId && currentSessionId !== 'default',
+    staleTime: 0, // 设置为0，确保每次组件挂载时都重新查询（解决刷新页面后消息丢失的问题）
+    gcTime: 10 * 60 * 1000, // 10分钟（缓存保留时间，原 cacheTime）
+    refetchOnMount: 'always', // 组件挂载时总是重新查询（确保刷新页面后能获取最新数据）
+    refetchOnWindowFocus: false, // 窗口聚焦时不重新查询（避免不必要的请求）
+  });
+  
+  // 当 currentSessionId 变化时，显式触发重新查询（确保切换会话时能获取最新数据）
+  // 使用 useRef 避免重复查询
+  const lastSessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentSessionId && currentSessionId !== 'default' && currentSessionId !== lastSessionIdRef.current) {
+      console.log('Session ID changed, refetching messages:', currentSessionId);
+      lastSessionIdRef.current = currentSessionId;
+      refetchMessages();
+    }
+  }, [currentSessionId, refetchMessages]);
+  
+  // 合并加载状态
+  const isLoading = isLoadingStore || isLoadingHistory;
+  
+  // 合并普通消息和语音通话消息
+  const allMessages = React.useMemo(() => {
+    const normalMessages = messages || [];
+    const voiceMessages = isVoiceCallActive ? voiceCallMessages : [];
+    // 合并并排序（按时间戳）
+    const combined = [...normalMessages, ...voiceMessages];
+    return combined.sort((a, b) => {
+      const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
+                     typeof a.timestamp === 'number' ? a.timestamp : 
+                     a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+      const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
+                     typeof b.timestamp === 'number' ? b.timestamp : 
+                     b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+      return timeA - timeB;
+    });
+  }, [messages, voiceCallMessages, isVoiceCallActive]);
 
   // 显示错误提示
   useEffect(() => {
@@ -78,7 +196,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [allMessages]);
 
   // 自动播放语音（当收到新的助手消息时）
   // 注意：只在用户发送消息后才自动播放，避免页面加载时触发
@@ -138,8 +256,9 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       }
 
       // 再次检查消息ID，防止在延迟期间消息已变化
-      const currentMessages = useChatStore.getState().messages;
-      const currentAssistantMessages = currentMessages.filter(
+      // 从 React Query 缓存获取最新消息
+      const cachedMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', currentSessionId]) || [];
+      const currentAssistantMessages = cachedMessages.filter(
         (msg) => msg.role === 'assistant' && msg.content
       );
       if (currentAssistantMessages.length === 0) {
@@ -161,29 +280,44 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 标记正在播放
       isAutoPlayingRef.current = true;
       lastAutoPlayedMessageIdRef.current = currentLatestMessage.id;
+      setAutoPlayingMessageId(currentLatestMessage.id); // 设置正在播放的消息ID
 
       // 自动播放语音
       playTTS(content, personalityId).then((audio) => {
         if (audio) {
+          autoPlayingAudioRef.current = audio; // 保存音频对象引用
           // 监听播放结束，重置播放状态
           audio.addEventListener('ended', () => {
             isAutoPlayingRef.current = false;
+            setAutoPlayingMessageId(null); // 清除正在播放的消息ID
+            autoPlayingAudioRef.current = null;
           });
           audio.addEventListener('error', () => {
             isAutoPlayingRef.current = false;
+            setAutoPlayingMessageId(null); // 清除正在播放的消息ID
+            autoPlayingAudioRef.current = null;
           });
         } else {
           isAutoPlayingRef.current = false;
+          setAutoPlayingMessageId(null); // 清除正在播放的消息ID
         }
       }).catch((error) => {
         // 播放失败，重置状态
         isAutoPlayingRef.current = false;
+        setAutoPlayingMessageId(null); // 清除正在播放的消息ID
         // 静默失败，不显示错误提示（因为是自动播放）
         // 浏览器可能阻止自动播放，这是正常的
         if (error.name !== 'NotAllowedError') {
           console.warn('自动播放语音失败:', error);
         }
       });
+      
+      // 延迟刷新会话列表，等待后端标题生成完成（标题生成是异步的，通常需要2-3秒）
+      setTimeout(() => {
+        if (userId) {
+          queryClient.invalidateQueries({ queryKey: ['sessions', userId] });
+        }
+      }, 3000); // 延迟3秒，确保标题生成完成
     }, 1500); // 延迟1.5秒，确保消息完成
 
     return () => {
@@ -191,46 +325,18 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     };
   }, [messages, preferences?.auto_tts, personalityId, isStreaming, isLoading]);
 
-  // 同步 currentSessionId 状态
+  // 同步 currentSessionId 到 Zustand，并重置自动播放状态
   useEffect(() => {
-    setCurrentSessionIdLocal(sessionId);
-  }, [sessionId]);
-
-  // 获取历史消息
-  const { isLoading: isLoadingHistory } = useQuery({
-    queryKey: ['chat', 'messages', currentSessionId],
-    queryFn: async () => {
-      if (!currentSessionId || currentSessionId === 'default') return [];
-      try {
-        const response = await chatApi.getHistory(currentSessionId);
-        // 确保 response 是数组
-        const responseArray = Array.isArray(response) ? response : [];
-        // 使用 getState() 获取最新消息，避免依赖项导致的重建
-        const currentMessages = useChatStore.getState().messages;
-        const localMessages = currentMessages.filter(m => m.session_id === currentSessionId);
-        if (localMessages.length > 0 && responseArray.length === 0) {
-          // 如果后端返回空但本地有消息，保留本地消息
-          return localMessages;
-        }
-        // 只在有实际变化时才更新
-        if (responseArray.length > 0) {
-        setMessages(responseArray);
-        }
-        return responseArray.length > 0 ? responseArray : localMessages;
-      } catch (error) {
-        // 如果查询失败，保留本地消息
-        const currentMessages = useChatStore.getState().messages;
-        const localMessages = currentMessages.filter(m => m.session_id === currentSessionId);
-        if (localMessages.length > 0) {
-          return localMessages;
-        }
-        showError(error, '加载历史消息失败');
-        return [];
-      }
-    },
-    enabled: !!currentSessionId && currentSessionId !== 'default',
-    staleTime: 5 * 60 * 1000, // 5分钟
-  });
+    // 更新 Zustand 中的 currentSessionId
+    const actualSessionId = sessionId === 'default' ? null : sessionId;
+    setCurrentSessionId(actualSessionId);
+    
+    // 重置自动播放相关状态（切换会话时）
+    hasUserInteractedRef.current = false;
+    isAutoPlayingRef.current = false;
+    lastAutoPlayedMessageIdRef.current = null;
+    setAutoPlayingMessageId(null);
+  }, [sessionId, setCurrentSessionId]);
 
   /**
    * 处理发送消息
@@ -255,16 +361,25 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           showError(new Error('创建会话失败：未返回会话ID'), '创建会话失败');
           return;
         }
-        // 先清空当前消息，避免消息混乱
-        setMessages([]);
-        setCurrentSessionIdLocal(actualSessionId);
+        // 移除消息缓存，然后显式触发重新查询（确保获取到欢迎消息）
+        queryClient.removeQueries({ queryKey: ['chat', 'messages', actualSessionId] });
         setCurrentSessionId(actualSessionId);
+        
+        // 显式触发消息查询（确保欢迎消息能够显示）
+        await queryClient.refetchQueries({ 
+          queryKey: ['chat', 'messages', actualSessionId],
+          exact: true 
+        });
+        
         // 更新 URL
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, '', `/chat/${actualSessionId}`);
         }
-        // 使查询失效，但不立即重新查询（避免覆盖即将添加的消息）
-        queryClient.invalidateQueries({ queryKey: ['chat', 'messages', actualSessionId] });
+        // 重置自动播放相关状态
+        hasUserInteractedRef.current = false;
+        isAutoPlayingRef.current = false;
+        lastAutoPlayedMessageIdRef.current = null;
+        setAutoPlayingMessageId(null);
       } catch (error) {
         showError(error, '创建会话失败');
         return;
@@ -280,152 +395,17 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     const content = inputValue.trim();
     setInputValue('');
     
-    // 如果会话ID已更改，直接使用 chatApi 发送消息（因为不能在回调中调用 hook）
+    // 如果会话ID已更改，更新 Zustand 中的 currentSessionId
     if (actualSessionId !== currentSessionId) {
-      // 直接调用流式聊天 API
-      setLoading(true);
-      setError(null);
-
-      try {
-        // 添加用户消息
-        const userMessage: Message = {
-          id: `user-${Date.now()}`,
-          role: 'user',
-          content,
-          timestamp: new Date(),
-          session_id: actualSessionId,
-        };
-        addMessage(userMessage);
-
-        // 创建AI消息占位符
-        const aiMessageId = `assistant-${Date.now()}`;
-        const aiMessage: Message = {
-          id: aiMessageId,
-          role: 'assistant',
-          content: '',
-          timestamp: new Date(),
-          session_id: actualSessionId,
-        };
-        addMessage(aiMessage);
-
-        // 构建请求（不传model，让后端根据personality_id自动选择）
-        const request = {
-          messages: [{ role: 'user' as const, content }],
-          personality_id: personalityId,
-          session_id: actualSessionId,
-          stream: true,
-          use_memory: true,
-        };
-
-        // 处理流式响应
-        let accumulatedContent = '';
-        for await (const chunk of chatApi.streamChat(request)) {
-          const deltaContent = chunk.choices?.[0]?.delta?.content || '';
-          if (deltaContent) {
-            accumulatedContent += deltaContent;
-            updateMessage(aiMessageId, {
-              content: accumulatedContent,
-            });
-          }
-
-          if (chunk.choices?.[0]?.finish_reason) {
-            break;
-          }
-        }
-
-        // 更新最终消息时间戳
-        updateMessage(aiMessageId, {
-          timestamp: new Date(),
-        });
-
-        // 更新React Query缓存，确保用户消息和AI消息都在缓存中
-        queryClient.setQueryData(
-          ['chat', 'messages', actualSessionId],
-          (old: Message[] = []) => {
-            // 检查是否已有用户消息
-            const hasUserMessage = old.some((msg) => msg.id === userMessage.id);
-            // 检查是否已有AI消息
-            const hasAiMessage = old.some((msg) => msg.id === aiMessageId);
-            
-            let updated = [...old];
-            
-            // 添加用户消息（如果不存在）
-            if (!hasUserMessage) {
-              updated.push(userMessage);
-            }
-            
-            // 更新或添加AI消息
-            if (hasAiMessage) {
-              updated = updated.map((msg) => 
-                msg.id === aiMessageId 
-                  ? { ...msg, content: accumulatedContent, timestamp: new Date() }
-                  : msg
-              );
-            } else {
-              updated.push({
-                ...aiMessage,
-                content: accumulatedContent,
-                timestamp: new Date(),
-              });
-            }
-            
-            return updated;
-          }
-        );
-        
-        // 使用 getState() 获取最新消息，避免依赖项导致的重建
-        const currentMessages = useChatStore.getState().messages;
-        const hasUserMessage = currentMessages.some((msg) => msg.id === userMessage.id);
-        const hasAiMessage = currentMessages.some((msg) => msg.id === aiMessageId);
-        
-        let updated = [...currentMessages];
-        
-        if (!hasUserMessage) {
-          updated.push(userMessage);
-        }
-        
-        if (hasAiMessage) {
-          updated = updated.map((msg) => 
-            msg.id === aiMessageId 
-              ? { ...msg, content: accumulatedContent, timestamp: new Date() }
-              : msg
-          );
-        } else {
-          updated.push({
-            ...aiMessage,
-            content: accumulatedContent,
-            timestamp: new Date(),
-          });
-        }
-        
-        setMessages(updated);
-        
-        // 标记用户已经交互过（发送了消息）
-        hasUserInteractedRef.current = true;
-        
-        // 触发自动播放（如果启用）
-        // 使用 setTimeout 确保消息状态已更新
-        setTimeout(() => {
-          const prefs = queryClient.getQueryData<UserPreferences>(['user', 'preferences']);
-          if (prefs?.auto_tts) {
-            playTTS(accumulatedContent, personalityId).catch((error) => {
-              // 静默失败，浏览器可能阻止自动播放
-              if (error.name !== 'NotAllowedError') {
-                console.warn('自动播放语音失败:', error);
-              }
-            });
-          }
-        }, 500);
-
-        setLoading(false);
-      } catch (error: any) {
-        setError(error.message || '发送消息失败');
-        setLoading(false);
-        showError(error, '发送消息失败');
+      setCurrentSessionId(actualSessionId);
+      // 更新 URL（如果不同）
+      if (window.history && window.history.replaceState && actualSessionId) {
+        window.history.replaceState(null, '', `/chat/${actualSessionId}`);
       }
-    } else {
-      await sendStreamMessage(content);
     }
+    
+    // 使用 sendStreamMessage 发送消息
+    await sendStreamMessage(content);
     
     // 聚焦输入框
     setTimeout(() => {
@@ -452,28 +432,33 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
    */
   const handleDeleteMessage = useCallback(
     async (messageId: string) => {
-      // 使用 getState() 获取最新消息，保存被删除的消息以便恢复
-      const currentMessages = useChatStore.getState().messages;
+      // 从 React Query 缓存获取消息，保存被删除的消息以便恢复
+      const currentMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', currentSessionId]) || [];
       const deletedMessage = currentMessages.find((msg) => msg.id === messageId);
       
-      // 先更新UI
-      removeMessage(messageId);
+      // 先更新UI（从 React Query 缓存移除）
+      queryClient.setQueryData(
+        ['chat', 'messages', currentSessionId],
+        (old: Message[] = []) => old.filter((msg) => msg.id !== messageId)
+      );
 
       // 调用API删除后端消息
-      if (sessionId && sessionId !== 'default') {
+      if (currentSessionId && currentSessionId !== 'default') {
         try {
-          await chatApi.deleteMessage(sessionId, messageId);
+          await chatApi.deleteMessage(currentSessionId, messageId);
         } catch (error) {
-          // 如果删除失败，恢复消息
+          // 如果删除失败，恢复消息到 React Query 缓存
           if (deletedMessage) {
-            const currentMessagesAfterDelete = useChatStore.getState().messages;
-            setMessages([...currentMessagesAfterDelete, deletedMessage]);
+            queryClient.setQueryData(
+              ['chat', 'messages', currentSessionId],
+              (old: Message[] = []) => [...old, deletedMessage]
+            );
           }
           showError(error, '删除消息失败');
         }
       }
     },
-    [removeMessage, sessionId, setMessages]
+    [currentSessionId, queryClient]
   );
 
 
@@ -490,6 +475,52 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         transition: 'background-color 0.3s ease',
       }}
     >
+      {/* 语音通话指示器 */}
+      {isVoiceCallActive && (
+        <VoiceCallIndicator
+          sessionId={currentSessionId || undefined}
+          personalityId={personalityId}
+          userFrequencyData={userFrequencyData}
+          assistantFrequencyData={assistantFrequencyData}
+          onEndCall={async () => {
+            // 结束通话逻辑
+            try {
+              // 结束通话
+              await endCall();
+              
+              // 保存语音通话消息到数据库
+              if (voiceCallMessages.length > 0 && currentSessionId) {
+                try {
+                  await chatApi.saveVoiceCallMessages(
+                    currentSessionId,
+                    voiceCallMessages.map((msg) => ({
+                      role: msg.role as 'user' | 'assistant',
+                      content: typeof msg.content === 'string' ? msg.content : (msg.content as any)?.text || '',
+                      timestamp: typeof msg.timestamp === 'string' 
+                        ? msg.timestamp 
+                        : msg.timestamp instanceof Date 
+                          ? msg.timestamp.toISOString()
+                          : new Date(msg.timestamp).toISOString(),
+                    }))
+                  );
+                  console.log('语音通话消息已保存到数据库');
+                } catch (error) {
+                  console.error('保存语音通话消息失败:', error);
+                  showError(error, '保存语音通话消息失败');
+                }
+              }
+              
+              // 清空状态
+              clearVoiceCallMessages();
+              endVoiceCall();
+            } catch (error) {
+              console.error('结束通话失败:', error);
+              showError(error, '结束通话失败');
+            }
+          }}
+        />
+      )}
+      
       {/* 消息列表 */}
       <div
         style={{
@@ -516,7 +547,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <Spin size="large" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : allMessages.length === 0 ? (
           <div
             style={{
               textAlign: 'center',
@@ -528,21 +559,36 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                id={msg.id}
-                role={msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'user'}
-                content={
-                  typeof msg.content === 'string'
-                    ? msg.content
-                    : (msg.content as any)?.text || ''
-                }
-                timestamp={msg.timestamp}
-                onDelete={handleDeleteMessage}
-                personalityId={personalityId}
-              />
-            ))}
+            {allMessages.map((msg) => {
+              // 判断是否为语音通话消息
+              const isVoiceCallMsg = isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id);
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  id={msg.id}
+                  role={msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'user'}
+                  content={
+                    typeof msg.content === 'string'
+                      ? msg.content
+                      : (msg.content as any)?.text || ''
+                  }
+                  timestamp={msg.timestamp}
+                  onDelete={handleDeleteMessage}
+                  personalityId={personalityId}
+                  isAutoPlaying={autoPlayingMessageId === msg.id}
+                  onStopAutoPlay={() => {
+                    // 停止自动播放
+                    if (autoPlayingAudioRef.current) {
+                      autoPlayingAudioRef.current.pause();
+                      autoPlayingAudioRef.current = null;
+                    }
+                    isAutoPlayingRef.current = false;
+                    setAutoPlayingMessageId(null);
+                  }}
+                  isVoiceCall={isVoiceCallMsg}
+                />
+              );
+            })}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -571,8 +617,8 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             boxSizing: 'border-box',
           }}
         >
-          {/* 语音输入切换按钮（仅在小屏幕下显示） */}
-          {isMobile && (
+          {/* 语音输入切换按钮（小屏幕下总是显示，宽屏幕下根据用户偏好显示） */}
+          {(isMobile || preferences?.always_show_voice_input) && (
             <button
               type="button"
               onClick={() => setIsVoiceInputMode(!isVoiceInputMode)}
@@ -788,10 +834,56 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           {/* 语音通话按钮 */}
           <button
             type="button"
-            onClick={() => {
-              // TODO: 实现语音通话功能
-              console.log('语音通话功能待实现');
+            onClick={async () => {
+              if (isVoiceCallActive) {
+                // 如果正在通话，结束通话
+                try {
+                  await endCall();
+                  
+                  // 保存语音通话消息到数据库
+                  if (voiceCallMessages.length > 0 && currentSessionId) {
+                    try {
+                      await chatApi.saveVoiceCallMessages(
+                        currentSessionId,
+                        voiceCallMessages.map((msg) => ({
+                          role: msg.role as 'user' | 'assistant',
+                          content: typeof msg.content === 'string' ? msg.content : (msg.content as any)?.text || '',
+                          timestamp: typeof msg.timestamp === 'string' 
+                            ? msg.timestamp 
+                            : msg.timestamp instanceof Date 
+                              ? msg.timestamp.toISOString()
+                              : new Date(msg.timestamp).toISOString(),
+                        }))
+                      );
+                      console.log('语音通话消息已保存到数据库');
+                    } catch (error) {
+                      console.error('保存语音通话消息失败:', error);
+                      showError(error, '保存语音通话消息失败');
+                    }
+                  }
+                  
+                  clearVoiceCallMessages();
+                  endVoiceCall();
+                } catch (error) {
+                  console.error('结束通话失败:', error);
+                  showError(error, '结束通话失败');
+                }
+              } else {
+                // 开始语音通话
+                try {
+                  // 启动语音通话状态
+                  startVoiceCall();
+                  
+                  // 开始通话（内部会自动连接）
+                  await startCall();
+                } catch (error) {
+                  console.error('开始语音通话失败:', error);
+                  showError(error, '开始语音通话失败');
+                  endVoiceCall();
+                }
+              }
             }}
+            disabled={isLoading || isStreaming || isTranscribing}
             style={{
               flexShrink: 0,
               width: '36px',
@@ -801,20 +893,23 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               justifyContent: 'center',
               border: 'none',
               borderRadius: '8px',
-              backgroundColor: 'var(--primary-color)',
-              cursor: 'pointer',
+              backgroundColor: isVoiceCallActive ? '#ff4d4f' : 'var(--primary-color)',
+              cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
               color: 'white',
               transition: 'background-color 0.2s ease',
               padding: 0,
               outline: 'none',
+              opacity: (isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+              if (!(isLoading || isStreaming || isTranscribing)) {
+                e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff7875' : 'var(--primary-hover)';
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--primary-color)';
+              e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff4d4f' : 'var(--primary-color)';
             }}
-            title="语音通话"
+            title={isVoiceCallActive ? '结束通话' : '语音通话'}
           >
             <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
           </button>

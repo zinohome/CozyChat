@@ -109,6 +109,7 @@ class Personality:
     name: str
     version: str = "1.0.0"
     description: str = ""
+    welcome_message: Optional[str] = None  # 新建会话时的欢迎词
     traits: PersonalityTraits = field(default_factory=PersonalityTraits)
     ai: AIConfig = field(default_factory=AIConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
@@ -127,6 +128,9 @@ class Personality:
         Returns:
             Personality: Personality对象
         """
+        # 解析基本信息
+        welcome_message = config.get("welcome_message")
+        
         # 解析traits
         traits_data = config.get("traits", {})
         traits = PersonalityTraits(
@@ -218,6 +222,7 @@ class Personality:
             name=config.get("name", ""),
             version=config.get("version", "1.0.0"),
             description=config.get("description", ""),
+            welcome_message=welcome_message,
             traits=traits,
             ai=ai,
             memory=memory,
@@ -238,6 +243,7 @@ class Personality:
             "name": self.name,
             "version": self.version,
             "description": self.description,
+            "welcome_message": self.welcome_message,
             "traits": {
                 "friendliness": self.traits.friendliness,
                 "formality": self.traits.formality,

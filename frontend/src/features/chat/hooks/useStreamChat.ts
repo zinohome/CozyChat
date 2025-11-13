@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '@/services/chat';
 import { useChatStore } from '@/store/slices/chatSlice';
+import { useAuthStore } from '@/store/slices/authSlice';
 import type { ChatRequest, Message, StreamChunk } from '@/types/chat';
 
 /**
@@ -14,7 +15,9 @@ export const useStreamChat = (
   personalityId: string
 ) => {
   const queryClient = useQueryClient();
-  const { addMessage, updateMessage, setLoading, setError } = useChatStore();
+  const { setLoading, setError } = useChatStore();
+  const { user } = useAuthStore();
+  const userId = user?.id || null;
   const [isStreaming, setIsStreaming] = useState(false);
   const currentMessageIdRef = useRef<string | null>(null);
 
@@ -28,7 +31,10 @@ export const useStreamChat = (
       setError(null);
 
       try {
-        // 添加用户消息
+        // 从 React Query 缓存获取历史消息
+        const currentMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', sessionId]) || [];
+        
+        // 创建用户消息
         const userMessage: Message = {
           id: `user-${Date.now()}`,
           role: 'user',
@@ -36,8 +42,7 @@ export const useStreamChat = (
           timestamp: new Date(),
           session_id: sessionId,
         };
-        addMessage(userMessage);
-
+        
         // 创建AI消息占位符
         const aiMessageId = `assistant-${Date.now()}`;
         currentMessageIdRef.current = aiMessageId;
@@ -48,13 +53,12 @@ export const useStreamChat = (
           timestamp: new Date(),
           session_id: sessionId,
         };
-        addMessage(aiMessage);
-
-        // 构建消息列表（包含历史消息）
-        // 使用 getState() 获取最新消息，避免依赖项导致的重建
-        const currentMessages = useChatStore.getState().messages.length > 0 
-          ? useChatStore.getState().messages 
-          : (queryClient.getQueryData<Message[]>(['chat', 'messages', sessionId]) || []);
+        
+        // 乐观更新：立即添加到 React Query 缓存
+        queryClient.setQueryData(
+          ['chat', 'messages', sessionId],
+          (old: Message[] = []) => [...old, userMessage, aiMessage]
+        );
         
         const messageList = [
           ...currentMessages.map((m) => ({
@@ -93,10 +97,16 @@ export const useStreamChat = (
           
           const now = Date.now();
           if (now - lastUpdateTime >= UPDATE_THROTTLE_MS) {
-            // 立即更新
-            updateMessage(aiMessageId, {
-              content,
-            });
+            // 立即更新 React Query 缓存
+            queryClient.setQueryData(
+              ['chat', 'messages', sessionId],
+              (old: Message[] = []) =>
+                old.map((msg) =>
+                  msg.id === aiMessageId
+                    ? { ...msg, content }
+                    : msg
+                )
+            );
             lastUpdateTime = now;
             lastUpdateContent = content;
             if (pendingUpdate) {
@@ -109,9 +119,15 @@ export const useStreamChat = (
               clearTimeout(pendingUpdate);
             }
             pendingUpdate = setTimeout(() => {
-              updateMessage(aiMessageId, {
-                content,
-              });
+              queryClient.setQueryData(
+                ['chat', 'messages', sessionId],
+                (old: Message[] = []) =>
+                  old.map((msg) =>
+                    msg.id === aiMessageId
+                      ? { ...msg, content }
+                      : msg
+                  )
+              );
               lastUpdateTime = Date.now();
               lastUpdateContent = content;
               pendingUpdate = null;
@@ -162,9 +178,15 @@ export const useStreamChat = (
               .join('\n');
             
             if (toolCallText) {
-              updateMessage(aiMessageId, {
-                content: accumulatedContent + (accumulatedContent ? '\n\n' : '') + toolCallText,
-              });
+              queryClient.setQueryData(
+                ['chat', 'messages', sessionId],
+                (old: Message[] = []) =>
+                  old.map((msg) =>
+                    msg.id === aiMessageId
+                      ? { ...msg, content: accumulatedContent + (accumulatedContent ? '\n\n' : '') + toolCallText }
+                      : msg
+                  )
+              );
             }
           }
           
@@ -195,9 +217,15 @@ export const useStreamChat = (
                 ? `${currentContent}\n\n${toolCallText}\n\n⏳ 正在执行工具...`
                 : `${toolCallText}\n\n⏳ 正在执行工具...`;
               
-              updateMessage(aiMessageId, {
-                content: displayContent,
-              });
+              queryClient.setQueryData(
+                ['chat', 'messages', sessionId],
+                (old: Message[] = []) =>
+                  old.map((msg) =>
+                    msg.id === aiMessageId
+                      ? { ...msg, content: displayContent }
+                      : msg
+                  )
+              );
               
               // 重置工具调用列表，准备接收后续回复
               toolCalls = [];
@@ -216,20 +244,6 @@ export const useStreamChat = (
         }
         
         // 更新最终消息内容和时间戳（确保最终内容被保存）
-        // 只在内容有变化时才更新
-        if (accumulatedContent !== lastUpdateContent) {
-          updateMessage(aiMessageId, {
-            content: accumulatedContent,
-            timestamp: new Date(),
-          });
-        } else {
-          // 只更新时间戳
-          updateMessage(aiMessageId, {
-            timestamp: new Date(),
-          });
-        }
-
-        // 更新React Query缓存
         queryClient.setQueryData(
           ['chat', 'messages', sessionId],
           (old: Message[] = []) => {
@@ -250,6 +264,13 @@ export const useStreamChat = (
         setLoading(false);
         setIsStreaming(false);
         currentMessageIdRef.current = null;
+        
+        // 延迟刷新会话列表，等待后端标题生成完成（标题生成是异步的，通常需要2-3秒）
+        setTimeout(() => {
+          if (userId) {
+            queryClient.invalidateQueries({ queryKey: ['sessions', userId] });
+          }
+        }, 3000); // 延迟3秒，确保标题生成完成
       } catch (error: any) {
         // 清理待处理的更新
         if (pendingUpdate) {
@@ -263,14 +284,16 @@ export const useStreamChat = (
         setIsStreaming(false);
         currentMessageIdRef.current = null;
         
-        // 如果出错，删除占位符消息
+        // 如果出错，从 React Query 缓存中删除占位符消息
         if (failedMessageId) {
-          const { removeMessage } = useChatStore.getState();
-          removeMessage(failedMessageId);
+          queryClient.setQueryData(
+            ['chat', 'messages', sessionId],
+            (old: Message[] = []) => old.filter((msg) => msg.id !== failedMessageId)
+          );
         }
       }
     },
-    [sessionId, personalityId, addMessage, updateMessage, setLoading, setError, queryClient]
+    [sessionId, personalityId, setLoading, setError, queryClient, userId]
   );
 
   /**

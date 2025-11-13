@@ -45,12 +45,12 @@ export const Header: React.FC = () => {
         key: 'profile',
         icon: <UserOutlined />,
         label: '个人资料',
-        onClick: () => navigate('/settings'),
+        onClick: () => navigate('/profile'),
       },
       {
         key: 'settings',
         icon: <SettingOutlined />,
-        label: '设置',
+        label: '偏好设置',
         onClick: () => navigate('/settings'),
       },
       {

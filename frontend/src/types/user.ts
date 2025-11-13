@@ -48,6 +48,9 @@ export interface UserPreferences {
   language?: string;
   chatBackgroundStyle?: ChatBackgroundStyle;
   auto_tts?: boolean; // 自动播放语音
+  always_show_voice_input?: boolean; // 总是显示语音输入按钮（宽屏幕下也显示）
+  timezone?: string; // 时区（默认：Asia/Shanghai）
+  default_personality?: string; // 默认人格ID
   notifications?: {
     email?: boolean;
     push?: boolean;

@@ -140,6 +140,16 @@ class ConfigLoader:
         config = self.load_yaml(file_path)
         return config.get("engines", {}).get(voice_type, {})
     
+    def load_session_config(self) -> Dict[str, Any]:
+        """加载会话配置
+        
+        Returns:
+            Dict[str, Any]: 会话配置字典
+        """
+        file_path = self.config_dir / "session.yaml"
+        config = self.load_yaml(file_path)
+        return config.get("session", {})
+    
     def clear_cache(self):
         """清除配置缓存"""
         self._cache.clear()

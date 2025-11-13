@@ -4,7 +4,9 @@ import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useSessions } from '../hooks/useSessions';
 import { showError, showSuccess } from '@/utils/errorHandler';
 import type { Session } from '@/types/session';
-import { format } from 'date-fns';
+import { formatDateTime, DEFAULT_TIMEZONE } from '@/utils/timezone';
+import { useQuery } from '@tanstack/react-query';
+import { userApi } from '@/services/user';
 
 const { Text } = Typography;
 
@@ -41,28 +43,19 @@ export const SessionItem: React.FC<SessionItemProps> = ({
   const [editTitle, setEditTitle] = useState(session.title || '');
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // 格式化时间，处理可能的无效日期
-  const formatTime = (dateValue: Date | string | undefined): string => {
-    if (!dateValue) {
-      return '--';
-    }
-    
-    try {
-      const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
-      // 检查日期是否有效
-      if (isNaN(date.getTime())) {
-        return '--';
-      }
-      return format(date, 'MM-dd HH:mm');
-    } catch (error) {
-      console.warn('Failed to format date:', dateValue, error);
-      return '--';
-    }
-  };
+  // 获取用户偏好（用于时区）
+  const { data: preferences } = useQuery({
+    queryKey: ['user', 'preferences'],
+    queryFn: () => userApi.getCurrentUserPreferences(),
+  });
 
+  // 获取时区（默认：Asia/Shanghai）
+  const timezone = preferences?.timezone || DEFAULT_TIMEZONE;
+
+  // 格式化时间，按时区显示，格式：YYYY-MM-DD HH:mm:ss
   const formattedTime = session.last_message_at
-    ? formatTime(session.last_message_at)
-    : formatTime(session.created_at);
+    ? formatDateTime(session.last_message_at, timezone, 'yyyy-MM-dd HH:mm:ss')
+    : formatDateTime(session.created_at, timezone, 'yyyy-MM-dd HH:mm:ss');
 
   /**
    * 处理编辑

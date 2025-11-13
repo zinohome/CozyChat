@@ -1,7 +1,7 @@
 """API v1版本路由"""
 from fastapi import APIRouter
 
-from . import audio, auth, chat, health, memory, models, personalities, sessions, tools, users, websocket
+from . import audio, auth, chat, config, health, memory, models, personalities, sessions, tools, users
 
 api_router = APIRouter()
 
@@ -17,8 +17,8 @@ api_router.include_router(memory.router, prefix="/memory", tags=["memory"])
 # Week 7: Audio路由（STT、TTS）
 api_router.include_router(audio.router, prefix="/audio", tags=["audio"])
 
-# Week 8: WebSocket路由（RealTime语音对话）
-api_router.include_router(websocket.router, prefix="/ws", tags=["websocket"])
+# 配置API
+api_router.include_router(config.router)
 
 # Week 9: 用户管理路由
 api_router.include_router(users.router, prefix="/users", tags=["users"])

@@ -99,6 +99,8 @@ class User(UserBase):
             "language": "zh-CN",
             "theme": "blue",  # 使用颜色主题系统：blue, green, purple, orange, pink, cyan
             "auto_tts": False,
+            "always_show_voice_input": False,  # 总是显示语音输入按钮（宽屏幕下也显示）
+            "timezone": "Asia/Shanghai",  # 默认时区：上海
             "show_reasoning": False
         }
     )
@@ -165,14 +167,40 @@ class User(UserBase):
     def get_preferences(self) -> Dict[str, Any]:
         """获取用户偏好设置
         
+        返回合并了默认值的偏好设置，确保所有字段都存在。
+        
         Returns:
             Dict[str, Any]: 偏好设置字典
         """
+        # 默认偏好设置
+        default_preferences = {
+            "default_personality": "health_assistant",
+            "language": "zh-CN",
+            "theme": "blue",  # 使用颜色主题系统：blue, green, purple, orange, pink, cyan
+            "auto_tts": False,
+            "always_show_voice_input": False,
+            "timezone": "Asia/Shanghai",  # 默认时区：上海
+            "show_reasoning": False
+        }
+        
+        # 获取当前偏好设置
+        current_prefs = {}
         if isinstance(self.preferences, dict):
-            return self.preferences
+            current_prefs = self.preferences
         elif isinstance(self.preferences, str):
-            return json.loads(self.preferences)
-        return {}
+            try:
+                current_prefs = json.loads(self.preferences)
+            except (json.JSONDecodeError, TypeError):
+                current_prefs = {}
+        
+        # 合并默认值和当前值（当前值优先）
+        merged_prefs = {**default_preferences, **current_prefs}
+        
+        # 迁移旧数据：如果 theme 是 "light"，转换为 "blue"
+        if merged_prefs.get("theme") == "light":
+            merged_prefs["theme"] = "blue"
+        
+        return merged_prefs
     
     def update_preferences(self, updates: Dict[str, Any]) -> None:
         """更新用户偏好设置

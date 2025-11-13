@@ -58,6 +58,8 @@ class UserPreferencesUpdateRequest(BaseModel):
         pattern="^(blue|green|purple|orange|pink|cyan)$"
     )
     auto_tts: Optional[bool] = Field(None, description="自动TTS")
+    always_show_voice_input: Optional[bool] = Field(None, description="总是显示语音输入按钮（宽屏幕下也显示）")
+    timezone: Optional[str] = Field(None, description="时区（如：Asia/Shanghai）")
     show_reasoning: Optional[bool] = Field(None, description="显示推理过程")
 
 
@@ -298,6 +300,14 @@ async def update_user_preferences(
         
         # 验证主题值（如果提供）
         if "theme" in updates and updates["theme"]:
+            # 迁移旧数据：如果 theme 是 "light"，转换为 "blue"
+            if updates["theme"] == "light":
+                logger.info(
+                    f"Migrating theme from 'light' to 'blue'",
+                    extra={"user_id": str(current_user.id)}
+                )
+                updates["theme"] = "blue"
+            
             valid_themes = ["blue", "green", "purple", "orange", "pink", "cyan"]
             if updates["theme"] not in valid_themes:
                 logger.warning(

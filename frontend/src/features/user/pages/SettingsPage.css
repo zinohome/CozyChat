@@ -1,0 +1,24 @@
+/**
+ * 偏好设置页面样式
+ */
+
+/* 偏好设置卡片标题颜色 - 白色文字 */
+.preferences-card .ant-card-head-title {
+  color: #ffffff !important;
+}
+
+/* 偏好设置卡片头部整体样式 */
+.preferences-card .ant-card-head {
+  color: #ffffff !important;
+}
+
+/* 返回按钮样式 */
+.preferences-back-button {
+  color: #ffffff !important;
+  transition: color 0.3s ease;
+}
+
+.preferences-back-button:hover {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+

@@ -125,3 +125,23 @@ class ModelListResponse(BaseModel):
     object: str = "list"
     data: List[ModelInfo]
 
+
+class VoiceCallMessage(BaseModel):
+    """语音通话消息模型"""
+    role: Literal["user", "assistant"]
+    content: str
+    timestamp: Optional[str] = None  # ISO格式时间戳
+
+
+class SaveVoiceCallMessagesRequest(BaseModel):
+    """保存语音通话消息请求"""
+    session_id: str = Field(..., description="会话ID")
+    messages: List[VoiceCallMessage] = Field(..., description="消息列表")
+
+
+class SaveVoiceCallMessagesResponse(BaseModel):
+    """保存语音通话消息响应"""
+    message: str = "消息已保存"
+    saved_count: int
+    session_id: str
+

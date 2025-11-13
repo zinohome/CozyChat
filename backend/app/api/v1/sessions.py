@@ -6,7 +6,7 @@
 
 # 标准库
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -139,12 +139,37 @@ async def create_session(
         db.commit()
         db.refresh(session)
         
+        # 如果 personality 有欢迎词，自动创建一条助手消息
+        if personality.welcome_message:
+            welcome_message = MessageModel(
+                session_id=session.id,
+                user_id=user.id,
+                role="assistant",
+                content=personality.welcome_message,
+                message_metadata={"is_welcome": True}  # 标记为欢迎消息
+            )
+            db.add(welcome_message)
+            # 更新会话统计信息
+            session.message_count = 1
+            session.last_message_at = welcome_message.created_at
+            db.commit()
+            
+            logger.info(
+                "Welcome message added to session",
+                extra={
+                    "user_id": str(user.id),
+                    "session_id": str(session.id),
+                    "personality_id": request.personality_id
+                }
+            )
+        
         logger.info(
             "Session created",
             extra={
                 "user_id": str(user.id),
                 "session_id": str(session.id),
-                "personality_id": request.personality_id
+                "personality_id": request.personality_id,
+                "has_welcome_message": bool(personality.welcome_message)
             }
         )
         
@@ -152,7 +177,7 @@ async def create_session(
             session_id=str(session.id),
             personality_id=session.personality_id,
             title=session.title,
-            created_at=session.created_at.isoformat()
+            created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
     except HTTPException:
@@ -204,11 +229,21 @@ async def list_sessions(
             query = query.filter(SessionModel.personality_id == personality_id)
         
         # 排序
-        sort_column = getattr(SessionModel, sort, SessionModel.created_at)
-        if order == "desc":
-            query = query.order_by(desc(sort_column))
+        # 如果按 last_message_at 排序，需要处理 null 值（使用 created_at 作为后备）
+        if sort == "last_message_at":
+            # 使用 COALESCE 处理 null 值：如果 last_message_at 为 null，使用 created_at
+            from sqlalchemy import func
+            sort_column = func.coalesce(SessionModel.last_message_at, SessionModel.created_at)
+            if order == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(sort_column)
         else:
-            query = query.order_by(sort_column)
+            sort_column = getattr(SessionModel, sort, SessionModel.created_at)
+            if order == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(sort_column)
         
         # 总数
         total = query.count()
@@ -230,8 +265,8 @@ async def list_sessions(
                 personality_name=personality.name if personality else None,
                 title=session.title,
                 message_count=session.message_count,
-                last_message_at=session.last_message_at.isoformat() if session.last_message_at else None,
-                created_at=session.created_at.isoformat()
+                last_message_at=session.last_message_at.replace(tzinfo=timezone.utc).isoformat() if session.last_message_at else None,
+                created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
             ))
         
         logger.info(
@@ -275,7 +310,23 @@ async def get_session(
     """
     try:
         import uuid
-        session_uuid = uuid.UUID(session_id)
+        # 记录接收到的 session_id，用于调试
+        logger.debug(
+            f"Received session_id: {session_id}, type: {type(session_id)}, length: {len(session_id)}"
+        )
+        
+        # 尝试解析 UUID
+        try:
+            session_uuid = uuid.UUID(session_id)
+        except ValueError as e:
+            logger.warning(
+                f"Invalid UUID format: {session_id}, error: {e}",
+                extra={"session_id": session_id, "user_id": str(user.id)}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid session ID format: {str(e)}"
+            )
         
         # 查询会话
         session = db.query(SessionModel).filter(
@@ -298,20 +349,29 @@ async def get_session(
         ).order_by(MessageModel.created_at).all()
         
         # 构建响应
-        message_items = [
-            MessageInfo(
-                id=str(msg.id),
-                role=msg.role,
-                content=msg.content,
-                created_at=msg.created_at.isoformat(),
-                metadata=msg.metadata or {}
+        message_items = []
+        for msg in messages:
+            # 注意：Message 模型中有 metadata = Base.metadata（SQLAlchemy 元数据对象）
+            # 实际的 JSONB 字段是 message_metadata，必须使用 message_metadata 而不是 metadata
+            msg_metadata = msg.message_metadata if msg.message_metadata else {}
+            
+            # 确保 metadata 是字典类型
+            if not isinstance(msg_metadata, dict):
+                msg_metadata = {}
+            
+            message_items.append(
+                MessageInfo(
+                    id=str(msg.id),
+                    role=msg.role,
+                    content=msg.content,
+                    created_at=msg.created_at.replace(tzinfo=timezone.utc).isoformat(),
+                    metadata=msg_metadata
+                )
             )
-            for msg in messages
-        ]
         
         logger.info(
             "Retrieved session detail",
-            extra={"user_id": str(user.id), "session_id": session_id}
+            extra={"user_id": str(user.id), "session_id": session_id, "message_count": len(message_items)}
         )
         
         return SessionDetailResponse(
@@ -320,14 +380,9 @@ async def get_session(
             title=session.title,
             messages=message_items,
             total_messages=len(message_items),
-            created_at=session.created_at.isoformat()
+            created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid session ID format"
-        )
     except HTTPException:
         raise
     except Exception as e:
@@ -394,7 +449,7 @@ async def update_session(
         return UpdateSessionResponse(
             session_id=str(session.id),
             title=session.title,
-            updated_at=session.updated_at.isoformat()
+            updated_at=session.updated_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
     except ValueError:
@@ -451,13 +506,24 @@ async def delete_session(
                 detail="Session not found"
             )
         
-        # 软删除
+        # 软删除会话
         session.deleted_at = datetime.utcnow()
+        
+        # 删除该会话的所有消息（物理删除，因为消息通常不需要恢复）
+        # 注意：虽然 Message 表有 CASCADE，但软删除不会触发，需要手动删除
+        deleted_messages_count = db.query(MessageModel).filter(
+            MessageModel.session_id == session_uuid
+        ).delete()
+        
         db.commit()
         
         logger.info(
-            "Deleted session",
-            extra={"user_id": str(user.id), "session_id": session_id}
+            "Deleted session and messages",
+            extra={
+                "user_id": str(user.id),
+                "session_id": session_id,
+                "deleted_messages_count": deleted_messages_count
+            }
         )
         
         return DeleteSessionResponse(

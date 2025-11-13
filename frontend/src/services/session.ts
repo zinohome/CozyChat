@@ -23,6 +23,7 @@ export const sessionApi = {
     // 后端返回格式: { sessions: SessionListItem[], total, page, page_size }
     // SessionListItem: { session_id, personality_id, personality_name, title, message_count, last_message_at, created_at }
     // 前端期望格式: { items: Session[], total, page, page_size, has_next, has_prev }
+    // 默认按 last_message_at 降序排列，最新的在最上面
     const response = await apiClient.get<{
       sessions: Array<{
         session_id: string;
@@ -37,7 +38,11 @@ export const sessionApi = {
       page: number;
       page_size: number;
     }>('/v1/sessions', {
-      params,
+      params: {
+        ...params,
+        sort: 'last_message_at',  // 按最后消息时间排序
+        order: 'desc',  // 降序，最新的在最上面
+      },
     });
     
     // 转换数据格式：将 session_id 映射为 id
@@ -72,11 +77,34 @@ export const sessionApi = {
    */
   async getSession(sessionId: string): Promise<Session> {
     try {
+      // 验证 UUID 格式
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(sessionId)) {
+        console.warn(`Invalid session ID format: ${sessionId}`);
+        throw new Error(`Invalid session ID format: ${sessionId}`);
+      }
+      
       return await apiClient.get<Session>(`/v1/sessions/${sessionId}`);
     } catch (error: any) {
       // 如果是404错误（会话不存在或已删除），返回一个默认的会话对象，避免抛出错误
       if (error?.response?.status === 404) {
         console.warn(`Session ${sessionId} not found, returning empty session`);
+        return {
+          id: sessionId,
+          session_id: sessionId,
+          title: '会话不存在',
+          personality_id: 'default',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          message_count: 0,
+          total_messages: 0,
+          messages: [],
+          metadata: {},
+        } as Session;
+      }
+      // 如果是400错误（无效的session ID格式），返回一个默认的会话对象
+      if (error?.response?.status === 400) {
+        console.warn(`Invalid session ID format: ${sessionId}, returning empty session`);
         return {
           id: sessionId,
           session_id: sessionId,

@@ -1,0 +1,34 @@
+/**
+ * 个人资料页面样式
+ */
+
+/* 个人资料卡片标题颜色 - 白色文字 */
+.profile-card .ant-card-head-title {
+  color: #ffffff !important;
+}
+
+/* 个人资料卡片头部整体样式 */
+.profile-card .ant-card-head {
+  color: #ffffff !important;
+}
+
+/* 返回按钮样式 */
+.profile-back-button {
+  color: #ffffff !important;
+  transition: color 0.3s ease;
+}
+
+.profile-back-button:hover {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 表单样式 */
+.profile-card .ant-form-item-label > label {
+  font-weight: 500;
+}
+
+/* 头像上传区域 */
+.profile-card .ant-upload {
+  margin-top: 8px;
+}
+

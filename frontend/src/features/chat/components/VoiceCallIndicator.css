@@ -1,0 +1,106 @@
+.voice-call-indicator {
+  width: 100%;
+  /* 使用浅色主题色（纯色，不用渐变） */
+  background-color: color-mix(in srgb, var(--primary-color) 20%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary-color) 15%, white);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.voice-call-indicator-content {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.voice-call-indicator-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.voice-call-icon {
+  font-size: 18px;
+  color: var(--primary-color);
+  transform: rotate(-90deg); /* 逆时针旋转90度 */
+  display: inline-block;
+}
+
+.voice-call-status {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.voice-call-indicator-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.voice-waveforms {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.voice-call-duration {
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.voice-call-indicator-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.voice-call-end-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px; /* 方形，使用小圆角 */
+  border: none;
+  background-color: #ff4d4f;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  padding: 0;
+  outline: none;
+}
+
+.voice-call-end-button:hover {
+  background-color: #ff7875;
+  transform: scale(1.05);
+}
+
+.voice-call-end-button:active {
+  transform: scale(0.95);
+}
+
+.voice-call-end-button svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+

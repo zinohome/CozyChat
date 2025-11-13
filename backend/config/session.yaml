@@ -1,0 +1,23 @@
+session:
+  # 会话标题自动更新配置
+  auto_title:
+    # 是否启用自动更新标题
+    enabled: true
+    # 消息数量阈值：当会话中的消息数量超过此值时，自动生成标题
+    message_threshold: 6
+    # 标题生成配置
+    generation:
+      # 使用的AI模型（如果为null，则使用personality配置的模型）
+      model: null
+      # 最大标题长度
+      max_length: 50
+      # 生成提示词模板（{messages} 会被替换为消息内容）
+      prompt_template: |
+        请根据以下对话内容，生成一个简洁的会话标题（不超过{max_length}个字）。
+        标题应该概括对话的主要话题或核心内容。
+        
+        对话内容：
+        {messages}
+        
+        请只返回标题，不要包含其他内容。
+

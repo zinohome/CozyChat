@@ -7,7 +7,6 @@ import { useChatStore } from '@/store/slices/chatSlice';
 import { useStreamChat } from '../hooks/useStreamChat';
 import { chatApi } from '@/services/chat';
 import { showError } from '@/utils/errorHandler';
-import type { Message } from '@/types/chat';
 
 /**
  * 聊天容器组件属性
@@ -28,7 +27,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { messages, setMessages, isLoading, error, setError } = useChatStore();
+  const { isLoading: isLoadingStore, error, setError } = useChatStore();
   const { sendStreamMessage, isStreaming } = useStreamChat(sessionId, personalityId);
 
   // 显示错误提示
@@ -40,15 +39,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     }
   }, [error, setError]);
 
-  // 获取历史消息
-  const { isLoading: isLoadingHistory } = useQuery({
+  // 从 React Query 获取消息（自动按 sessionId 隔离）
+  const { data: messages = [], isLoading: isLoadingHistory } = useQuery({
     queryKey: ['chat', 'messages', sessionId],
     queryFn: async () => {
       if (!sessionId || sessionId === 'default') return [];
       try {
         const response = await chatApi.getHistory(sessionId);
-        setMessages(response);
-        return response;
+        return Array.isArray(response) ? response : [];
       } catch (error) {
         showError(error, '加载历史消息失败');
         return [];
@@ -57,6 +55,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     enabled: !!sessionId && sessionId !== 'default',
     staleTime: 5 * 60 * 1000, // 5分钟
   });
+  
+  // 合并加载状态
+  const isLoading = isLoadingStore || isLoadingHistory;
 
   /**
    * 处理发送消息

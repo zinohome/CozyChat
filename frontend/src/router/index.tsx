@@ -9,6 +9,7 @@ const LoginPage = lazy(() => import('@/features/auth/pages/LoginPage'));
 const RegisterPage = lazy(() => import('@/features/auth/pages/RegisterPage'));
 const ChatPage = lazy(() => import('@/features/chat/pages/ChatPage'));
 const SettingsPage = lazy(() => import('@/features/user/pages/SettingsPage'));
+const ProfilePage = lazy(() => import('@/features/user/pages/ProfilePage'));
 
 /**
  * 加载中组件
@@ -31,7 +32,12 @@ const Loading: React.FC = () => (
  */
 export const AppRouter: React.FC = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Suspense fallback={<Loading />}>
         <Routes>
           {/* 公开路由 */}
@@ -74,6 +80,14 @@ export const AppRouter: React.FC = () => {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />

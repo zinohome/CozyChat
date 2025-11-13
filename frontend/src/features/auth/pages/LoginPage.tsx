@@ -19,7 +19,9 @@ export const LoginPage: React.FC = () => {
       <Card
         title="登录 CozyChat"
         style={{ width: 400 }}
-        headStyle={{ textAlign: 'center', fontSize: '24px' }}
+        styles={{
+          header: { textAlign: 'center', fontSize: '24px' },
+        }}
       >
         <LoginForm />
       </Card>

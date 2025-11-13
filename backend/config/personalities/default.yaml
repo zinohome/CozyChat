@@ -4,6 +4,9 @@ personality:
   version: "1.0.0"
   description: "通用AI助手"
   
+  # 欢迎词（新建会话时自动显示）
+  welcome_message: "你好！我是AI助手，很高兴为你服务。有什么问题可以随时问我~"
+  
   # 人格特征
   traits:
     friendliness: 0.7
@@ -83,6 +86,12 @@ personality:
       enabled: false
       provider: "openai"
       voice: "alloy"
+      # Realtime 专用的 instructions（可选）
+      # 如果不存在，会回退到 ai.system_prompt
+      instructions: |
+        你是一个友好的AI助手，帮助用户解答问题和完成任务。
+        在语音对话中，请保持简洁、自然的对话风格。
+        回复要简短明了，适合语音播放。
       turn_detection:
         type: "server_vad"
         threshold: 0.5

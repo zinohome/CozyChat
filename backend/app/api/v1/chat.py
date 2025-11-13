@@ -7,27 +7,33 @@
 # 标准库
 import json
 from typing import AsyncIterator
+from datetime import timezone
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 # 本地库
-from app.api.deps import get_sync_session
+from app.api.deps import get_sync_session, get_current_active_user
 from app.core.personality import PersonalityManager
 from app.engines.ai import AIEngineFactory, ChatMessage as EngineChatMessage
 from app.engines.tools import builtin  # 导入以注册工具
 from app.engines.tools.manager import ToolManager
 from app.models.session import Session as SessionModel
+from app.models.message import Message as MessageModel
+from app.models.user import User
 from app.schemas.chat import (
     ChatCompletionChoice,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionUsage,
     EngineListResponse,
+    SaveVoiceCallMessagesRequest,
+    SaveVoiceCallMessagesResponse,
 )
 from app.utils.logger import logger
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 router = APIRouter()
 
@@ -374,6 +380,7 @@ async def create_chat_completion(
                     max_iterations = 10  # 防止无限循环
                     iteration = 0
                     accumulated_content = ""  # 收集AI回复内容，用于保存记忆
+                    stream_actual_model = actual_model  # 保存actual_model到闭包中
                     
                     while iteration < max_iterations:
                         iteration += 1
@@ -644,39 +651,115 @@ async def create_chat_completion(
                             
                             assistant_content = accumulated_content
                             
-                            # 创建异步任务保存记忆，不等待结果
+                            # 创建异步任务保存记忆和更新标题，不等待结果
                             if last_user_message and assistant_content:
                                 import asyncio
                                 from app.engines.memory.manager import MemoryManager
+                                from app.core.session import SessionTitleGenerator
                                 
-                                async def save_memory_async():
-                                    """异步保存记忆，不阻塞主流程"""
+                                async def save_memory_and_update_title_async():
+                                    """异步保存消息、记忆和更新标题，不阻塞主流程"""
                                     try:
-                                        personality_manager = PersonalityManager()
-                                        personality = personality_manager.get_personality(personality_id)
+                                        # 需要创建新的数据库会话，因为原会话可能在异步任务中已关闭
+                                        from app.models.base import get_sync_db
+                                        import uuid
                                         
-                                        if personality and personality.memory.enabled and request.use_memory:
-                                            memory_manager = MemoryManager()
+                                        async_db = next(get_sync_db())
+                                        try:
+                                            session_uuid = uuid.UUID(request.session_id)
+                                            user_uuid = uuid.UUID(user_id)
                                             
-                                            # 使用 async_save=True 异步保存，不阻塞
-                                            await memory_manager.add_conversation_turn(
-                                                user_id=user_id,
-                                                session_id=request.session_id,
-                                                user_message=last_user_message,
-                                                assistant_message=assistant_content,
-                                                importance=0.5,
-                                                async_save=True
-                                            )
+                                            # 保存用户消息到数据库
+                                            try:
+                                                user_message = MessageModel(
+                                                    session_id=session_uuid,
+                                                    user_id=user_uuid,
+                                                    role="user",
+                                                    content=last_user_message
+                                                )
+                                                async_db.add(user_message)
+                                                
+                                                # 保存助手消息到数据库
+                                                # 获取实际使用的模型（使用闭包中的stream_actual_model）
+                                                assistant_model = stream_actual_model
+                                                
+                                                assistant_message = MessageModel(
+                                                    session_id=session_uuid,
+                                                    user_id=user_uuid,
+                                                    role="assistant",
+                                                    content=assistant_content,
+                                                    model=assistant_model
+                                                )
+                                                async_db.add(assistant_message)
+                                                
+                                                # 更新会话的message_count和last_message_at
+                                                session = async_db.query(SessionModel).filter(
+                                                    SessionModel.id == session_uuid
+                                                ).first()
+                                                if session:
+                                                    session.message_count = (session.message_count or 0) + 2
+                                                    from datetime import datetime
+                                                    session.last_message_at = datetime.utcnow()
+                                                
+                                                async_db.commit()
+                                                
+                                                logger.debug(
+                                                    f"Saved messages to database (stream)",
+                                                    extra={
+                                                        "user_id": user_id,
+                                                        "session_id": request.session_id,
+                                                        "user_message_length": len(last_user_message),
+                                                        "assistant_message_length": len(assistant_content)
+                                                    }
+                                                )
+                                            except Exception as msg_error:
+                                                logger.warning(
+                                                    f"Failed to save messages to database: {msg_error}",
+                                                    exc_info=False
+                                                )
+                                                async_db.rollback()
                                             
-                                            logger.debug(
-                                                f"Saved conversation to memory (stream)",
-                                                extra={
-                                                    "user_id": user_id,
-                                                    "session_id": request.session_id,
-                                                    "user_message_length": len(last_user_message),
-                                                    "assistant_message_length": len(assistant_content)
-                                                }
-                                            )
+                                            # 保存记忆（如果启用了记忆系统）
+                                            personality_manager = PersonalityManager()
+                                            personality = personality_manager.get_personality(personality_id)
+                                            
+                                            if personality and personality.memory.enabled and request.use_memory:
+                                                memory_manager = MemoryManager()
+                                                
+                                                # 使用 async_save=True 异步保存，不阻塞
+                                                await memory_manager.add_conversation_turn(
+                                                    user_id=user_id,
+                                                    session_id=request.session_id,
+                                                    user_message=last_user_message,
+                                                    assistant_message=assistant_content,
+                                                    importance=0.5,
+                                                    async_save=True
+                                                )
+                                                
+                                                logger.debug(
+                                                    f"Saved conversation to memory (stream)",
+                                                    extra={
+                                                        "user_id": user_id,
+                                                        "session_id": request.session_id,
+                                                        "user_message_length": len(last_user_message),
+                                                        "assistant_message_length": len(assistant_content)
+                                                    }
+                                                )
+                                            
+                                            # 更新会话标题（如果需要）
+                                            try:
+                                                title_generator = SessionTitleGenerator(async_db)
+                                                await title_generator.update_session_title_if_needed(
+                                                    session_id=request.session_id,
+                                                    personality_id=personality_id
+                                                )
+                                            except Exception as title_error:
+                                                logger.warning(
+                                                    f"Failed to update session title (stream): {title_error}",
+                                                    exc_info=False
+                                                )
+                                        finally:
+                                            async_db.close()
                                     except Exception as e:
                                         logger.warning(
                                             f"Failed to save memory (stream): {e}",
@@ -684,7 +767,7 @@ async def create_chat_completion(
                                         )
                                 
                                 # 创建后台任务，不等待完成
-                                asyncio.create_task(save_memory_async())
+                                asyncio.create_task(save_memory_and_update_title_async())
                         
                         break
                     
@@ -737,39 +820,112 @@ async def create_chat_completion(
                     elif isinstance(response.message, dict):
                         assistant_content = response.message.get("content", "")
                 
-                # 创建异步任务保存记忆，不等待结果
+                # 创建异步任务保存记忆和更新标题，不等待结果
                 if last_user_message and assistant_content:
                     import asyncio
                     from app.engines.memory.manager import MemoryManager
+                    from app.core.session import SessionTitleGenerator
                     
-                    async def save_memory_async():
-                        """异步保存记忆，不阻塞主流程"""
+                    async def save_memory_and_update_title_async():
+                        """异步保存消息、记忆和更新标题，不阻塞主流程"""
                         try:
-                            personality_manager = PersonalityManager()
-                            personality = personality_manager.get_personality(personality_id)
+                            # 需要创建新的数据库会话，因为原会话可能在异步任务中已关闭
+                            from app.models.base import get_sync_db
+                            import uuid
                             
-                            if personality and personality.memory.enabled and request.use_memory:
-                                memory_manager = MemoryManager()
+                            async_db = next(get_sync_db())
+                            try:
+                                session_uuid = uuid.UUID(request.session_id)
+                                user_uuid = uuid.UUID(user_id)
                                 
-                                # 使用 async_save=True 异步保存，不阻塞
-                                await memory_manager.add_conversation_turn(
-                                    user_id=user_id,
-                                    session_id=request.session_id,
-                                    user_message=last_user_message,
-                                    assistant_message=assistant_content,
-                                    importance=0.5,
-                                    async_save=True
-                                )
+                                # 保存用户消息到数据库
+                                try:
+                                    user_message = MessageModel(
+                                        session_id=session_uuid,
+                                        user_id=user_uuid,
+                                        role="user",
+                                        content=last_user_message
+                                    )
+                                    async_db.add(user_message)
+                                    
+                                    # 保存助手消息到数据库
+                                    assistant_message = MessageModel(
+                                        session_id=session_uuid,
+                                        user_id=user_uuid,
+                                        role="assistant",
+                                        content=assistant_content,
+                                        model=response.model
+                                    )
+                                    async_db.add(assistant_message)
+                                    
+                                    # 更新会话的message_count和last_message_at
+                                    session = async_db.query(SessionModel).filter(
+                                        SessionModel.id == session_uuid
+                                    ).first()
+                                    if session:
+                                        session.message_count = (session.message_count or 0) + 2
+                                        from datetime import datetime
+                                        session.last_message_at = datetime.utcnow()
+                                    
+                                    async_db.commit()
+                                    
+                                    logger.debug(
+                                        f"Saved messages to database (non-stream)",
+                                        extra={
+                                            "user_id": user_id,
+                                            "session_id": request.session_id,
+                                            "user_message_length": len(last_user_message),
+                                            "assistant_message_length": len(assistant_content)
+                                        }
+                                    )
+                                except Exception as msg_error:
+                                    logger.warning(
+                                        f"Failed to save messages to database: {msg_error}",
+                                        exc_info=False
+                                    )
+                                    async_db.rollback()
                                 
-                                logger.debug(
-                                    f"Saved conversation to memory (non-stream)",
-                                    extra={
-                                        "user_id": user_id,
-                                        "session_id": request.session_id,
-                                        "user_message_length": len(last_user_message),
-                                        "assistant_message_length": len(assistant_content)
-                                    }
-                                )
+                                # 保存记忆（如果启用了记忆系统）
+                                personality_manager = PersonalityManager()
+                                personality = personality_manager.get_personality(personality_id)
+                                
+                                if personality and personality.memory.enabled and request.use_memory:
+                                    memory_manager = MemoryManager()
+                                    
+                                    # 使用 async_save=True 异步保存，不阻塞
+                                    await memory_manager.add_conversation_turn(
+                                        user_id=user_id,
+                                        session_id=request.session_id,
+                                        user_message=last_user_message,
+                                        assistant_message=assistant_content,
+                                        importance=0.5,
+                                        async_save=True
+                                    )
+                                    
+                                    logger.debug(
+                                        f"Saved conversation to memory (non-stream)",
+                                        extra={
+                                            "user_id": user_id,
+                                            "session_id": request.session_id,
+                                            "user_message_length": len(last_user_message),
+                                            "assistant_message_length": len(assistant_content)
+                                        }
+                                    )
+                                
+                                # 更新会话标题（如果需要）
+                                try:
+                                    title_generator = SessionTitleGenerator(async_db)
+                                    await title_generator.update_session_title_if_needed(
+                                        session_id=request.session_id,
+                                        personality_id=personality_id
+                                    )
+                                except Exception as title_error:
+                                    logger.warning(
+                                        f"Failed to update session title (non-stream): {title_error}",
+                                        exc_info=False
+                                    )
+                            finally:
+                                async_db.close()
                         except Exception as e:
                             logger.warning(
                                 f"Failed to save memory (non-stream): {e}",
@@ -777,7 +933,7 @@ async def create_chat_completion(
                             )
                     
                     # 创建后台任务，不等待完成
-                    asyncio.create_task(save_memory_async())
+                    asyncio.create_task(save_memory_and_update_title_async())
             
             # 转换为API响应格式
             return ChatCompletionResponse(
@@ -837,4 +993,128 @@ async def list_engines() -> EngineListResponse:
 
 # 注意：模型列表端点已移至 /v1/models（models.py）
 # 这里不再提供 /v1/chat/models 端点，请使用 /v1/models
+
+
+@router.post("/voice-call-messages", response_model=SaveVoiceCallMessagesResponse)
+async def save_voice_call_messages(
+    request: SaveVoiceCallMessagesRequest,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_sync_session)
+):
+    """保存语音通话消息到数据库
+    
+    Args:
+        request: 保存语音通话消息请求
+        user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        SaveVoiceCallMessagesResponse: 保存结果
+        
+    Raises:
+        HTTPException: 如果会话不存在或不属于当前用户
+    """
+    try:
+        import uuid
+        from datetime import datetime
+        
+        # 验证会话ID
+        try:
+            session_uuid = uuid.UUID(request.session_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session ID format"
+            )
+        
+        # 验证会话是否存在且属于当前用户
+        session = db.query(SessionModel).filter(
+            and_(
+                SessionModel.id == session_uuid,
+                SessionModel.user_id == user.id,
+                SessionModel.deleted_at.is_(None)
+            )
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
+        
+        # 保存消息
+        saved_count = 0
+        for msg in request.messages:
+            try:
+                # 解析时间戳（如果有）
+                created_at = datetime.utcnow()
+                if msg.timestamp:
+                    try:
+                        # 尝试解析ISO格式时间戳
+                        # 支持格式：2025-01-13T10:30:00.000Z 或 2025-01-13T10:30:00
+                        timestamp_str = msg.timestamp
+                        if timestamp_str.endswith('Z'):
+                            timestamp_str = timestamp_str[:-1] + '+00:00'
+                        elif '+' not in timestamp_str and '-' in timestamp_str:
+                            # 如果没有时区信息，假设是UTC
+                            if 'T' in timestamp_str:
+                                timestamp_str = timestamp_str + '+00:00'
+                        
+                        # 使用datetime.fromisoformat解析（Python 3.7+）
+                        parsed_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        # 转换为UTC并移除时区信息
+                        if parsed_time.tzinfo:
+                            parsed_time = parsed_time.astimezone(timezone.utc)
+                        created_at = parsed_time.replace(tzinfo=None)
+                    except Exception as parse_error:
+                        # 如果解析失败，使用当前时间
+                        logger.debug(f"Failed to parse timestamp {msg.timestamp}: {parse_error}")
+                        pass
+                
+                message = MessageModel(
+                    session_id=session_uuid,
+                    user_id=user.id,
+                    role=msg.role,
+                    content=msg.content,
+                    created_at=created_at,
+                    message_metadata={"is_voice_call": True}  # 标记为语音通话消息
+                )
+                db.add(message)
+                saved_count += 1
+            except Exception as e:
+                logger.warning(
+                    f"Failed to save voice call message: {e}",
+                    extra={"user_id": str(user.id), "session_id": request.session_id}
+                )
+        
+        # 更新会话统计信息
+        session.message_count = (session.message_count or 0) + saved_count
+        session.last_message_at = datetime.utcnow()
+        
+        db.commit()
+        
+        logger.info(
+            "Saved voice call messages",
+            extra={
+                "user_id": str(user.id),
+                "session_id": request.session_id,
+                "saved_count": saved_count
+            }
+        )
+        
+        return SaveVoiceCallMessagesResponse(
+            message="消息已保存",
+            saved_count=saved_count,
+            session_id=request.session_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to save voice call messages: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save voice call messages: {str(e)}"
+        )
 

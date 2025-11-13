@@ -19,7 +19,9 @@ export const RegisterPage: React.FC = () => {
       <Card
         title="注册 CozyChat"
         style={{ width: 400 }}
-        headStyle={{ textAlign: 'center', fontSize: '24px' }}
+        styles={{
+          header: { textAlign: 'center', fontSize: '24px' },
+        }}
       >
         <RegisterForm />
       </Card>

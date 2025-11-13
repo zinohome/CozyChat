@@ -5,11 +5,12 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import { Button, Space, Tooltip, message } from 'antd';
 import { CopyOutlined, DeleteOutlined, CheckOutlined, UserOutlined, SoundOutlined, PauseOutlined } from '@ant-design/icons';
-import { format } from 'date-fns';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { showSuccess, showError } from '@/utils/errorHandler';
-import { voiceApi } from '@/services/voice';
-import type { SpeechRequest } from '@/types/voice';
+import { playTTS } from '@/utils/tts';
+import { formatDateTime, DEFAULT_TIMEZONE } from '@/utils/timezone';
+import { useQuery } from '@tanstack/react-query';
+import { userApi } from '@/services/user';
 
 /**
  * 消息气泡组件属性
@@ -29,6 +30,12 @@ interface MessageBubbleProps {
   onDelete?: (id: string) => void;
   /** 人格ID（用于TTS） */
   personalityId?: string;
+  /** 是否正在自动播放 */
+  isAutoPlaying?: boolean;
+  /** 停止自动播放回调 */
+  onStopAutoPlay?: () => void;
+  /** 是否为语音通话消息 */
+  isVoiceCall?: boolean;
 }
 
 /**
@@ -44,6 +51,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   showActions = true,
   onDelete,
   personalityId,
+  isAutoPlaying = false,
+  onStopAutoPlay,
+  isVoiceCall = false,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -51,6 +61,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isMobile = useIsMobile();
   const copyTimerRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 获取用户偏好（用于时区）
+  const { data: preferences } = useQuery({
+    queryKey: ['user', 'preferences'],
+    queryFn: () => userApi.getCurrentUserPreferences(),
+  });
+
+  // 获取时区（默认：Asia/Shanghai）
+  const timezone = preferences?.timezone || DEFAULT_TIMEZONE;
 
   // 清理定时器和音频
   useEffect(() => {
@@ -148,6 +167,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
    * 播放TTS语音
    */
   const handlePlayTTS = async () => {
+    // 如果正在自动播放，停止自动播放
+    if (isAutoPlaying && onStopAutoPlay) {
+      onStopAutoPlay();
+      setIsPlaying(false);
+      return;
+    }
+    
     // 如果正在播放，则暂停
     if (audioRef.current && !audioRef.current.paused) {
       audioRef.current.pause();
@@ -162,63 +188,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       return;
     }
 
-    // 提取纯文本内容（去除Markdown标记）
-    const textToSpeak = content
-      .replace(/```[\s\S]*?```/g, '') // 移除代码块
-      .replace(/`[^`]+`/g, '') // 移除行内代码
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // 移除链接，保留文本
-      .replace(/#{1,6}\s+/g, '') // 移除标题标记
-      .replace(/\*\*([^*]+)\*\*/g, '$1') // 移除粗体标记
-      .replace(/\*([^*]+)\*/g, '$1') // 移除斜体标记
-      .replace(/^\s*[-*+]\s+/gm, '') // 移除列表标记
-      .replace(/^\s*\d+\.\s+/gm, '') // 移除有序列表标记
-      .trim();
-
-    if (!textToSpeak) {
-      message.warning('消息内容为空，无法播放');
-      return;
-    }
-
     try {
       setIsLoadingAudio(true);
 
-      // 构建TTS请求
-      const request: SpeechRequest = {
-        input: textToSpeak,
-        model: 'tts-1',
-        voice: 'alloy',
-        speed: 1.0,
-        personality_id: personalityId,
-      };
+      // 使用优化后的 playTTS 函数（自动选择普通或流式TTS）
+      const audio = await playTTS(
+        content,
+        personalityId,
+        () => {
+          // 播放结束回调
+          setIsPlaying(false);
+          audioRef.current = null;
+        },
+        (progress) => {
+          // 进度回调（仅流式TTS时调用）
+          // 可以在这里更新进度条（如果需要）
+          console.log(`TTS生成进度: ${progress}%`);
+        }
+      );
 
-      // 调用TTS API
-      const audioBlob = await voiceApi.synthesize(request);
-
-      // 创建音频对象
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      // 监听播放结束
-      audio.addEventListener('ended', () => {
-        setIsPlaying(false);
-        URL.revokeObjectURL(audioUrl);
-        audioRef.current = null;
-      });
-
-      // 监听播放错误
-      audio.addEventListener('error', (e) => {
-        console.error('音频播放错误:', e);
-        setIsPlaying(false);
-        setIsLoadingAudio(false);
-        URL.revokeObjectURL(audioUrl);
-        audioRef.current = null;
-        showError(new Error('音频播放失败'), '播放失败');
-      });
-
-      // 开始播放
-      await audio.play();
-      setIsPlaying(true);
+      if (audio) {
+        audioRef.current = audio;
+        setIsPlaying(true);
+      } else {
+        // 播放被阻止或其他原因失败
+        message.warning('无法播放语音，请检查浏览器设置');
+      }
       setIsLoadingAudio(false);
     } catch (error) {
       console.error('TTS播放失败:', error);
@@ -228,19 +223,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   /**
-   * 格式化时间
+   * 格式化时间（格式：YYYY-MM-DD HH:mm:ss）
    */
   const formatTime = (ts: Date | string | number): string => {
-    try {
-      const date = typeof ts === 'string' 
-        ? new Date(ts) 
-        : typeof ts === 'number' 
-          ? new Date(ts) 
-          : ts;
-      return format(date, 'HH:mm');
-    } catch {
-      return '';
-    }
+    return formatDateTime(ts, timezone, 'yyyy-MM-dd HH:mm:ss');
   };
 
   const isUser = role === 'user';
@@ -275,7 +261,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {isUser ? (
           <>
             <UserOutlined style={{ fontSize: '14px' }} />
-            <span>我</span>
+            <span>我{isVoiceCall ? '(语音)' : ''}</span>
           </>
         ) : (
           <>
@@ -291,7 +277,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 mixBlendMode: 'multiply',
               }}
             />
-            <span>助手</span>
+            <span>助手{isVoiceCall ? '(语音)' : ''}</span>
           </>
         )}
       </div>
@@ -422,11 +408,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             <Space size="small" style={{ marginLeft: '8px' }}>
               {/* 只在助手消息显示播放按钮 */}
               {!isUser && personalityId && (
-                <Tooltip title={isPlaying ? '暂停' : isLoadingAudio ? '加载中...' : '播放语音'}>
+                <Tooltip title={
+                  isAutoPlaying 
+                    ? '停止播放' 
+                    : isPlaying 
+                      ? '暂停' 
+                      : isLoadingAudio 
+                        ? '加载中...' 
+                        : '播放语音'
+                }>
                   <Button
                     type="text"
                     size="small"
-                    icon={isPlaying ? <PauseOutlined /> : <SoundOutlined />}
+                    icon={
+                      isAutoPlaying || isPlaying 
+                        ? <PauseOutlined /> 
+                        : <SoundOutlined />
+                    }
                     onClick={handlePlayTTS}
                     loading={isLoadingAudio}
                     disabled={isLoadingAudio}
