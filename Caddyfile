@@ -49,18 +49,35 @@ oneapi.naivehero.top {
             header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto {scheme}
             
-            # 支持 WebSocket 升级（用于 Realtime API）
+            # WebSocket 支持配置
+            # Caddy 2 默认支持 WebSocket，但显式转发升级头可以确保更好的兼容性
+            
+            # 1. 转发 WebSocket 升级请求头（确保 WebSocket 连接正常工作）
+            # 注意：Caddy 会自动处理 WebSocket 升级，但显式转发可以确保所有场景下都正常工作
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+            header_up Sec-WebSocket-Key {>Sec-WebSocket-Key}
+            header_up Sec-WebSocket-Version {>Sec-WebSocket-Version}
+            header_up Sec-WebSocket-Protocol {>Sec-WebSocket-Protocol}
+            header_up Sec-WebSocket-Extensions {>Sec-WebSocket-Extensions}
+            
+            # 2. 支持 HTTP/1.1 和 HTTP/2
+            # WebSocket 需要 HTTP/1.1，但 Caddy 会自动降级到 HTTP/1.1 用于 WebSocket 连接
             transport http {
                 versions 1.1 2
             }
             
-            # 健康检查
+            # 3. 健康检查（仅用于 HTTP 请求，不影响 WebSocket）
             health_uri /v1/models
             health_interval 30s
             health_timeout 5s
             
-            # 超时设置
+            # 4. 流式响应设置（用于 SSE 和 WebSocket）
+            # -1 表示立即刷新，确保流式数据及时传输
             flush_interval -1
+            
+            # 注意：Caddy 2 默认支持长时间 WebSocket 连接，无需额外配置超时
+            # 对于 OpenAI Realtime API 等长时间运行的 WebSocket 连接，Caddy 会自动保持连接
         }
     }
 

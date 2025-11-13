@@ -6,7 +6,7 @@
 - ✅ API Key 替换保护，隐藏真实 OpenAI Key
 - ✅ 支持所有 OpenAI API 端点
 - ✅ 自动 HTTPS（Let's Encrypt）
-- ✅ WebSocket 支持（Realtime API）
+- ✅ **完整 WebSocket 支持**（Realtime API、长时间连接）
 
 ## Docker 快速部署
 
@@ -76,11 +76,26 @@ docker-compose -f docker-compose.caddy.yml logs -f caddy
 docker-compose -f docker-compose.caddy.yml exec caddy caddy validate --config /etc/caddy/Caddyfile
 ```
 
+## WebSocket 支持
+
+配置已完整支持 WebSocket 连接，包括 OpenAI Realtime API：
+
+```javascript
+// 前端连接示例
+const ws = new WebSocket(
+  'wss://oneapi.naivehero.top/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
+  ['openai-insecure-api-key', 'sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH']
+);
+```
+
+详细说明请参考：[WebSocket 支持文档](docs/setup/CADDY_WEBSOCKET.md)
+
 ## 文档
 
 - 📖 [Docker 部署指南](docs/setup/CADDY_DOCKER_DEPLOY.md)
 - 📖 [完整部署指南](docs/setup/CADDY_PROXY.md)
 - 📖 [快速参考](docs/setup/CADDY_API_KEY_QUICK_START.md)
+- 📖 [WebSocket 支持说明](docs/setup/CADDY_WEBSOCKET.md)
 
 ## 工作原理
 
