@@ -86,28 +86,36 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 用户语音转文本回调
       onUserTranscript: (text: string) => {
         if (text.trim()) {
+          // 使用文本内容的hash作为ID的一部分，确保唯一性
+          const textHash = text.slice(0, 20).replace(/\s/g, '_');
           const message: Message = {
-            id: `voice-user-${Date.now()}`,
+            id: `voice-user-${Date.now()}-${textHash}`,
             role: 'user',
             content: text,
             timestamp: new Date(),
             session_id: currentSessionId || undefined,
             user_id: userId || undefined,
-          };
+            // 添加语音通话标记
+            is_voice_call: true,
+          } as any; // 临时使用 any，因为 Message 类型可能没有 is_voice_call 字段
           addVoiceCallMessage(message);
         }
       },
       // 助手回复文本回调
       onAssistantTranscript: (text: string) => {
         if (text.trim()) {
+          // 使用文本内容的hash作为ID的一部分，确保唯一性
+          const textHash = text.slice(0, 20).replace(/\s/g, '_');
           const message: Message = {
-            id: `voice-assistant-${Date.now()}`,
+            id: `voice-assistant-${Date.now()}-${textHash}`,
             role: 'assistant',
             content: text,
             timestamp: new Date(),
             session_id: currentSessionId || undefined,
             user_id: userId || undefined,
-          };
+            // 添加语音通话标记
+            is_voice_call: true,
+          } as any; // 临时使用 any，因为 Message 类型可能没有 is_voice_call 字段
           addVoiceCallMessage(message);
         }
       },
@@ -488,9 +496,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               // 结束通话
               await endCall();
               
-              // 保存语音通话消息到数据库
+              // 保存语音通话消息到数据库，并添加到 React Query 缓存
               if (voiceCallMessages.length > 0 && currentSessionId) {
                 try {
+                  // 保存到数据库（添加 is_voice_call 标记）
                   await chatApi.saveVoiceCallMessages(
                     currentSessionId,
                     voiceCallMessages.map((msg) => ({
@@ -501,16 +510,36 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         : msg.timestamp instanceof Date 
                           ? msg.timestamp.toISOString()
                           : new Date(msg.timestamp).toISOString(),
+                      is_voice_call: true, // 标记为语音通话消息
                     }))
                   );
                   console.log('语音通话消息已保存到数据库');
+                  
+                  // 将消息添加到 React Query 缓存，保留在会话历史中
+                  queryClient.setQueryData(
+                    ['chat', 'messages', currentSessionId],
+                    (old: Message[] = []) => {
+                      // 合并消息，去重（基于ID）
+                      const existingIds = new Set(old.map(m => m.id));
+                      const newMessages = voiceCallMessages.filter(msg => !existingIds.has(msg.id));
+                      return [...old, ...newMessages].sort((a, b) => {
+                        const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
+                                     typeof a.timestamp === 'number' ? a.timestamp : 
+                                     a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+                        const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
+                                     typeof b.timestamp === 'number' ? b.timestamp : 
+                                     b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+                        return timeA - timeB;
+                      });
+                    }
+                  );
                 } catch (error) {
                   console.error('保存语音通话消息失败:', error);
                   showError(error, '保存语音通话消息失败');
                 }
               }
               
-              // 清空状态
+              // 清空状态（不影响已添加到缓存的消息）
               clearVoiceCallMessages();
               endVoiceCall();
             } catch (error) {
@@ -561,7 +590,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           <>
             {allMessages.map((msg) => {
               // 判断是否为语音通话消息
-              const isVoiceCallMsg = isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id);
+              // 1. 当前正在通话中，且在 voiceCallMessages 中
+              // 2. 或者消息有 is_voice_call 标记
+              const isVoiceCallMsg = 
+                (isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id)) ||
+                (msg as any).is_voice_call === true;
               return (
                 <MessageBubble
                   key={msg.id}
@@ -840,9 +873,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 try {
                   await endCall();
                   
-                  // 保存语音通话消息到数据库
+                  // 保存语音通话消息到数据库，并添加到 React Query 缓存
                   if (voiceCallMessages.length > 0 && currentSessionId) {
                     try {
+                      // 保存到数据库
                       await chatApi.saveVoiceCallMessages(
                         currentSessionId,
                         voiceCallMessages.map((msg) => ({
@@ -856,12 +890,32 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         }))
                       );
                       console.log('语音通话消息已保存到数据库');
+                      
+                      // 将消息添加到 React Query 缓存，保留在会话历史中
+                      queryClient.setQueryData(
+                        ['chat', 'messages', currentSessionId],
+                        (old: Message[] = []) => {
+                          // 合并消息，去重（基于ID）
+                          const existingIds = new Set(old.map(m => m.id));
+                          const newMessages = voiceCallMessages.filter(msg => !existingIds.has(msg.id));
+                          return [...old, ...newMessages].sort((a, b) => {
+                            const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
+                                         typeof a.timestamp === 'number' ? a.timestamp : 
+                                         a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+                            const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
+                                         typeof b.timestamp === 'number' ? b.timestamp : 
+                                         b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+                            return timeA - timeB;
+                          });
+                        }
+                      );
                     } catch (error) {
                       console.error('保存语音通话消息失败:', error);
                       showError(error, '保存语音通话消息失败');
                     }
                   }
                   
+                  // 清空状态（不影响已添加到缓存的消息）
                   clearVoiceCallMessages();
                   endVoiceCall();
                 } catch (error) {
@@ -911,7 +965,14 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             }}
             title={isVoiceCallActive ? '结束通话' : '语音通话'}
           >
+            {isVoiceCallActive ? (
+              // 挂断图标（和 VoiceCallIndicator 中的一样）
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block' }}>
+                <path fill="#fff" d="M15.897 9c.125.867.207 2.053-.182 2.507c-.643.751-4.714.751-4.714-.751c0-.756.67-1.252.027-2.003c-.632-.738-1.766-.75-3.027-.751s-2.394.012-3.027.751c-.643.751.027 1.247.027 2.003c0 1.501-4.071 1.501-4.714.751C-.102 11.053-.02 9.867.105 9c.096-.579.339-1.203 1.118-2c1.168-1.09 2.935-1.98 6.716-2h.126c3.781.019 5.548.91 6.716 2c.778.797 1.022 1.421 1.118 2z" />
+              </svg>
+            ) : (
             <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
+            )}
           </button>
         </div>
       </div>

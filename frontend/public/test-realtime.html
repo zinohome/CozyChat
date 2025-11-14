@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Realtime API 端点验证工具</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+      color: #555;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #1890ff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #40a9ff;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .success {
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #52c41a;
+    }
+    .error {
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #ff4d4f;
+    }
+    .info {
+      background: #e6f7ff;
+      border: 1px solid #91d5ff;
+      color: #1890ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Realtime API 端点验证工具</h1>
+    
+    <div class="form-group">
+      <label for="baseUrl">Base URL:</label>
+      <input type="text" id="baseUrl" value="https://oneapi.naivehero.top" placeholder="https://oneapi.naivehero.top">
+    </div>
+    
+    <div class="form-group">
+      <label for="apiKey">临时密钥 (EPHEMERAL_KEY) 或 API Key:</label>
+      <input type="password" id="apiKey" placeholder="ek_... 或 sk-...">
+      <small style="color: #666; display: block; margin-top: 5px;">WebRTC 测试需要临时密钥（格式：ek_...）</small>
+    </div>
+    
+    <button onclick="testWebRTC()">测试 WebRTC 端点</button>
+    <button onclick="testWebSocket()">测试 WebSocket 端点</button>
+    <button onclick="testBoth()">测试所有端点</button>
+    
+    <div id="result"></div>
+  </div>
+
+  <script>
+    function log(message, type = 'info') {
+      const result = document.getElementById('result');
+      const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+      result.className = `result ${className}`;
+      result.textContent = message;
+    }
+
+    async function testWebRTC() {
+      const baseUrl = document.getElementById('baseUrl').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      
+      if (!baseUrl || !apiKey) {
+        log('请填写 Base URL 和临时密钥（格式：ek_...）', 'error');
+        return;
+      }
+      
+      // 检查是否是临时密钥格式
+      if (!apiKey.startsWith('ek_')) {
+        log('⚠️ 提示：输入的密钥不是临时密钥格式（应以 ek_ 开头）\n\n继续测试...', 'info');
+      }
+      
+      log('正在测试 WebRTC 端点...\n使用临时密钥创建 WebRTC 会话...', 'info');
+      
+      try {
+        // 直接使用临时密钥创建 WebRTC 会话
+        const callsEndpoint = `${baseUrl}/v1/realtime/calls`;
+        
+        // 创建 WebRTC offer 并获取 SDP
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        
+        // 添加音频轨道（WebRTC 需要）
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        } catch (mediaError) {
+          log(`⚠️ 无法获取音频权限，使用空连接测试\n\n错误: ${mediaError.message}`, 'info');
+        }
+        
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        
+        // 等待 SDP 设置完成
+        await new Promise((resolve) => {
+          if (pc.localDescription) {
+            resolve();
+          } else {
+            pc.onicegatheringstatechange = () => {
+              if (pc.iceGatheringState === 'complete') {
+                resolve();
+              }
+            };
+          }
+        });
+        
+        if (!pc.localDescription || !pc.localDescription.sdp) {
+          log('错误: 无法创建 WebRTC offer SDP', 'error');
+          pc.close();
+          return;
+        }
+        
+        const sdp = pc.localDescription.sdp;
+        
+        // 调试信息
+        console.log('SDP 长度:', sdp.length);
+        console.log('SDP 前100字符:', sdp.substring(0, 100));
+        console.log('使用临时密钥:', apiKey.substring(0, 20) + '...');
+        
+        // 发送请求（使用临时密钥和 application/sdp 格式）
+        const response = await fetch(callsEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/sdp',
+            'Authorization': `Bearer ${apiKey}`, // 使用输入的临时密钥
+          },
+          body: sdp,
+        });
+        
+        pc.close();
+        
+        const responseText = await response.text();
+        
+        // 调试信息
+        console.log('响应状态:', response.status);
+        console.log('响应头:', Object.fromEntries(response.headers.entries()));
+        console.log('响应体:', responseText);
+        
+        if (response.ok) {
+          log(`✅ WebRTC 端点可用！\n\n端点: ${callsEndpoint}\n状态码: ${response.status}\n响应: ${responseText.substring(0, 500)}...`, 'success');
+        } else {
+          // 尝试解析 JSON 错误
+          let errorMsg = responseText;
+          try {
+            const errorJson = JSON.parse(responseText);
+            if (errorJson.error) {
+              errorMsg = JSON.stringify(errorJson.error, null, 2);
+            }
+          } catch (e) {
+            // 不是 JSON，使用原始文本
+          }
+          
+          log(`❌ WebRTC 端点不可用\n\n端点: ${callsEndpoint}\n状态码: ${response.status}\n错误: ${errorMsg}\n\n提示：\n1. 检查 API Key 是否正确（应使用自定义 Key）\n2. 检查临时密钥是否正确获取\n3. 检查 SDP 格式是否正确\n4. 查看浏览器控制台获取更多调试信息`, 'error');
+        }
+      } catch (error) {
+        log(`❌ WebRTC 测试失败\n\n错误: ${error.message}\n\n可能的原因:\n1. 服务器不支持 WebRTC 端点\n2. CORS 配置问题\n3. 网络连接问题\n4. API Key 无效\n5. 浏览器不支持 WebRTC`, 'error');
+      }
+    }
+
+    async function testWebSocket() {
+      const baseUrl = document.getElementById('baseUrl').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      
+      if (!baseUrl || !apiKey) {
+        log('请填写 Base URL 和 API Key', 'error');
+        return;
+      }
+      
+      log('正在测试 WebSocket 端点...', 'info');
+      
+      return new Promise((resolve) => {
+        const wsBaseUrl = baseUrl.replace(/^https?:\/\//, 'wss://');
+        const endpoint = `${wsBaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01`;
+        
+        const protocols = [
+          'realtime',
+          `openai-insecure-api-key.${apiKey}`,
+          'openai-beta.realtime-v1',
+        ];
+        
+        const ws = new WebSocket(endpoint, protocols);
+        
+        const timeout = setTimeout(() => {
+          ws.close();
+          log(`❌ WebSocket 连接超时\n\n端点: ${endpoint}`, 'error');
+          resolve();
+        }, 5000);
+        
+        ws.onopen = () => {
+          clearTimeout(timeout);
+          ws.close();
+          log(`✅ WebSocket 端点可用！\n\n端点: ${endpoint}`, 'success');
+          resolve();
+        };
+        
+        ws.onerror = (error) => {
+          clearTimeout(timeout);
+          ws.close();
+          log(`❌ WebSocket 连接失败\n\n端点: ${endpoint}\n错误: 无法建立连接\n\n可能的原因:\n1. 服务器不支持 WebSocket\n2. 端点路径不正确\n3. 认证失败`, 'error');
+          resolve();
+        };
+      });
+    }
+
+    async function testBoth() {
+      log('开始测试所有端点...\n', 'info');
+      await testWebRTC();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await testWebSocket();
+    }
+  </script>
+</body>
+</html>
+

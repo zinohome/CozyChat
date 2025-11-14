@@ -283,28 +283,35 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
     }
   }, []);
   
+  // 节流日志输出（每1秒最多输出一次）
+  const lastLogTimeRef = useRef<number>(0);
+  const LOG_THROTTLE_MS = 1000;
+  
   // 使用 useMemo 计算音频强度和声纹显示
   const { activeFrequencyData, activeColor } = useMemo(() => {
     const userInt = getAudioIntensity(userFrequencyData);
     const assistantInt = getAudioIntensity(assistantFrequencyData);
-    const hasUser = userInt > 0.05; // 阈值 5%
-    const hasAssistant = assistantInt > 0.05; // 阈值 5%
+    // 降低阈值，提高灵敏度（从5%降到3%）
+    const hasUser = userInt > 0.03; // 阈值 3%
+    const hasAssistant = assistantInt > 0.03; // 阈值 3%
     
     // 决定显示哪个声纹：优先显示有声音的，如果都有声音则显示用户的
     const activeData = hasUser ? userFrequencyData : (hasAssistant ? assistantFrequencyData : null);
     const activeCol = hasUser ? '#52c41a' : (hasAssistant ? '#ff4d4f' : '#52c41a');
     
-    // 调试日志
+    // 节流调试日志（每1秒最多输出一次）
     if (process.env.NODE_ENV === 'development') {
+      const now = Date.now();
+      if (now - lastLogTimeRef.current >= LOG_THROTTLE_MS) {
+        lastLogTimeRef.current = now;
       console.log('VoiceCallIndicator: 音频强度', {
         userIntensity: userInt.toFixed(3),
         assistantIntensity: assistantInt.toFixed(3),
         hasUserSound: hasUser,
         hasAssistantSound: hasAssistant,
         hasActiveData: !!activeData,
-        userDataLength: userFrequencyData?.length || 0,
-        assistantDataLength: assistantFrequencyData?.length || 0,
       });
+      }
     }
     
     return {
@@ -340,11 +347,18 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
         {/* 中间：声纹和通话时长 */}
         <div className="voice-call-indicator-center">
           <div className="voice-waveforms">
+            {/* 只有在有音频数据时才显示波形 */}
+            {activeFrequencyData ? (
             <VoiceWaveform 
-              frequencyData={activeFrequencyData || null} 
+                frequencyData={activeFrequencyData} 
               color={activeColor}
               isActive={true}
             />
+            ) : (
+              <div style={{ width: '200px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+                等待音频...
+              </div>
+            )}
           </div>
           <span className="voice-call-duration">{formatDuration(duration)}</span>
         </div>

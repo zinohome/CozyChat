@@ -16,7 +16,7 @@ export interface OpenAIConfig {
 export interface RealtimeToken {
   /** Ephemeral client key (token) */
   token: string;
-  /** WebSocket URL */
+  /** WebSocket URL（用于 WebSocket 传输层） */
   url: string;
   /** Model name */
   model: string;
@@ -31,7 +31,7 @@ export const configApi = {
   /**
    * 获取 OpenAI 配置
    *
-   * 返回 OpenAI API key 和 base URL，供前端直接连接 OpenAI Realtime API。
+   * 返回 OpenAI API key 和 base URL，供前端使用 OpenAI Agents SDK 连接 Realtime API。
    *
    * @returns OpenAI配置信息
    */
@@ -42,8 +42,7 @@ export const configApi = {
   /**
    * 获取 Realtime API 的 ephemeral client key (token)
    *
-   * 这个端点会调用后端生成 ephemeral client key，用于前端直接连接 OpenAI Realtime API。
-   * 如果后端无法生成（例如使用非官方 base_url），会返回错误。
+   * 这个端点会调用后端生成 ephemeral client key，用于前端连接 OpenAI Realtime API。
    *
    * @returns Realtime token 信息
    */

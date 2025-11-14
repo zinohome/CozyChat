@@ -32,8 +32,11 @@ class OpenAIConfigResponse(BaseModel):
 class RealtimeTokenResponse(BaseModel):
     """Realtime Token响应"""
     token: str
+    """Ephemeral client key (token)"""
     url: str
+    """WebSocket URL（用于 WebSocket 传输层）"""
     model: str
+    """Model name"""
 
 
 # ===== API路由 =====
@@ -91,7 +94,7 @@ async def get_realtime_token(
     获取 OpenAI Realtime API 的 ephemeral client key (token)
     
     这个端点会调用 OpenAI 的 /v1/realtime/client_secrets 端点生成临时客户端密钥，
-    用于前端直接连接 OpenAI Realtime API。
+    用于前端连接 OpenAI Realtime API。
     
     Args:
         user: 当前用户（需要认证）
@@ -113,9 +116,9 @@ async def get_realtime_token(
         is_new_api = base_url and base_url != 'https://api.openai.com/v1'
         
         if is_new_api:
-            # New API 方式：尝试获取临时秘钥，如果失败则返回 API key（前端使用 useInsecureApiKey）
+            # New API 方式：使用 /v1/realtime/client_secrets 端点
             logger.info(
-                "Attempting to generate ephemeral client key (New API)",
+                "Generating ephemeral client key (New API)",
                 extra={
                     "user_id": str(user.id),
                     "base_url": base_url
@@ -134,7 +137,7 @@ async def get_realtime_token(
             
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    # New API 请求格式：使用 /v1/realtime/client_secrets 端点
+                    # New API 请求格式：使用 session 对象（与 OpenAI 官方格式相同）
                     response = await client.post(
                         client_secrets_url,
                         headers={
@@ -142,20 +145,24 @@ async def get_realtime_token(
                             'Content-Type': 'application/json',
                         },
                         json={
-                            'model': 'gpt-4o-realtime-preview-2024-10-01',
-                            'voice': 'shimmer'
+                            'session': {
+                                'type': 'realtime',
+                                'model': 'gpt-realtime'  # 使用 gpt-realtime 而不是 gpt-4o-realtime-preview-2024-10-01
+                            }
                         }
                     )
                     
                     if response.status_code == 200:
                         data = response.json()
                         
-                        # New API 响应格式：可能包含 token、ephemeral_token 或 session.client_secret.value
+                        # New API 响应格式：可能包含 value（顶层）、token、ephemeral_token 或 client_secret.value
+                        # 根据日志，响应格式是：{'value': 'ek_...', 'expires_at': ..., 'session': {...}}
                         client_secret = (
+                            data.get('value', '') or  # 顶层 value（New API 格式）
                             data.get('token', '') or
                             data.get('ephemeral_token', '') or
-                            data.get('session', {}).get('client_secret', {}).get('value', '') or
-                            data.get('client_secret', {}).get('value', '')
+                            data.get('client_secret', {}).get('value', '') or
+                            data.get('session', {}).get('client_secret', {}).get('value', '')
                         )
                         
                         if client_secret:
@@ -165,7 +172,7 @@ async def get_realtime_token(
                             )
                         else:
                             logger.warning(
-                                "New API response missing token, will use API key",
+                                "New API response missing token",
                                 extra={
                                     "user_id": str(user.id),
                                     "response": data
@@ -186,17 +193,11 @@ async def get_realtime_token(
                     extra={"user_id": str(user.id)}
                 )
             
-            # 如果无法获取临时秘钥，返回 API key（前端会使用 useInsecureApiKey）
             if not client_secret:
-                logger.info(
-                    "New API ephemeral token not available, using API key with useInsecureApiKey subprotocol",
-                    extra={
-                        "user_id": str(user.id),
-                        "method": "useInsecureApiKey",
-                        "note": "Frontend will use 'openai-insecure-api-key.{api_key}' subprotocol"
-                    }
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Failed to generate ephemeral client key from New API"
                 )
-                client_secret = settings.openai_api_key
         else:
             # OpenAI 官方方式：使用 /v1/realtime/client_secrets 端点
             logger.info(
@@ -207,7 +208,6 @@ async def get_realtime_token(
             client_secrets_url = "https://api.openai.com/v1/realtime/client_secrets"
             
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # OpenAI 官方请求格式：使用 session 对象
                 response = await client.post(
                     client_secrets_url,
                     headers={
@@ -246,25 +246,15 @@ async def get_realtime_token(
                         detail="Invalid response from OpenAI API: missing client_secret.value"
                     )
         
-        # 构建 WebSocket URL（New API 和 OpenAI 官方共用）
+        # 构建 WebSocket URL（用于 WebSocket 传输层，WebRTC 不需要）
         if is_new_api:
-            # New API WebSocket URL
-            if base_url.startswith('https://'):
-                ws_base_url = base_url.replace('https://', 'wss://')
-            elif base_url.startswith('http://'):
-                ws_base_url = base_url.replace('http://', 'ws://')
-            else:
-                ws_base_url = base_url
-            
+            ws_base_url = base_url.replace('https://', 'wss://').replace('http://', 'ws://')
             if ws_base_url.endswith('/v1'):
                 ws_base_url = ws_base_url[:-3]
             elif ws_base_url.endswith('/v1/'):
                 ws_base_url = ws_base_url[:-4]
-            
-            # New API WebSocket URL（浏览器使用子协议认证，不需要在 URL 中添加 token）
             ws_url = f"{ws_base_url.rstrip('/')}/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         else:
-            # OpenAI 官方 WebSocket URL（浏览器使用子协议认证，不需要在 URL 中添加 token）
             ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         
         logger.info(
@@ -295,4 +285,5 @@ async def get_realtime_token(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate ephemeral client key: {str(e)}"
         )
+
 
