@@ -47,8 +47,7 @@ docker-compose -f docker-compose.caddy.yml ps
 
 ```bash
 # 测试 API 端点（使用自定义 Key）
-curl https://oneapi.naivehero.top/v1/models \
-  -H "Authorization: Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+curl https://oneapi.naivehero.top/v1/models -H "Authorization: Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
 
 # 应该返回模型列表
 ```

@@ -1,16 +1,80 @@
+www.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         reverse_proxy 192.210.183.125:8090
+}
+newapi.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         reverse_proxy 192.210.183.125:3000
+}
+c9.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         reverse_proxy 192.210.183.125:30280
+}
+desktop.naivehero.top {
+         encode gzip
+         reverse_proxy 192.210.183.125:6901 {
+                  transport http {
+                        tls_insecure_skip_verify
+                  }
+         }
+}
+1p.naivehero.top {
+         encode gzip
+         reverse_proxy 192.210.183.125:19984 {
+                  transport http {
+                           tls
+                           tls_insecure_skip_verify
+                  }
+         }
+}
+gemini.naivehero.top {
+         encode gzip
+         reverse_proxy 192.210.183.125:8000 {
+                  transport http {
+                           tls
+                           tls_insecure_skip_verify
+                  }
+         }
+}
+yychat.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         # 根路径重定向到指定URL
+         @root path /
+         redir @root /chat/mTYPopxB99ZemGub 301
+    
+         reverse_proxy 192.168.240.101:80
+}
+dify.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         reverse_proxy 192.168.240.101:80
+}
+yyhelper.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         reverse_proxy 192.168.240.101:8000
+}
+chat.naivehero.top {
+         tls ibmzhangjun@139.com
+         encode gzip
+         # 普通HTTP请求代理到yyAsistant
+         reverse_proxy 192.210.183.125:8000
+         # WebSocket请求代理到yychat后端
+         handle /ws/* {
+             reverse_proxy 192.210.183.125:9800
+         }
+}
+
 # Caddy 反向代理配置 - OpenAI API
 # 域名: oneapi.naivehero.top
 # 用途: 代理 OpenAI API 以绕过 GFW 限制，并保护真实的 OpenAI API Key
 
-# 自定义 API Key（对外暴露的Key，可以硬编码，因为这是公开的）
-# 真实的生产环境建议也使用环境变量：export CUSTOM_API_KEY="sk-xxx"
-{$CUSTOM_API_KEY:sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH}
-
-# 真实的 OpenAI API Key（必须从环境变量读取）
-# 设置方式：export OPENAI_API_KEY="sk-your-real-openai-key"
-{$OPENAI_API_KEY}
-
 oneapi.naivehero.top {
+    tls ibmzhangjun@139.com
     # 启用日志记录
     log {
         output file /var/log/caddy/access.log
@@ -29,9 +93,10 @@ oneapi.naivehero.top {
         respond 204
     }
 
-    # 匹配使用自定义 API Key 的请求（使用正则表达式匹配）
+    # 匹配使用自定义 API Key 的请求
+    # 使用 header 匹配器（简单字符串匹配）
     @custom_key {
-        header Authorization =~ "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+        header Authorization "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
     }
 
     # 处理自定义 Key 的请求：替换为真实的 OpenAI Key
@@ -59,10 +124,13 @@ oneapi.naivehero.top {
                 versions 1.1 2
             }
             
-            # 3. 健康检查（仅用于 HTTP 请求，不影响 WebSocket）
-            health_uri /v1/models
-            health_interval 30s
-            health_timeout 5s
+            # 3. 健康检查已禁用
+            # 注意：OpenAI API 需要认证，健康检查会返回401，导致上游被标记为不可用
+            # 如果需要健康检查，可以取消注释下面的配置并添加认证header
+            # health_uri /v1/models
+            # health_interval 30s
+            # health_timeout 5s
+            # health_header Authorization "Bearer {$OPENAI_API_KEY}"
             
             # 4. 流式响应设置（用于 SSE 和 WebSocket）
             # -1 表示立即刷新，确保流式数据及时传输
@@ -86,20 +154,4 @@ oneapi.naivehero.top {
         Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
     }
 
-    # 选项2：如果允许直接使用真实Key（不推荐，会暴露真实Key）
-    # 取消注释下面的代码，并注释掉上面的 handle 拒绝处理
-    # reverse_proxy https://api.openai.com {
-    #     header_up Host {upstream_hostport}
-    #     header_up X-Real-IP {remote_host}
-    #     header_up X-Forwarded-For {remote_host}
-    #     header_up X-Forwarded-Proto {scheme}
-    #     transport http {
-    #         versions 1.1 2
-    #     }
-    #     health_uri /v1/models
-    #     health_interval 30s
-    #     health_timeout 5s
-    #     flush_interval -1
-    # }
 }
-
