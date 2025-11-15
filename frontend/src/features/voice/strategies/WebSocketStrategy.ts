@@ -39,11 +39,11 @@ export class WebSocketStrategy implements ITransportStrategy {
   
   // ✅ 音频缓冲管理（用于流式播放）
   private audioBuffer: Float32Array | null = null; // 累积的音频缓冲区
-  private minBufferSize: number = 24000 * 0.5; // 最小缓冲区：0.5秒（12000个采样点）- 增大缓冲区提升流畅度
-  private maxBufferSize: number = 24000 * 1.0; // 最大缓冲区：1.0秒（24000个采样点）
+  private minBufferSize: number = 24000 * 3.0; // 最小缓冲区：3.0秒（72000个采样点）- 平衡流畅度和延迟
+  private maxBufferSize: number = 24000 * 5.0; // 最大缓冲区：5.0秒（120000个采样点）- 防止延迟过大
   private flushInterval: number | null = null; // 定时刷新缓冲区
   private nextPlayTime: number = 0; // 下一个音频片段的播放时间（用于无缝拼接）
-  private gainNode: GainNode | null = null; // 音量控制节点（用于淡入淡出）
+  private gainNode: GainNode | null = null; // 音量控制节点
   private activeSources: AudioBufferSourceNode[] = []; // 正在播放的音频源（用于打断时停止）
   private lastUserAudioTime: number = 0; // 上次用户音频时间（用于检测用户开始说话）
   private crossfadeLength: number = 240; // 交叉淡入淡出长度：约10ms（240个采样点）
@@ -339,24 +339,13 @@ export class WebSocketStrategy implements ITransportStrategy {
       const channelData = audioBuffer.getChannelData(0);
       channelData.set(float32);
 
-      // ✅ 关键：使用更温和的淡入淡出，减少对音质的影响
-      // 只在片段边界处使用较短的淡入淡出，保持音频的完整性
-      const fadeLength = Math.min(this.crossfadeLength, float32.length / 10); // 淡入淡出长度：约10ms
-      if (fadeLength > 0) {
-        // 淡入（开头）- 使用更平滑的曲线
-        for (let i = 0; i < fadeLength && i < float32.length; i++) {
-          const fadeIn = i / fadeLength;
-          // 使用三次方曲线，更平滑自然
-          const smoothFade = fadeIn * fadeIn * (3 - 2 * fadeIn); // smoothstep 函数
-          channelData[i] *= smoothFade;
-        }
-        
-        // 淡出（结尾）- 使用更平滑的曲线
-        const startFadeOut = Math.max(0, float32.length - fadeLength);
-        for (let i = startFadeOut; i < float32.length; i++) {
-          const fadeOut = (float32.length - i) / fadeLength;
-          // 使用三次方曲线，更平滑自然
-          const smoothFade = fadeOut * fadeOut * (3 - 2 * fadeOut); // smoothstep 函数
+      // ✅ 关键：只在第一段使用轻微淡入，其他片段保持原始音频
+      // 这样可以避免开头点击声，同时保持音频完整性
+      if (this.nextPlayTime === 0 && float32.length > 0) {
+        const fadeInLength = Math.min(120, float32.length / 20); // 约5ms淡入
+        for (let i = 0; i < fadeInLength && i < float32.length; i++) {
+          const fadeIn = i / fadeInLength;
+          const smoothFade = fadeIn * fadeIn * (3 - 2 * fadeIn); // smoothstep
           channelData[i] *= smoothFade;
         }
       }
@@ -371,25 +360,26 @@ export class WebSocketStrategy implements ITransportStrategy {
       // ✅ 添加到活动源列表（用于打断时停止）
       this.activeSources.push(source);
       
-      // ✅ 关键：使用 scheduled playback 实现无缝拼接
+      // ✅ 关键：使用精确的 scheduled playback 实现无缝拼接
       const currentTime = this.playbackAudioContext.currentTime;
       
-      // 精确计算播放时间，确保无缝拼接
+      // 精确计算播放时间，允许小幅度重叠（10ms）用于交叉淡入淡出
       let playTime: number;
       if (this.nextPlayTime === 0) {
         // 第一段，立即播放
         playTime = currentTime;
       } else if (this.nextPlayTime > currentTime) {
-        // 使用预定的时间，确保无缝拼接
-        playTime = this.nextPlayTime;
+        // 使用预定的时间，允许小幅度重叠用于交叉淡入淡出
+        const overlapTime = this.crossfadeLength / 24000; // 约10ms
+        playTime = Math.max(currentTime, this.nextPlayTime - overlapTime);
       } else {
-        // 如果预定时间已过期，使用当前时间
-        // 允许小幅度重叠（通过交叉淡入淡出处理）
-        playTime = Math.max(currentTime, this.nextPlayTime - 0.01); // 允许10ms重叠用于交叉淡入淡出
+        // 如果预定时间已过期，使用当前时间，允许小幅度重叠
+        const overlapTime = this.crossfadeLength / 24000; // 约10ms
+        playTime = Math.max(currentTime, this.nextPlayTime - overlapTime);
       }
       
       // ✅ 实现交叉淡入淡出（Crossfade）
-      // 如果上一个音频源存在，对新源使用淡入效果，实现平滑过渡
+      // 如果上一个音频源存在，在重叠部分进行交叉淡入淡出
       if (this.previousSource) {
         const overlapTime = this.crossfadeLength / 24000; // 转换为秒（约10ms）
         
@@ -428,7 +418,9 @@ export class WebSocketStrategy implements ITransportStrategy {
             this.previousSource = null;
           }
           // 更新下一个播放时间，实现无缝拼接
-          this.nextPlayTime = playTime + duration;
+          // 考虑交叉淡入淡出的重叠时间
+          const overlapTime = this.crossfadeLength / 24000; // 约10ms
+          this.nextPlayTime = playTime + duration - overlapTime; // 减去重叠时间，确保连续
           resolve();
         };
         try {
@@ -450,16 +442,17 @@ export class WebSocketStrategy implements ITransportStrategy {
       this.isPlayingAudio = false;
       
       // ✅ 流式播放：如果缓冲区中还有足够的数据，立即继续播放下一段
-      // 这样可以实现连续的流式播放，没有间隙
+      // 使用 requestAnimationFrame 确保与音频线程同步，提升流畅度
       if (this.isCalling && this.audioBuffer && this.audioBuffer.length >= this.minBufferSize) {
-        // 使用 setTimeout(0) 确保在下一个事件循环中执行，避免阻塞
-        setTimeout(() => {
+        // 使用 requestAnimationFrame 确保在下一个渲染帧执行，与音频线程同步
+        requestAnimationFrame(() => {
           this.flushAudioBuffer().catch((error) => {
             console.error('[WebSocketStrategy] 继续播放缓冲区失败:', error);
           });
-        }, 0);
+        });
       } else if (this.isCalling && this.audioBuffer && this.audioBuffer.length > 0) {
-        // 如果数据不够最小缓冲区，等待更多数据（设置一个短延迟）
+        // 如果数据不够最小缓冲区，等待更多数据
+        // 使用更短的延迟，提升响应速度
         if (!this.flushInterval) {
           this.flushInterval = window.setTimeout(() => {
             if (this.audioBuffer && this.audioBuffer.length > 0 && !this.isPlayingAudio) {
@@ -468,7 +461,7 @@ export class WebSocketStrategy implements ITransportStrategy {
               });
             }
             this.flushInterval = null;
-          }, 50); // 50ms 后重试
+          }, 20); // 20ms 后重试（降低延迟）
         }
       }
     }
