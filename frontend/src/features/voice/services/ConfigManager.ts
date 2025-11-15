@@ -30,6 +30,10 @@ export interface VoiceAgentConfig {
   tools: any[];
   /** OpenAI 配置（完整） */
   openai: OpenAIConfig;
+  /** 音频转录配置 */
+  inputAudioTranscription?: {
+    model: string;
+  };
 }
 
 /**
@@ -75,7 +79,8 @@ export class ConfigManager {
       if (this.personalityId) {
         try {
           const personality = await personalityApi.getPersonality(this.personalityId);
-          personalityConfig = personality?.config || {};
+          // Personality 类型没有 config 属性，直接使用 personality 对象本身
+          personalityConfig = personality || {};
           console.log('[ConfigManager] Personality 配置已加载');
         } catch (error) {
           console.warn('[ConfigManager] 加载 personality 配置失败:', error);
@@ -92,10 +97,17 @@ export class ConfigManager {
         personalityConfig?.ai?.system_prompt ||
         'You are a helpful assistant.';
 
+      // 音频转录配置（从全局配置或personality配置读取）
+      const inputAudioTranscription = 
+        personalityRealtimeConfig.input_audio_transcription || 
+        globalConfig.input_audio_transcription || 
+        { model: 'whisper-1' }; // 默认启用 whisper-1
+
       console.log('[ConfigManager] 配置合并完成:', {
         global: globalConfig.voice,
         personality: personalityRealtimeConfig.voice,
         final: voice,
+        inputAudioTranscription,
       });
 
       // 6. 构建完整配置
@@ -107,12 +119,17 @@ export class ConfigManager {
         baseUrl: openaiConfig.base_url,
         tools: [], // 工具列表将由 VoiceAgentService 加载
         openai: openaiConfig,
+        inputAudioTranscription,
       };
 
       // 缓存配置
       this.cachedConfig = config;
 
-      console.log('[ConfigManager] 配置加载完成');
+      console.log('[ConfigManager] 配置加载完成:', {
+        voice,
+        model: config.model,
+        inputAudioTranscription,
+      });
       return config;
     } catch (error) {
       console.error('[ConfigManager] 加载配置失败:', error);

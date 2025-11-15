@@ -57,10 +57,12 @@ export class WebRTCTransport implements ITransport {
       }
 
       // 2. 创建助手音频元素（如果未提供）
+      // 注意：OpenAIRealtimeWebRTC SDK 内部会自动处理音频播放
+      // 我们的 audioElement 仅用于可视化（波形显示），必须静音避免重复播放
       if (!this.config.audioElement) {
         this.audioElement = new Audio();
-        this.audioElement.autoplay = false;
-        this.audioElement.muted = true; // 静音，只用于可视化
+        this.audioElement.autoplay = false; // 不自动播放，SDK内部播放
+        this.audioElement.muted = true;     // 必须静音，避免重复播放和回声
       } else {
         this.audioElement = this.config.audioElement;
       }
@@ -85,43 +87,15 @@ export class WebRTCTransport implements ITransport {
         audioElement: this.audioElement,
       });
 
-      // 5. 等待连接建立
-      await this.waitForConnection();
-
+      // 注意：WebRTC连接是异步的，SDK内部会处理连接状态
+      // 不需要等待连接完成，直接标记为已连接即可
       this.status = 'connected';
-      console.log('[WebRTCTransport] 连接成功');
+      console.log('[WebRTCTransport] WebRTC传输层已创建（连接异步建立中）');
     } catch (error) {
       this.status = 'error';
       console.error('[WebRTCTransport] 连接失败:', error);
       throw error;
     }
-  }
-
-  /**
-   * 等待 WebRTC 连接建立
-   */
-  private async waitForConnection(): Promise<void> {
-    if (!this.transport) {
-      throw new Error('Transport not initialized');
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 50; // 最多等待5秒（50 * 100ms）
-
-      const checkConnection = () => {
-        if (this.transport!.status === 'connected') {
-          resolve();
-        } else if (attempts >= maxAttempts) {
-          reject(new Error('WebRTC 连接超时'));
-        } else {
-          attempts++;
-          setTimeout(checkConnection, 100);
-        }
-      };
-
-      checkConnection();
-    });
   }
 
   /**

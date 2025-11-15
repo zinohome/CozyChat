@@ -13,7 +13,7 @@ interface VoiceCallIndicatorProps {
 
 /**
  * 现代频谱柱状图可视化组件
- * 
+ *
  * 类似 Apple Music / Spotify 风格的音频可视化
  * 特点：流畅动画、渐变色彩、发光效果、镜像对称
  */
@@ -27,7 +27,7 @@ export const VoiceWaveform: React.FC<{
   const [bars, setBars] = useState<number[]>(Array(18).fill(0));
   const smoothedBarsRef = useRef<number[]>(Array(18).fill(0));
   const timeRef = useRef<number>(0);
-
+  
   // 连接动画（正在连接时）
   const updateConnectingAnimation = useCallback(() => {
     timeRef.current += 0.04; // 控制移动速度
@@ -44,7 +44,7 @@ export const VoiceWaveform: React.FC<{
       let isLit = false;
       for (let dotIndex = 0; dotIndex < dotCount; dotIndex++) {
         let dotPosition = firstDotPosition + dotIndex * dotSpacing;
-        
+
         // 处理循环：如果位置超过总数，从左边开始
         if (dotPosition >= barCount) {
           dotPosition = dotPosition - barCount;
@@ -54,9 +54,9 @@ export const VoiceWaveform: React.FC<{
         if (Math.abs(i - dotPosition) < 0.5) {
           isLit = true;
           break;
-        }
       }
-      
+    }
+
       // 如果这个位置应该亮起，设置较高的高度；否则保持很低
       return isLit ? 0.4 : 0.08; // 亮起的高度降低到0.4，暗着的高度保持0.08
     });
@@ -78,7 +78,7 @@ export const VoiceWaveform: React.FC<{
       return Math.max(0.08, (wave1 + wave2 + 0.5) * 0.2);
     });
     setBars(newBars);
-    
+
     if (isActive && (!frequencyData || frequencyData.length === 0) && !isConnecting) {
       animationFrameRef.current = requestAnimationFrame(updateIdleAnimation);
     }
@@ -93,7 +93,7 @@ export const VoiceWaveform: React.FC<{
 
     const barCount = 18;
     const newBars: number[] = [];
-    
+
     // 将频率数据映射到柱状图
     for (let i = 0; i < barCount; i++) {
       // 使用对数分布，低频占更多柱子（更符合人耳感知）
@@ -108,9 +108,9 @@ export const VoiceWaveform: React.FC<{
       // 添加最小高度，避免完全消失
       newBars.push(Math.max(0.03, smoothed));
     }
-    
+
     setBars(newBars);
-    
+
     if (isActive) {
       animationFrameRef.current = requestAnimationFrame(updateVisualization);
     }
@@ -123,7 +123,7 @@ export const VoiceWaveform: React.FC<{
         animationFrameRef.current = null;
       }
       return;
-    }
+      }
 
     // 优先显示连接动画
     if (isConnecting) {
@@ -273,12 +273,12 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
 
   return (
     <div className="voice-call-indicator">
-      <div className="voice-waveforms">
-        <VoiceWaveform 
+          <div className="voice-waveforms">
+            <VoiceWaveform 
           frequencyData={activeFrequencyData} 
-          color={activeColor}
-          isActive={true}
-        />
+              color={activeColor}
+              isActive={true}
+            />
       </div>
     </div>
   );

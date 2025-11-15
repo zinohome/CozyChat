@@ -1,15 +1,16 @@
+/**
+ * Voice Agent Hook（重构版本）
+ * 
+ * 使用 VoiceAgentService 协调所有模块，简化 Hook 逻辑。
+ * 从原来的 900+ 行简化到 ~150 行。
+ */
+
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { RealtimeAgent, RealtimeSession, OpenAIRealtimeWebRTC } from '@openai/agents/realtime';
-import { configApi } from '@/services/config';
-import { personalityApi } from '@/services/personality';
-import type { OpenAIConfig } from '@/services/config';
-import { ToolManager } from '@/features/voice/services/ToolManager';
-import { EventHandler } from '@/features/voice/services/EventHandler';
+import { VoiceAgentService } from '@/features/voice/services/VoiceAgentService';
 import type { EventHandlerCallbacks } from '@/features/voice/services/EventHandler';
 
 /**
- * Voice Agent Hook返回值
+ * Voice Agent Hook 返回值
  */
 export interface UseVoiceAgentReturn {
   /** 是否已连接 */
@@ -37,906 +38,213 @@ export interface UseVoiceAgentReturn {
 /**
  * Voice Agent Hook
  *
- * 使用 OpenAI Agents SDK 的 Realtime API 实现语音通话功能。
- * 由于 oneapi.naivehero.top 是 api.openai.com 的完整镜像，可以直接使用 OpenAI SDK。
- *
  * @param sessionId - 会话ID
  * @param personalityId - 人格ID
  * @param callbacks - 回调函数
  * @returns Voice Agent Hook返回值
  */
 export const useVoiceAgent = (
-  _sessionId?: string,
+  sessionId?: string,
   personalityId?: string,
-  callbacks?: {
-    onUserTranscript?: (text: string) => void;
-    onAssistantTranscript?: (text: string) => void;
-    onToolCall?: (toolName: string, parameters: Record<string, any>) => void;
-    onToolResult?: (toolName: string, result: any) => void;
-  }
+  callbacks?: EventHandlerCallbacks
 ): UseVoiceAgentReturn => {
+  // 状态
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const sessionRef = useRef<RealtimeSession | null>(null);
-  const configRef = useRef<OpenAIConfig | null>(null);
-  const isCallingRef = useRef(false);
-  
-  // 工具管理器和事件处理器
-  const toolManagerRef = useRef<ToolManager | null>(null);
-  const eventHandlerRef = useRef<EventHandler | null>(null);
-  
-  // 音频流和元素引用（用于可视化）
-  const userMediaStreamRef = useRef<MediaStream | null>(null);
-  const assistantAudioElementRef = useRef<HTMLAudioElement | null>(null);
-  
-  // 音频可视化相关
-  const userAnalyserRef = useRef<AnalyserNode | null>(null);
-  const assistantAnalyserRef = useRef<AnalyserNode | null>(null);
-  const assistantSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const assistantAudioContextRef = useRef<AudioContext | null>(null);
   const [userFrequencyData, setUserFrequencyData] = useState<Uint8Array | null>(null);
   const [assistantFrequencyData, setAssistantFrequencyData] = useState<Uint8Array | null>(null);
-  const userAnimationFrameRef = useRef<number | null>(null);
-  const assistantAnimationFrameRef = useRef<number | null>(null);
-  // 用于防止无限更新的标志
-  const isUpdatingUserVisualizationRef = useRef(false);
-  const isUpdatingAssistantVisualizationRef = useRef(false);
-  // 节流：记录上次更新时间
-  const lastUserUpdateTimeRef = useRef<number>(0);
-  const lastAssistantUpdateTimeRef = useRef<number>(0);
-  
-  // 获取 personality 配置
-  const { data: personality } = useQuery({
-    queryKey: ['personality', personalityId],
-    queryFn: () => personalityApi.getPersonality(personalityId!),
-    enabled: !!personalityId,
-  });
+
+  // VoiceAgentService 实例
+  const serviceRef = useRef<VoiceAgentService | null>(null);
+  const frequencyUpdateIntervalRef = useRef<number | null>(null);
 
   /**
-   * 加载配置
+   * 初始化服务
    */
-  const loadConfig = useCallback(async (): Promise<OpenAIConfig> => {
-    if (configRef.current) {
-      return configRef.current;
+  const initService = useCallback(() => {
+    if (!serviceRef.current) {
+      serviceRef.current = new VoiceAgentService({
+        sessionId,
+        personalityId,
+        callbacks,
+      });
+      console.log('[useVoiceAgent] VoiceAgentService 已初始化');
     }
-    
-    const config = await configApi.getOpenAIConfig();
-    configRef.current = config;
-    return config;
-  }, []);
-
-  /**
-   * 初始化用户音频可视化
-   */
-  const initUserAudioVisualization = useCallback(async (stream: MediaStream) => {
-    try {
-      // 如果已经在更新，先停止
-      if (isUpdatingUserVisualizationRef.current) {
-        if (userAnimationFrameRef.current) {
-          cancelAnimationFrame(userAnimationFrameRef.current);
-          userAnimationFrameRef.current = null;
-        }
-        isUpdatingUserVisualizationRef.current = false;
-      }
-      
-      // 检查 AudioContext 状态
-      let audioContext: AudioContext;
-      try {
-        audioContext = new AudioContext({ sampleRate: 24000 });
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
-      } catch (e) {
-        console.error('创建 AudioContext 失败:', e);
-        return;
-      }
-      
-      const source = audioContext.createMediaStreamSource(stream);
-      
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.3;
-      userAnalyserRef.current = analyser;
-      
-      source.connect(analyser);
-      
-      // 启动用户音频可视化（使用稳定的更新函数）
-      const updateUserAudioVisualization = () => {
-        // 检查是否应该继续更新
-        if (!userAnalyserRef.current || !isCallingRef.current || !isUpdatingUserVisualizationRef.current) {
-          isUpdatingUserVisualizationRef.current = false;
-          userAnimationFrameRef.current = null;
-          return;
-        }
-        
-        try {
-          // 节流：限制更新频率为 20fps（每50ms更新一次）
-          const now = Date.now();
-          if (now - lastUserUpdateTimeRef.current >= 50) {
-            const bufferLength = userAnalyserRef.current.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            userAnalyserRef.current.getByteFrequencyData(dataArray);
-            
-            // 使用函数式更新，避免依赖问题
-            setUserFrequencyData((prev) => {
-              // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
-              if (prev && prev.length === dataArray.length) {
-                let isEqual = true;
-                for (let i = 0; i < dataArray.length; i++) {
-                  if (prev[i] !== dataArray[i]) {
-                    isEqual = false;
-                    break;
-                  }
-                }
-                if (isEqual) {
-                  return prev; // 返回旧值，不触发更新
-                }
-              }
-              return dataArray;
-            });
-            
-            lastUserUpdateTimeRef.current = now;
-          }
-          
-          // 继续下一帧
-          userAnimationFrameRef.current = requestAnimationFrame(updateUserAudioVisualization) as any;
-        } catch (err) {
-          console.error('更新用户音频可视化失败:', err);
-          isUpdatingUserVisualizationRef.current = false;
-          userAnimationFrameRef.current = null;
-        }
-      };
-      
-      // 设置更新标志并启动
-      isUpdatingUserVisualizationRef.current = true;
-      // 延迟启动，确保 isCallingRef 已设置
-      setTimeout(() => {
-        if (isCallingRef.current && userAnalyserRef.current && isUpdatingUserVisualizationRef.current) {
-          updateUserAudioVisualization();
-        }
-      }, 200);
-    } catch (err: any) {
-      console.error('初始化用户音频可视化失败:', err);
-      isUpdatingUserVisualizationRef.current = false;
-    }
-  }, []);
-
-  /**
-   * 初始化助手音频可视化
-   */
-  const initAssistantAudioVisualization = useCallback((audioElement: HTMLAudioElement) => {
-    try {
-      // 如果已经在更新，先停止
-      if (isUpdatingAssistantVisualizationRef.current) {
-        if (assistantAnimationFrameRef.current) {
-          cancelAnimationFrame(assistantAnimationFrameRef.current);
-          assistantAnimationFrameRef.current = null;
-        }
-        isUpdatingAssistantVisualizationRef.current = false;
-      }
-      
-      // 清理之前的连接（如果存在）
-      if (assistantSourceRef.current) {
-        try {
-          assistantSourceRef.current.disconnect();
-        } catch (e) {
-          // 忽略断开连接错误
-        }
-        assistantSourceRef.current = null;
-      }
-      
-      if (assistantAudioContextRef.current) {
-        try {
-          assistantAudioContextRef.current.close();
-        } catch (e) {
-          // 忽略关闭错误
-        }
-        assistantAudioContextRef.current = null;
-      }
-      
-      // 检查 AudioContext 状态
-      let audioContext: AudioContext;
-      try {
-        audioContext = new AudioContext({ sampleRate: 24000 });
-        assistantAudioContextRef.current = audioContext;
-        if (audioContext.state === 'suspended') {
-          audioContext.resume();
-        }
-      } catch (e) {
-        console.error('创建助手 AudioContext 失败:', e);
-        return;
-      }
-      
-      // 优先使用 srcObject 的 MediaStream（更可靠，不会出现"already connected"错误）
-      // 注意：不要同时使用 MediaStreamSource 和 MediaElementSource，会导致重复播放
-      let source: MediaElementAudioSourceNode | MediaStreamAudioSourceNode;
-      
-      if (audioElement.srcObject instanceof MediaStream) {
-        // 如果 audioElement 有 srcObject（MediaStream），直接使用它
-        try {
-          const streamSource = audioContext.createMediaStreamSource(audioElement.srcObject);
-          assistantSourceRef.current = streamSource as any;
-          source = streamSource;
-        } catch (e: any) {
-          console.error('从 MediaStream 创建音频源失败:', e);
-          throw e;
-        }
-      } else {
-        // 如果没有 srcObject，尝试从 audioElement 创建 MediaElementSource
-        try {
-          source = audioContext.createMediaElementSource(audioElement);
-          assistantSourceRef.current = source;
-        } catch (e: any) {
-          if (e.name === 'InvalidStateError' && e.message.includes('already connected')) {
-            // 音频元素已被连接，跳过可视化（避免重复播放）
-            return;
-          } else {
-            throw e;
-          }
-        }
-      }
-      
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.1;
-      analyser.minDecibels = -90;
-      analyser.maxDecibels = -10;
-      assistantAnalyserRef.current = analyser;
-      
-      source.connect(analyser);
-      analyser.connect(audioContext.destination);
-      
-      // 启动助手音频可视化（使用稳定的更新函数）
-      const updateAssistantAudioVisualization = () => {
-        // 检查是否应该继续更新
-        if (!assistantAnalyserRef.current || !isCallingRef.current || !isUpdatingAssistantVisualizationRef.current) {
-          isUpdatingAssistantVisualizationRef.current = false;
-          assistantAnimationFrameRef.current = null;
-          return;
-        }
-        
-        try {
-          // 节流：限制更新频率为 20fps（每50ms更新一次）
-          const now = Date.now();
-          if (now - lastAssistantUpdateTimeRef.current >= 50) {
-            const bufferLength = assistantAnalyserRef.current.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            assistantAnalyserRef.current.getByteFrequencyData(dataArray);
-            
-            // 使用函数式更新，避免依赖问题
-            setAssistantFrequencyData((prev) => {
-              // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
-              if (prev && prev.length === dataArray.length) {
-                let isEqual = true;
-                for (let i = 0; i < dataArray.length; i++) {
-                  if (prev[i] !== dataArray[i]) {
-                    isEqual = false;
-                    break;
-                  }
-                }
-                if (isEqual) {
-                  return prev; // 返回旧值，不触发更新
-                }
-              }
-              return dataArray;
-            });
-            
-            lastAssistantUpdateTimeRef.current = now;
-          }
-          
-          // 继续下一帧
-          assistantAnimationFrameRef.current = requestAnimationFrame(updateAssistantAudioVisualization) as any;
-        } catch (err) {
-          console.error('更新助手音频可视化失败:', err);
-          isUpdatingAssistantVisualizationRef.current = false;
-          assistantAnimationFrameRef.current = null;
-        }
-      };
-      
-      // 设置更新标志并启动
-      isUpdatingAssistantVisualizationRef.current = true;
-      // 立即启动可视化循环
-      if (isCallingRef.current && assistantAnalyserRef.current) {
-        updateAssistantAudioVisualization();
-      } else {
-        // 延迟启动，等待条件满足
-        setTimeout(() => {
-          if (isCallingRef.current && assistantAnalyserRef.current && isUpdatingAssistantVisualizationRef.current) {
-            updateAssistantAudioVisualization();
-          }
-        }, 200);
-      }
-    } catch (err: any) {
-      console.error('初始化助手音频可视化失败:', err);
-      isUpdatingAssistantVisualizationRef.current = false;
-    }
-  }, []);
+    return serviceRef.current;
+  }, [sessionId, personalityId, callbacks]);
 
   /**
    * 连接 Voice Agent
    */
   const connect = useCallback(async () => {
+    if (isConnected) {
+      console.warn('[useVoiceAgent] 已连接，无需重复连接');
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
     try {
-      setError(null);
+      const service = initService();
       
-      // 获取配置
-      const config = await loadConfig();
-      
-      // 获取 ephemeral client key (临时密钥)
-      const realtimeToken = await configApi.getRealtimeToken();
-      
-      // 获取全局默认配置（来自 realtime.yaml）
-      const globalConfig = await configApi.getRealtimeConfig();
-      
-      // 获取 personality 配置
-      const personalityConfig = (personality as any)?.config || {};
-      const voiceConfig = personalityConfig?.voice || {};
-      const personalityRealtimeConfig = voiceConfig?.realtime || {};
-      
-      // 合并配置：personality 配置 > 全局配置 > 代码默认值
-      const voice = personalityRealtimeConfig.voice || globalConfig.voice || 'shimmer';
-      const instructions = personalityRealtimeConfig.instructions || personalityConfig?.ai?.system_prompt || 'You are a helpful assistant.';
-      
-      console.log('🎙️ Realtime Voice 配置:', {
-        global: globalConfig.voice,
-        personality: personalityRealtimeConfig.voice,
-        final: voice,
-      });
-      
-      // ========== 工具调用支持 ==========
-      // 1. 初始化工具管理器
-      if (!toolManagerRef.current) {
-        toolManagerRef.current = new ToolManager();
-      }
-      
-      // 2. 获取工具列表（支持缓存）
-      let tools: any[] = [];
-      try {
-        const toolInfos = await toolManagerRef.current.getTools(personalityId, 'builtin');
-        tools = toolManagerRef.current.convertToRealtimeFormat(toolInfos);
-        console.log('🛠️ 工具列表已加载:', tools.length, '个工具');
-      } catch (error) {
-        console.error('⚠️ 加载工具列表失败，将不使用工具:', error);
-      }
-      
-      // 创建 RealtimeAgent
-      const agent = new RealtimeAgent({
-        name: 'cozychat-agent',
-        instructions: instructions,
-        voice: voice,
-        tools: tools.length > 0 ? tools : undefined, // 如果有工具，传递给 agent
-      });
-      
-      // 创建用户音频流（用于可视化）
-      // 我们需要自己创建 mediaStream，这样可以从它获取音频数据用于可视化
-      const userMediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 24000,
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      });
-      userMediaStreamRef.current = userMediaStream;
-      
-      // 创建助手音频元素（仅用于可视化，不自动播放）
-      // 注意：WebRTC transport 会自动处理音频播放，我们只需要可视化
-      // 关键：必须静音，否则会和 transport 的播放重叠，导致回声
-      const assistantAudioElement = new Audio();
-      assistantAudioElement.autoplay = false; // 禁用自动播放
-      assistantAudioElement.muted = true; // 静音！只用于可视化，不用于播放（避免与 transport 播放重叠）
-      assistantAudioElementRef.current = assistantAudioElement;
-      
-      // 创建 WebRTC 传输层（浏览器环境）
-      // 传递我们自己创建的 mediaStream 和 audioElement，以便用于可视化
-      // 注意：baseUrl 需要是完整的端点 URL，包括 /v1/realtime/calls 路径
-      // SDK 不会自动添加路径，需要手动指定完整 URL
-      let baseUrl = config.base_url;
-      if (baseUrl.endsWith('/v1')) {
-        baseUrl = baseUrl.slice(0, -3);
-      } else if (baseUrl.endsWith('/v1/')) {
-        baseUrl = baseUrl.slice(0, -4);
-      }
-      // 确保 baseUrl 不以 / 结尾
-      baseUrl = baseUrl.replace(/\/$/, '');
-      // 添加 /v1/realtime/calls 路径（WebRTC 端点）
-      const webrtcEndpoint = `${baseUrl}/v1/realtime/calls`;
-      
-      const transport = new OpenAIRealtimeWebRTC({
-        baseUrl: webrtcEndpoint, // 使用完整的端点 URL（例如：https://oneapi.naivehero.top/v1/realtime/calls）
-        // 不使用 useInsecureApiKey，因为我们现在有 ephemeral key
-        mediaStream: userMediaStream, // 使用我们自己创建的音频流
-        audioElement: assistantAudioElement, // 使用我们自己创建的音频元素
-      });
-      
-      // 创建 RealtimeSession
-      // 注意：转录配置已经在后端创建 ephemeral token 时完成
-      const session = new RealtimeSession(agent, {
-        apiKey: realtimeToken.token, // 使用后端生成的 ephemeral key（已包含转录配置）
-        transport: transport, // 使用自定义的 WebRTC 传输层
-        model: realtimeToken.model, // 使用后端返回的模型名称
-      });
-      
-      // 保存 webrtcEndpoint 到 session 的某个地方，以便在 connect 时使用
-      (session as any).__webrtcEndpoint = webrtcEndpoint;
-      
-      // ========== 正确的事件监听方式 ==========
-      // 根据社区讨论：https://community.openai.com/t/input-audio-transcription-in-realtime-api/1007401/5
-      // 正确的事件名是：conversation.item.input_audio_transcription.completed
-      
-      // 1. 用户语音转文本事件（完成）
-      (session as any).on('conversation.item.input_audio_transcription.completed', (event: any) => {
-        const transcript = event?.transcript;
-        if (transcript && typeof transcript === 'string' && transcript.trim() && callbacks?.onUserTranscript) {
-          callbacks.onUserTranscript(transcript);
-        }
-      });
-      
-      // 2. 从 history_added 和 history_updated 提取文本
-      // 用于去重的 Set（存储已处理的消息ID和文本内容）
-      const processedMessageIds = new Set<string>();
-      const processedTexts = new Set<string>(); // 存储已处理的文本内容（消息ID:文本内容）
-      
-      // 提取用户转录文本的辅助函数
-      const extractUserTranscript = (item: any): string | null => {
-        // 1. 首先检查 item 的直接字段
-        if (item.transcript && typeof item.transcript === 'string' && item.transcript.trim()) {
-          return item.transcript.trim();
-        }
-        if (item.input_audio_transcript && typeof item.input_audio_transcript === 'string' && item.input_audio_transcript.trim()) {
-          return item.input_audio_transcript.trim();
-        }
-        
-        // 2. 检查 content 数组（转录文本在这里）
-        if (Array.isArray(item.content)) {
-          for (const c of item.content) {
-            // 优先检查 input_audio 类型（这是用户语音输入）
-            if (c.type === 'input_audio') {
-              if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
-                return c.transcript.trim();
+      // ✅ 关键修复：确保使用最新的回调函数
+      if (callbacks) {
+        service.updateCallbacks(callbacks);
               }
-              if (c.input_audio_transcript && typeof c.input_audio_transcript === 'string' && c.input_audio_transcript.trim()) {
-                return c.input_audio_transcript.trim();
-              }
-              if (c.text && typeof c.text === 'string' && c.text.trim()) {
-                return c.text.trim();
-              }
-            }
-            // 检查任何包含 transcript 的项（备用）
-            if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
-              return c.transcript.trim();
-            }
-            // 检查 text 类型（某些情况下转录可能以 text 形式存在）
-            if (c.type === 'text' && c.text && typeof c.text === 'string' && c.text.trim()) {
-              return c.text.trim();
-            }
-          }
-        }
-        
-        // 3. 如果 content 是字符串，直接返回（备用）
-        if (typeof item.content === 'string' && item.content.trim()) {
-          return item.content.trim();
-        }
-        
-        return null;
-      };
       
-      // 提取助手文本的辅助函数
-      const extractAssistantText = (item: any): string | null => {
-        // 检查 content 数组
-        if (Array.isArray(item.content)) {
-          for (const c of item.content) {
-            if (c.type === 'text' && c.text && typeof c.text === 'string') {
-              return c.text.trim();
-            }
-            if (c.type === 'output_audio' && c.transcript && typeof c.transcript === 'string') {
-              return c.transcript.trim();
-            }
-          }
-        }
-        
-        // 检查直接字段
-        if (item.text && typeof item.text === 'string') {
-          return item.text.trim();
-        }
-        
-        return null;
-      };
+      await service.connect();
       
-      session.on('history_added', (item: any) => {
-        if (item.type === 'message') {
-          const messageId = item.itemId || item.id;
-          if (!messageId) {
-            return; // 没有有效的消息ID，跳过
-          }
-          
-          // 检查是否已处理过这个消息ID
-          if (processedMessageIds.has(messageId)) {
-            return;
-          }
-          
-          if (item.role === 'user') {
-            const transcript = extractUserTranscript(item);
-            if (transcript && callbacks?.onUserTranscript) {
-              const textKey = `${messageId}:${transcript}`;
-              if (!processedTexts.has(textKey)) {
-                processedMessageIds.add(messageId);
-                processedTexts.add(textKey);
-              callbacks.onUserTranscript(transcript);
-              }
-            }
-          } else if (item.role === 'assistant') {
-            const text = extractAssistantText(item);
-            if (text && callbacks?.onAssistantTranscript) {
-              const textKey = `${messageId}:${text}`;
-              if (!processedTexts.has(textKey)) {
-                processedMessageIds.add(messageId);
-                processedTexts.add(textKey);
-              callbacks.onAssistantTranscript(text);
-              }
-            }
-          }
-        }
-      });
-      
-      session.on('history_updated', (history: any[]) => {
-        // 遍历所有消息，检查是否有新的转录文本
-        history.forEach((item: any) => {
-          if (item.type === 'message') {
-            const messageId = item.itemId || item.id;
-            if (!messageId) {
-              return; // 没有有效的消息ID，跳过
-            }
-            
-            if (item.role === 'user') {
-              const transcript = extractUserTranscript(item);
-              if (transcript) {
-                // 使用消息ID和文本内容作为唯一标识
-                const textKey = `${messageId}:${transcript}`;
-                
-                // 如果之前没有处理过这个文本
-                if (!processedTexts.has(textKey) && callbacks?.onUserTranscript) {
-                  processedMessageIds.add(messageId);
-                  processedTexts.add(textKey);
-                callbacks.onUserTranscript(transcript);
-                }
-              }
-            } else if (item.role === 'assistant') {
-              const text = extractAssistantText(item);
-              if (text) {
-                // 使用消息ID和文本内容作为唯一标识
-                const textKey = `${messageId}:${text}`;
-                
-                // 如果之前没有处理过这个文本
-                if (!processedTexts.has(textKey) && callbacks?.onAssistantTranscript) {
-                  processedMessageIds.add(messageId);
-                  processedTexts.add(textKey);
-                callbacks.onAssistantTranscript(text);
-                }
-              }
-            }
-          }
-        });
-      });
-      
-      // ========== 设置工具调用事件处理器 ==========
-      if (tools.length > 0) {
-        // 创建事件处理器
-        if (!eventHandlerRef.current) {
-          eventHandlerRef.current = new EventHandler();
-        }
-        
-        // 设置 session 和回调
-        eventHandlerRef.current.setSession(session);
-        eventHandlerRef.current.setCallbacks({
-          onUserTranscript: callbacks?.onUserTranscript,
-          onAssistantTranscript: callbacks?.onAssistantTranscript,
-          onToolCall: callbacks?.onToolCall,
-          onToolResult: callbacks?.onToolResult,
-        });
-        
-        // 设置工具调用事件监听
-        eventHandlerRef.current.setupToolCallListeners();
-        
-        console.log('🛠️ 工具调用事件监听已设置');
-      }
-      
-      sessionRef.current = session;
       setIsConnected(true);
+      setIsConnecting(false);
       
-      console.log('Voice Agent 连接成功');
+      console.log('[useVoiceAgent] 连接成功');
     } catch (err: any) {
-      console.error('连接 Voice Agent 失败:', err);
+      console.error('[useVoiceAgent] 连接失败:', err);
       setError(err.message || '连接失败');
+      setIsConnecting(false);
+      setIsConnected(false);
       throw err;
     }
-  }, [loadConfig, personality, callbacks]);
+  }, [isConnected, initService]);
 
   /**
    * 断开连接
    */
   const disconnect = useCallback(() => {
-    try {
-      // 清理事件处理器
-      if (eventHandlerRef.current) {
-        eventHandlerRef.current.cleanup();
-        eventHandlerRef.current = null;
+    if (serviceRef.current) {
+      serviceRef.current.disconnect();
+      serviceRef.current = null;
       }
       
-      if (sessionRef.current) {
-        sessionRef.current.close(); // 使用 close() 方法断开连接
-        sessionRef.current = null;
+    // 停止频率数据更新
+    if (frequencyUpdateIntervalRef.current) {
+      clearInterval(frequencyUpdateIntervalRef.current);
+      frequencyUpdateIntervalRef.current = null;
       }
       
-      // 停止用户音频流
-      if (userMediaStreamRef.current) {
-        userMediaStreamRef.current.getTracks().forEach(track => track.stop());
-        userMediaStreamRef.current = null;
-      }
+    setIsConnected(false);
+    setIsCalling(false);
+             setUserFrequencyData(null);
+             setAssistantFrequencyData(null);
       
-      // 停止助手音频元素
-      if (assistantAudioElementRef.current) {
-        assistantAudioElementRef.current.pause();
-        assistantAudioElementRef.current.src = '';
-        assistantAudioElementRef.current = null;
-      }
-      
-      // 停止音频可视化
-      isUpdatingUserVisualizationRef.current = false;
-      isUpdatingAssistantVisualizationRef.current = false;
-      if (userAnimationFrameRef.current) {
-        cancelAnimationFrame(userAnimationFrameRef.current);
-        userAnimationFrameRef.current = null;
-      }
-      if (assistantAnimationFrameRef.current) {
-        cancelAnimationFrame(assistantAnimationFrameRef.current);
-        assistantAnimationFrameRef.current = null;
-      }
-      
-      setUserFrequencyData(null);
-      setAssistantFrequencyData(null);
-      setIsConnected(false);
-      setIsCalling(false);
-      isCallingRef.current = false;
-      
-      console.log('断开 Voice Agent 连接');
-    } catch (err) {
-      console.error('断开连接失败:', err);
-    }
+    console.log('[useVoiceAgent] 已断开连接');
   }, []);
 
   /**
    * 开始通话
    */
   const startCall = useCallback(async () => {
-    setIsConnecting(true);
-    setError(null);
+    // 检查是否已连接，如果未连接或 service 不存在则先连接
+    if (!isConnected || !serviceRef.current) {
+      console.log('[useVoiceAgent] 未连接，先建立连接');
+      try {
+      await connect();
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : '连接失败';
+        console.error('[useVoiceAgent] 连接失败:', errorMsg);
+        setError(errorMsg);
+        throw err;
+      }
+    }
+
+    if (isCalling) {
+      console.warn('[useVoiceAgent] 已在通话中');
+      return;
+    }
     
     try {
-      // 如果未连接或 sessionRef 为 null，都需要重新连接
-      if (!isConnected || !sessionRef.current) {
-        await connect();
+      console.log('[useVoiceAgent] 开始通话');
+      
+      // ✅ 关键修复：更新回调函数（确保使用最新的回调引用）
+      if (serviceRef.current && callbacks) {
+        serviceRef.current.updateCallbacks(callbacks);
       }
       
-      if (!sessionRef.current) {
-        throw new Error('Voice Agent 未连接');
-      }
+      // ✅ 关键修复：设置连接中状态，UI显示"正在连接"
+      setIsConnecting(true);
+      setError(null);
       
-      // 获取 ephemeral key（如果还没有）
-      const realtimeToken = await configApi.getRealtimeToken();
+      await serviceRef.current!.startCall();
       
-      // 获取 WebRTC 端点 URL（从 transport 或 session 中获取）
-      // 注意：不要传递 url 参数，让 transport 使用它自己的 baseUrl
-      // 如果传递了 url，会覆盖 transport 的 baseUrl，导致路径不正确
-      const webrtcEndpoint = (sessionRef.current as any).__webrtcEndpoint;
-      
-      // 检查 transport 的内部状态
-      const currentTransport = sessionRef.current?.transport;
-      let transportInternalUrl = 'N/A';
-      if (currentTransport instanceof OpenAIRealtimeWebRTC) {
-        // 尝试获取 transport 的内部 URL（通过反射或直接访问）
-        try {
-          // @ts-ignore - 访问私有属性
-          transportInternalUrl = currentTransport['#url'] || '无法访问';
-        } catch (e) {
-          transportInternalUrl = '无法访问私有属性';
-        }
-      }
-      
-      try {
-        await sessionRef.current.connect({
-          apiKey: realtimeToken.token,
-          model: realtimeToken.model,
-        });
-      } catch (connectErr: any) {
-        console.error('RealtimeSession 连接失败:', {
-          error: connectErr,
-          message: connectErr?.message,
-          stack: connectErr?.stack,
-          webrtcEndpoint: webrtcEndpoint,
-          errorName: connectErr?.name,
-          errorCause: connectErr?.cause,
-        });
-        
-        // 提供更友好的错误信息
-        if (connectErr?.message?.includes('Failed to fetch')) {
-          // 检查是否是 CORS 问题
-          const isCorsError = connectErr?.message?.includes('CORS') || 
-                             connectErr?.stack?.includes('CORS') ||
-                             connectErr?.cause?.message?.includes('CORS');
-          
-          const errorMsg = `WebRTC 连接失败 (Failed to fetch)。
-
-可能的原因：
-1. CORS 配置问题 - 服务器未设置正确的 CORS 头部
-2. 服务器不支持 /v1/realtime/calls 端点
-3. 网络连接问题
-
-调试信息：
-- WebRTC 端点: ${webrtcEndpoint}
-- Transport 内部 URL: ${transportInternalUrl}
-- 是否 CORS 错误: ${isCorsError ? '是' : '否'}
-
-请检查：
-1. 浏览器开发者工具的 Network 标签页，查看实际请求的 URL 和响应
-2. 服务器是否正确配置了 CORS 头部（Access-Control-Allow-Origin 等）
-3. 服务器是否支持 /v1/realtime/calls 端点`;
-          setError(errorMsg);
-          
-          console.error('详细错误信息:', {
-            error: connectErr,
-            webrtcEndpoint,
-            transportInternalUrl,
-            isCorsError,
-            suggestion: '请打开浏览器开发者工具的 Network 标签页，查看实际请求的详细信息',
-          });
-        }
-        
-        throw connectErr;
-      }
-      
-      // 等待连接建立后再初始化音频可视化
-      const sessionTransport = sessionRef.current.transport;
-      if (sessionTransport instanceof OpenAIRealtimeWebRTC) {
-        // 优化：减少轮询间隔，添加超时机制
-        await new Promise<void>((resolve, reject) => {
-          let attempts = 0;
-          const maxAttempts = 50; // 最多等待5秒（50 * 100ms）
-          const checkConnection = () => {
-            if (sessionTransport.status === 'connected') {
-              resolve();
-            } else if (attempts >= maxAttempts) {
-              reject(new Error('WebRTC 连接超时'));
-            } else {
-              attempts++;
-              setTimeout(checkConnection, 100);
-            }
-          };
-          checkConnection();
-        });
-        
-        // 从 transport 获取实际的音频流
-        // OpenAIRealtimeWebRTC 内部会设置 audioElement.srcObject
-        // 我们需要等待这个设置完成，但设置超时避免无限等待
-        await new Promise<void>((resolve) => {
-          let attempts = 0;
-          const maxAttempts = 30; // 最多等待3秒（30 * 100ms）
-          const checkAudioElement = () => {
-            if (assistantAudioElementRef.current?.srcObject) {
-              resolve();
-            } else if (attempts >= maxAttempts) {
-              // 超时后也继续，音频可视化可以在后续初始化
-              console.warn('等待音频元素超时，将在后续初始化音频可视化');
-              resolve();
-            } else {
-              attempts++;
-              setTimeout(checkAudioElement, 100);
-            }
-          };
-          checkAudioElement();
-        });
-      }
-      
-      // 先设置 isCalling 状态，这样音频可视化才能正常工作
+      // ✅ 通话启动成功后，设置 Hook 层状态（UI状态）
+      // Service 层状态已在 startCall() 内部设置
       setIsCalling(true);
-      isCallingRef.current = true;
+      setIsConnecting(false); // ← 连接完成，取消连接中状态
+
+      // 启动频率数据更新（轮询）
+      // 注意：这里使用轮询而不是回调，因为 Hook 层需要触发 React 更新
+      const audioVisualizer = serviceRef.current!.getAudioVisualizer();
       
-      // 初始化音频可视化
-      if (userMediaStreamRef.current) {
-        await initUserAudioVisualization(userMediaStreamRef.current);
+      frequencyUpdateIntervalRef.current = window.setInterval(() => {
+        // 从 AudioVisualizer 获取最新的频率数据
+        const userFreq = audioVisualizer.getCurrentUserFrequencyData();
+        const assistantFreq = audioVisualizer.getCurrentAssistantFrequencyData();
+        
+        if (userFreq) {
+          setUserFrequencyData(userFreq);
       }
-      
-      if (assistantAudioElementRef.current) {
-        const initAssistantVisualization = () => {
-          if (assistantAudioElementRef.current?.srcObject) {
-        initAssistantAudioVisualization(assistantAudioElementRef.current);
-          } else {
-            setTimeout(initAssistantVisualization, 200);
-          }
-        };
-        setTimeout(initAssistantVisualization, 300);
+        if (assistantFreq) {
+          setAssistantFrequencyData(assistantFreq);
       }
+      }, 50); // 20fps更新频率
       
-      console.log('开始语音通话');
-      setIsConnecting(false);
+      console.log('[useVoiceAgent] 通话已开始');
     } catch (err: any) {
-      console.error('开始通话失败:', err);
+      console.error('[useVoiceAgent] 开始通话失败:', err);
       setError(err.message || '开始通话失败');
-      setIsConnecting(false);
+      setIsCalling(false); // ← 关键修复：失败时重置状态
+      setIsConnecting(false); // ← 失败时取消连接中状态
       throw err;
     }
-  }, [isConnected, connect, loadConfig, initUserAudioVisualization, initAssistantAudioVisualization]);
+  }, [isConnected, isCalling, connect, callbacks]);
 
   /**
    * 结束通话
    */
   const endCall = useCallback(async () => {
-    try {
-      if (sessionRef.current) {
-        sessionRef.current.close();
-        sessionRef.current = null;
-      }
-      
-      // 停止音频可视化
-      isUpdatingUserVisualizationRef.current = false;
-      isUpdatingAssistantVisualizationRef.current = false;
-      if (userAnimationFrameRef.current) {
-        cancelAnimationFrame(userAnimationFrameRef.current);
-        userAnimationFrameRef.current = null;
-      }
-      if (assistantAnimationFrameRef.current) {
-        cancelAnimationFrame(assistantAnimationFrameRef.current);
-        assistantAnimationFrameRef.current = null;
-      }
-      
-      // 清理助手音频源和上下文
-      if (assistantSourceRef.current) {
-        try {
-          assistantSourceRef.current.disconnect();
-        } catch (e) {
-          // 忽略断开连接错误
-        }
-        assistantSourceRef.current = null;
-      }
-      
-      if (assistantAudioContextRef.current) {
-        try {
-          assistantAudioContextRef.current.close();
-        } catch (e) {
-          // 忽略关闭错误
-        }
-        assistantAudioContextRef.current = null;
-      }
-      
-      // 清理音频流
-      if (userMediaStreamRef.current) {
-        userMediaStreamRef.current.getTracks().forEach((track) => track.stop());
-        userMediaStreamRef.current = null;
-      }
-      
-      setIsCalling(false);
-      isCallingRef.current = false;
-      setIsConnected(false); // 重置连接状态，允许下次重新连接
-      setUserFrequencyData(null);
-      setAssistantFrequencyData(null);
-      
-      console.log('结束语音通话');
-    } catch (err: any) {
-      console.error('结束通话失败:', err);
-      setError(err.message || '结束通话失败');
+    console.log('[useVoiceAgent] 🔍 endCall 被调用');
+    console.log('[useVoiceAgent] 🔍 当前 isCalling:', isCalling);
+    console.trace('[useVoiceAgent] 🔍 endCall 调用堆栈');
+    
+    if (!isCalling || !serviceRef.current) {
+      console.warn('[useVoiceAgent] 未在通话中，isCalling:', isCalling);
+      return;
     }
-  }, []);
 
-  // 清理
+    console.log('[useVoiceAgent] 结束通话');
+    
+    serviceRef.current.endCall();
+
+    // 停止频率数据更新
+    if (frequencyUpdateIntervalRef.current) {
+      clearInterval(frequencyUpdateIntervalRef.current);
+      frequencyUpdateIntervalRef.current = null;
+    }
+
+    setIsCalling(false);
+    setUserFrequencyData(null);
+    setAssistantFrequencyData(null);
+    
+    console.log('[useVoiceAgent] 通话已结束');
+  }, [isCalling]);
+
+  // 注意：isCalling 状态现在完全由 Hook 层控制
+  // 不需要定期同步 Service 层状态
+  // Service 层的 isCalling 主要用于内部逻辑判断
+
+  /**
+   * 组件卸载时清理
+   */
   useEffect(() => {
     return () => {
       disconnect();
     };
   }, [disconnect]);
 
+  // 返回接口
   return {
     isConnected,
     isConnecting,
@@ -950,3 +258,4 @@ export const useVoiceAgent = (
     endCall,
   };
 };
+

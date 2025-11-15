@@ -34,6 +34,10 @@ export interface RealtimeConfig {
   temperature: number;
   /** 最大输出token数 */
   max_response_output_tokens: number;
+  /** 音频转录配置 */
+  input_audio_transcription?: {
+    model: string;
+  };
 }
 
 /**

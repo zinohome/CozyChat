@@ -819,8 +819,25 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           {/* 语音通话按钮 */}
           <button
             type="button"
-            onClick={async () => {
-              if (isVoiceCallActive) {
+            onClick={async (e) => {
+              // ✅ 关键修复：阻止事件冒泡和重复触发
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // ✅ 关键修复：使用 ref 锁定按钮状态，防止异步过程中状态变化
+              // 在事件处理开始时立即锁定状态，避免异步操作期间状态变化导致重复触发
+              const buttonClickedAt = Date.now();
+              const wasActive = isVoiceCallActive;
+              
+              // 添加防抖：如果距离上次点击太近（< 500ms），忽略
+              const lastClickTime = (window as any).__lastVoiceCallClick || 0;
+              if (buttonClickedAt - lastClickTime < 500) {
+                console.log('[EnhancedChatContainer] 点击过快，忽略');
+                return;
+              }
+              (window as any).__lastVoiceCallClick = buttonClickedAt;
+              
+              if (wasActive) {
                 // 如果正在通话，结束通话
                 try {
                   await endCall();
@@ -877,15 +894,20 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               } else {
                 // 开始语音通话
                 try {
-                  // 先开始通话（内部会自动连接），成功后再启动语音通话状态
-                  // 这样 isConnecting 状态可以正确显示
+                  // ✅ 关键修复：不立即设置 startVoiceCall()
+                  // 让 isConnecting 状态控制UI显示"正在连接"
+                  // 在 startCall() 成功后，才设置 startVoiceCall() 显示"可以说话"
+                  
+                  // 开始实际通话（异步）
                   await startCall();
                   
-                  // 通话开始成功后，启动语音通话状态
+                  // ✅ 通话启动成功后，才设置UI状态为"可以说话"
+                  // 此时 isCalling = true，UI会显示为通话状态
                   startVoiceCall();
                 } catch (error) {
                   console.error('开始语音通话失败:', error);
                   showError(error, '开始语音通话失败');
+                  // 失败时清除UI状态
                   endVoiceCall();
                 }
               }
@@ -906,10 +928,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 : { 
                     flex: 'none', 
                     flexGrow: 0, 
-                    flexShrink: 0, 
+              flexShrink: 0,
                     flexBasis: 'auto',
-                    width: '36px',
-                    height: '36px',
+              width: '36px',
+              height: '36px',
                     padding: 0,
                   }
               ),
@@ -961,7 +983,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               </svg>
             ) : (
               // 未连接：显示电话图标
-              <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
+            <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
             )}
           </button>
         </div>

@@ -18,6 +18,10 @@ export interface SessionConfig {
   apiKey: string;
   /** 模型名称 */
   model: string;
+  /** 音频转录配置 */
+  inputAudioTranscription?: {
+    model: string;
+  };
 }
 
 /**
@@ -31,7 +35,7 @@ export class SessionManager {
    * 
    * @param agent - RealtimeAgent 实例
    * @param transport - 传输层实例
-   * @param config - 会话配置
+   * @param config - 会话配置（包含音频转录配置）
    * @returns RealtimeSession 实例
    */
   async createSession(
@@ -40,10 +44,13 @@ export class SessionManager {
     config: SessionConfig
   ): Promise<RealtimeSession> {
     try {
-      console.log('[SessionManager] 创建 RealtimeSession...');
+      console.log('[SessionManager] 创建 RealtimeSession...', {
+        model: config.model,
+        inputAudioTranscription: config.inputAudioTranscription,
+      });
 
       // 创建 RealtimeSession
-      // 注意：转录配置已经在后端创建 ephemeral token 时完成
+      // 注意：转录配置已经在后端创建 ephemeral token 时完成，不需要前端再传入！
       const session = new RealtimeSession(agent, {
         apiKey: config.apiKey, // 使用后端生成的 ephemeral key（已包含转录配置）
         transport: transport.getUnderlyingTransport(), // 使用传输层的底层对象
@@ -52,7 +59,7 @@ export class SessionManager {
 
       this.session = session;
 
-      console.log('[SessionManager] RealtimeSession 已创建');
+      console.log('[SessionManager] RealtimeSession 已创建（转录配置由后端提供）');
       return session;
     } catch (error) {
       console.error('[SessionManager] 创建 session 失败:', error);
