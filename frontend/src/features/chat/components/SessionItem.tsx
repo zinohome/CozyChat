@@ -47,6 +47,8 @@ export const SessionItem: React.FC<SessionItemProps> = ({
   const { data: preferences } = useQuery({
     queryKey: ['user', 'preferences'],
     queryFn: () => userApi.getCurrentUserPreferences(),
+    staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
+    cacheTime: 10 * 60 * 1000, // 10分钟内保留缓存
   });
 
   // 获取时区（默认：Asia/Shanghai）

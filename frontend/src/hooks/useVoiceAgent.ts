@@ -11,6 +11,8 @@ import type { OpenAIConfig } from '@/services/config';
 export interface UseVoiceAgentReturn {
   /** 是否已连接 */
   isConnected: boolean;
+  /** 是否正在连接中 */
+  isConnecting: boolean;
   /** 是否正在通话 */
   isCalling: boolean;
   /** 错误信息 */
@@ -49,6 +51,7 @@ export const useVoiceAgent = (
   }
 ): UseVoiceAgentReturn => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -550,11 +553,11 @@ export const useVoiceAgent = (
       
       // 停止音频可视化
       if (userAnimationFrameRef.current) {
-        clearTimeout(userAnimationFrameRef.current as any);
+        cancelAnimationFrame(userAnimationFrameRef.current);
         userAnimationFrameRef.current = null;
       }
       if (assistantAnimationFrameRef.current) {
-        clearTimeout(assistantAnimationFrameRef.current as any);
+        cancelAnimationFrame(assistantAnimationFrameRef.current);
         assistantAnimationFrameRef.current = null;
       }
       
@@ -574,11 +577,15 @@ export const useVoiceAgent = (
    * 开始通话
    */
   const startCall = useCallback(async () => {
-    if (!isConnected) {
-      await connect();
-    }
+    setIsConnecting(true);
+    setError(null);
     
     try {
+      // 如果未连接或 sessionRef 为 null，都需要重新连接
+      if (!isConnected || !sessionRef.current) {
+        await connect();
+      }
+      
       if (!sessionRef.current) {
         throw new Error('Voice Agent 未连接');
       }
@@ -659,11 +666,17 @@ export const useVoiceAgent = (
       // 等待连接建立后再初始化音频可视化
       const sessionTransport = sessionRef.current.transport;
       if (sessionTransport instanceof OpenAIRealtimeWebRTC) {
-        await new Promise<void>((resolve) => {
+        // 优化：减少轮询间隔，添加超时机制
+        await new Promise<void>((resolve, reject) => {
+          let attempts = 0;
+          const maxAttempts = 50; // 最多等待5秒（50 * 100ms）
           const checkConnection = () => {
             if (sessionTransport.status === 'connected') {
               resolve();
+            } else if (attempts >= maxAttempts) {
+              reject(new Error('WebRTC 连接超时'));
             } else {
+              attempts++;
               setTimeout(checkConnection, 100);
             }
           };
@@ -672,16 +685,22 @@ export const useVoiceAgent = (
         
         // 从 transport 获取实际的音频流
         // OpenAIRealtimeWebRTC 内部会设置 audioElement.srcObject
-        // 我们需要等待这个设置完成
+        // 我们需要等待这个设置完成，但设置超时避免无限等待
         await new Promise<void>((resolve) => {
+          let attempts = 0;
+          const maxAttempts = 30; // 最多等待3秒（30 * 100ms）
           const checkAudioElement = () => {
             if (assistantAudioElementRef.current?.srcObject) {
               resolve();
+            } else if (attempts >= maxAttempts) {
+              // 超时后也继续，音频可视化可以在后续初始化
+              console.warn('等待音频元素超时，将在后续初始化音频可视化');
+              resolve();
             } else {
+              attempts++;
               setTimeout(checkAudioElement, 100);
             }
           };
-          setTimeout(() => resolve(), 5000);
           checkAudioElement();
         });
       }
@@ -707,9 +726,11 @@ export const useVoiceAgent = (
       }
       
       console.log('开始语音通话');
+      setIsConnecting(false);
     } catch (err: any) {
       console.error('开始通话失败:', err);
       setError(err.message || '开始通话失败');
+      setIsConnecting(false);
       throw err;
     }
   }, [isConnected, connect, loadConfig, initUserAudioVisualization, initAssistantAudioVisualization]);
@@ -761,6 +782,7 @@ export const useVoiceAgent = (
       
       setIsCalling(false);
       isCallingRef.current = false;
+      setIsConnected(false); // 重置连接状态，允许下次重新连接
       setUserFrequencyData(null);
       setAssistantFrequencyData(null);
       
@@ -780,6 +802,7 @@ export const useVoiceAgent = (
 
   return {
     isConnected,
+    isConnecting,
     isCalling,
     error,
     userFrequencyData,

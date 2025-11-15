@@ -32,6 +32,8 @@ export interface Message {
   user_id?: string;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  /** 消息元数据（如 is_voice_call 等） */
+  metadata?: Record<string, any>;
 }
 
 /**

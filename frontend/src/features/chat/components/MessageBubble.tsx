@@ -11,6 +11,7 @@ import { playTTS } from '@/utils/tts';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/utils/timezone';
 import { useQuery } from '@tanstack/react-query';
 import { userApi } from '@/services/user';
+import type { UserPreferences } from '@/types/user';
 
 /**
  * 消息气泡组件属性
@@ -36,6 +37,8 @@ interface MessageBubbleProps {
   onStopAutoPlay?: () => void;
   /** 是否为语音通话消息 */
   isVoiceCall?: boolean;
+  /** 用户偏好设置（可选，用于优化性能，避免重复请求） */
+  preferences?: UserPreferences;
 }
 
 /**
@@ -54,6 +57,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isAutoPlaying = false,
   onStopAutoPlay,
   isVoiceCall = false,
+  preferences: preferencesProp,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -62,11 +66,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const copyTimerRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // 获取用户偏好（用于时区）
-  const { data: preferences } = useQuery({
+  // 降级处理：如果父组件传递了 preferences，就使用传递的值
+  // 否则，使用 useQuery 获取（向后兼容）
+  const { data: preferencesFromQuery } = useQuery({
     queryKey: ['user', 'preferences'],
     queryFn: () => userApi.getCurrentUserPreferences(),
+    enabled: !preferencesProp, // 只有在没有传递时才获取
+    staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
+    cacheTime: 10 * 60 * 1000, // 10分钟内保留缓存
   });
+
+  // 优先使用传递的值，否则使用查询结果
+  const preferences = preferencesProp || preferencesFromQuery;
 
   // 获取时区（默认：Asia/Shanghai）
   const timezone = preferences?.timezone || DEFAULT_TIMEZONE;

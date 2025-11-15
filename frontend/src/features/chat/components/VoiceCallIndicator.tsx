@@ -17,15 +17,56 @@ interface VoiceCallIndicatorProps {
  * 类似 Apple Music / Spotify 风格的音频可视化
  * 特点：流畅动画、渐变色彩、发光效果、镜像对称
  */
-const VoiceWaveform: React.FC<{ 
+export const VoiceWaveform: React.FC<{ 
   frequencyData: Uint8Array | null; 
   color: string;
   isActive?: boolean;
-}> = ({ frequencyData, color, isActive = true }) => {
+  isConnecting?: boolean;
+}> = ({ frequencyData, color, isActive = true, isConnecting = false }) => {
   const animationFrameRef = useRef<number | null>(null);
   const [bars, setBars] = useState<number[]>(Array(18).fill(0));
   const smoothedBarsRef = useRef<number[]>(Array(18).fill(0));
   const timeRef = useRef<number>(0);
+
+  // 连接动画（正在连接时）
+  const updateConnectingAnimation = useCallback(() => {
+    timeRef.current += 0.04; // 控制移动速度
+    const barCount = 18;
+    const dotCount = 3; // 三个白点
+    const dotSpacing = 3; // 点之间的间距（柱子索引）- 减小间距
+    
+    // 计算第一个点的位置（循环移动，范围：0 到 barCount + dotSpacing）
+    const cycleLength = barCount + dotSpacing;
+    const firstDotPosition = (timeRef.current * 1.5) % cycleLength;
+    
+    const newBars = Array(barCount).fill(0).map((_, i) => {
+      // 计算每个点应该亮起的位置
+      let isLit = false;
+      for (let dotIndex = 0; dotIndex < dotCount; dotIndex++) {
+        let dotPosition = firstDotPosition + dotIndex * dotSpacing;
+        
+        // 处理循环：如果位置超过总数，从左边开始
+        if (dotPosition >= barCount) {
+          dotPosition = dotPosition - barCount;
+        }
+        
+        // 检查这个点是否在当前柱子位置
+        if (Math.abs(i - dotPosition) < 0.5) {
+          isLit = true;
+          break;
+        }
+      }
+      
+      // 如果这个位置应该亮起，设置较高的高度；否则保持很低
+      return isLit ? 0.4 : 0.08; // 亮起的高度降低到0.4，暗着的高度保持0.08
+    });
+    
+    setBars(newBars);
+    
+    if (isActive && isConnecting) {
+      animationFrameRef.current = requestAnimationFrame(updateConnectingAnimation);
+    }
+  }, [isActive, isConnecting]);
 
   // Idle 动画（等待音频时）
   const updateIdleAnimation = useCallback(() => {
@@ -38,10 +79,10 @@ const VoiceWaveform: React.FC<{
     });
     setBars(newBars);
     
-    if (isActive && (!frequencyData || frequencyData.length === 0)) {
+    if (isActive && (!frequencyData || frequencyData.length === 0) && !isConnecting) {
       animationFrameRef.current = requestAnimationFrame(updateIdleAnimation);
     }
-  }, [isActive, frequencyData]);
+  }, [isActive, frequencyData, isConnecting]);
 
   // 实时音频可视化
   const updateVisualization = useCallback(() => {
@@ -84,6 +125,12 @@ const VoiceWaveform: React.FC<{
       return;
     }
 
+    // 优先显示连接动画
+    if (isConnecting) {
+      updateConnectingAnimation();
+      return;
+    }
+
     if (frequencyData && frequencyData.length > 0) {
       updateVisualization();
     } else {
@@ -96,7 +143,7 @@ const VoiceWaveform: React.FC<{
         animationFrameRef.current = null;
       }
     };
-  }, [isActive, frequencyData, updateVisualization, updateIdleAnimation]);
+  }, [isActive, isConnecting, frequencyData, updateVisualization, updateIdleAnimation, updateConnectingAnimation]);
 
   // 根据颜色生成渐变
   const getGradientStops = (baseColor: string) => {

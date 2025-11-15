@@ -10,7 +10,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
 import { MessageBubble } from './MessageBubble';
-import { VoiceCallIndicator } from './VoiceCallIndicator';
+import { VoiceCallIndicator, VoiceWaveform } from './VoiceCallIndicator';
 import { showError } from '@/utils/errorHandler';
 import { userApi } from '@/services/user';
 import { playTTS } from '@/utils/tts';
@@ -74,6 +74,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   // 语音通话Hook
   const {
     isCalling,
+    isConnecting,
     error: voiceCallError,
     userFrequencyData,
     assistantFrequencyData,
@@ -95,9 +96,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             timestamp: new Date(),
             session_id: currentSessionId || undefined,
             user_id: userId || undefined,
-            // 添加语音通话标记
-            is_voice_call: true,
-          } as any; // 临时使用 any，因为 Message 类型可能没有 is_voice_call 字段
+            // 添加语音通话标记到 metadata
+            metadata: {
+              is_voice_call: true,
+            },
+          };
           addVoiceCallMessage(message);
         }
       },
@@ -113,9 +116,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             timestamp: new Date(),
             session_id: currentSessionId || undefined,
             user_id: userId || undefined,
-            // 添加语音通话标记
-            is_voice_call: true,
-          } as any; // 临时使用 any，因为 Message 类型可能没有 is_voice_call 字段
+            // 添加语音通话标记到 metadata
+            metadata: {
+              is_voice_call: true,
+            },
+          };
           addVoiceCallMessage(message);
         }
       },
@@ -125,10 +130,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   // 跟踪用户是否已经有过交互（发送过消息）
   const hasUserInteractedRef = useRef(false);
   
-  // 获取用户偏好（用于自动播放语音）
+  // 获取用户偏好（用于自动播放语音和传递给子组件）
   const { data: preferences } = useQuery({
     queryKey: ['user', 'preferences'],
     queryFn: () => userApi.getCurrentUserPreferences(),
+    staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
+    cacheTime: 10 * 60 * 1000, // 10分钟内保留缓存
   });
   
   // 使用动态的 sessionId 创建 sendStreamMessage
@@ -483,6 +490,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         transition: 'background-color 0.3s ease',
       }}
     >
+
       {/* 语音通话指示器 */}
       {isVoiceCallActive && (
         <VoiceCallIndicator
@@ -532,10 +540,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             {allMessages.map((msg) => {
               // 判断是否为语音通话消息
               // 1. 当前正在通话中，且在 voiceCallMessages 中
-              // 2. 或者消息有 is_voice_call 标记
+              // 2. 或者消息的 metadata 中有 is_voice_call 标记
               const isVoiceCallMsg = 
                 (isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id)) ||
-                (msg as any).is_voice_call === true;
+                (msg.metadata?.is_voice_call === true);
               return (
                 <MessageBubble
                   key={msg.id}
@@ -560,6 +568,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                     setAutoPlayingMessageId(null);
                   }}
                   isVoiceCall={isVoiceCallMsg}
+                  preferences={preferences}
                 />
               );
             })}
@@ -592,7 +601,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           }}
         >
           {/* 语音输入切换按钮（小屏幕下总是显示，宽屏幕下根据用户偏好显示） */}
-          {(isMobile || preferences?.always_show_voice_input) && (
+          {!isVoiceCallActive && !isConnecting && (isMobile || preferences?.always_show_voice_input) && (
             <button
               type="button"
               onClick={() => setIsVoiceInputMode(!isVoiceInputMode)}
@@ -666,7 +675,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           )}
 
           {/* 文本输入模式 */}
-          {!isVoiceInputMode && (
+          {!isVoiceCallActive && !isConnecting && !isVoiceInputMode && (
             <TextArea
               ref={inputRef}
               value={inputValue}
@@ -690,7 +699,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           )}
 
           {/* 语音输入模式 */}
-          {isVoiceInputMode && (
+          {!isVoiceCallActive && !isConnecting && isVoiceInputMode && (
             <TextArea
               ref={inputRef}
               value={isRecording ? '正在录音...' : isTranscribing ? '识别中...' : '点击说话'}
@@ -760,6 +769,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           )}
 
           {/* 发送按钮 */}
+          {!isVoiceCallActive && !isConnecting && (
           <button
             type="button"
             onClick={handleSend}
@@ -804,6 +814,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               <SendOutlined style={{ fontSize: '18px', color: 'white' }} />
             )}
           </button>
+          )}
 
           {/* 语音通话按钮 */}
           <button
@@ -866,11 +877,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               } else {
                 // 开始语音通话
                 try {
-                  // 启动语音通话状态
-                  startVoiceCall();
-                  
-                  // 开始通话（内部会自动连接）
+                  // 先开始通话（内部会自动连接），成功后再启动语音通话状态
+                  // 这样 isConnecting 状态可以正确显示
                   await startCall();
+                  
+                  // 通话开始成功后，启动语音通话状态
+                  startVoiceCall();
                 } catch (error) {
                   console.error('开始语音通话失败:', error);
                   showError(error, '开始语音通话失败');
@@ -878,41 +890,78 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 }
               }
             }}
-            disabled={isLoading || isStreaming || isTranscribing}
+            disabled={isLoading || isStreaming || isTranscribing || (isConnecting && !isVoiceCallActive)}
             style={{
-              flexShrink: 0,
-              width: '36px',
-              height: '36px',
+              // 连接中或通话中时，按钮直接变成通话状态大小（无动画）
+              // 保持固定高度36px，不会因为内容变化而改变
+              ...((isConnecting || isVoiceCallActive)
+                ? { 
+                    flex: 1, 
+                    flexGrow: 1, 
+                    flexBasis: 0,
+                    width: '100%',
+                    height: '36px', // 固定高度
+                    padding: '0 16px', // 只设置左右内边距
+                  }
+                : { 
+                    flex: 'none', 
+                    flexGrow: 0, 
+                    flexShrink: 0, 
+                    flexBasis: 'auto',
+                    width: '36px',
+                    height: '36px',
+                    padding: 0,
+                  }
+              ),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: '12px',
               border: 'none',
               borderRadius: '8px',
-              backgroundColor: isVoiceCallActive ? '#ff4d4f' : 'var(--primary-color)',
-              cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
+              backgroundColor: isVoiceCallActive ? '#ff4d4f' : (isConnecting ? 'var(--primary-color)' : 'var(--primary-color)'),
+              cursor: (isLoading || isStreaming || isTranscribing || (isConnecting && !isVoiceCallActive)) ? 'not-allowed' : 'pointer',
               color: 'white',
-              transition: 'background-color 0.2s ease',
-              padding: 0,
+              transition: 'background-color 0.2s ease', // 只保留背景色过渡，不包含尺寸变化
               outline: 'none',
               opacity: (isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
+              position: 'relative',
+              zIndex: 10,
             }}
             onMouseEnter={(e) => {
-              if (!(isLoading || isStreaming || isTranscribing)) {
+              if (!(isLoading || isStreaming || isTranscribing || (isConnecting && !isVoiceCallActive))) {
                 e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff7875' : 'var(--primary-hover)';
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff4d4f' : 'var(--primary-color)';
+              e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff4d4f' : (isConnecting ? 'var(--primary-color)' : 'var(--primary-color)');
             }}
-            title={isVoiceCallActive ? '结束通话' : '语音通话'}
+            title={
+              isConnecting 
+                ? '正在连接...' 
+                : isVoiceCallActive 
+                  ? '结束通话' 
+                  : '语音通话'
+            }
           >
-            {isVoiceCallActive ? (
-              // 挂断图标（和 VoiceCallIndicator 中的一样）
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block' }}>
+            {isConnecting ? (
+              // 连接中：只显示声纹动画
+              <div className="voice-waveforms" style={{ width: '180px', height: '40px' }}>
+                <VoiceWaveform 
+                  frequencyData={null} 
+                  color="#ffffff"
+                  isActive={true}
+                  isConnecting={true}
+                />
+              </div>
+            ) : isVoiceCallActive ? (
+              // 通话中：显示挂断图标
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" style={{ display: 'block' }}>
                 <path fill="#fff" d="M15.897 9c.125.867.207 2.053-.182 2.507c-.643.751-4.714.751-4.714-.751c0-.756.67-1.252.027-2.003c-.632-.738-1.766-.75-3.027-.751s-2.394.012-3.027.751c-.643.751.027 1.247.027 2.003c0 1.501-4.071 1.501-4.714.751C-.102 11.053-.02 9.867.105 9c.096-.579.339-1.203 1.118-2c1.168-1.09 2.935-1.98 6.716-2h.126c3.781.019 5.548.91 6.716 2c.778.797 1.022 1.421 1.118 2z" />
               </svg>
             ) : (
-            <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
+              // 未连接：显示电话图标
+              <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
             )}
           </button>
         </div>
