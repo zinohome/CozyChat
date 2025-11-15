@@ -54,6 +54,8 @@ class RealtimeConfigResponse(BaseModel):
     """音频转录配置"""
     transport: Optional[Dict[str, Any]] = None
     """传输层配置（例如：{"type": "webrtc"} 或 {"type": "websocket"}）"""
+    websocket: Optional[Dict[str, Any]] = None
+    """WebSocket配置（包括音频缓冲区等）"""
 
 
 # ===== API路由 =====
@@ -351,13 +353,17 @@ async def get_realtime_config(
         # 获取音频转录配置
         input_audio_transcription = openai_config.get('input_audio_transcription')
         
+        # 获取 WebSocket 配置
+        websocket_config = openai_config.get('websocket', {})
+        
         return RealtimeConfigResponse(
             voice=openai_config.get('voice', 'shimmer'),
             model=openai_config.get('model', settings.openai_realtime_model),
             temperature=openai_config.get('temperature', 0.8),
             max_response_output_tokens=openai_config.get('max_response_output_tokens', 4096),
             input_audio_transcription=input_audio_transcription,
-            transport=transport_config if transport_config else None
+            transport=transport_config if transport_config else None,
+            websocket=websocket_config if websocket_config else None
         )
     except Exception as e:
         logger.error(f"Failed to get realtime config: {e}", exc_info=True)

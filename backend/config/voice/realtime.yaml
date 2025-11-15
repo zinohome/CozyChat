@@ -41,4 +41,8 @@ engines:
         ping_timeout: 10
         reconnect_interval: 5
         max_reconnect_attempts: 5
+        # 音频缓冲区配置（单位：秒）
+        audio_buffer:
+          min_size: 3.0  # 最小缓冲区：3.0秒（平衡流畅度和延迟）
+          max_size: 5.0  # 最大缓冲区：5.0秒（防止延迟过大）
 

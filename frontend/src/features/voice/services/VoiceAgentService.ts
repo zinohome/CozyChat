@@ -167,6 +167,7 @@ export class VoiceAgentService {
         baseUrl: config.baseUrl,
         wsUrl: config.wsUrl,
         inputAudioTranscription: config.inputAudioTranscription,
+        websocket: config.websocket,
       });
 
       // 6. 设置事件处理器

@@ -6,7 +6,6 @@
  */
 
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime';
-import type { EventHandlerCallbacks } from '../services/EventHandler';
 
 /**
  * 传输层策略配置
@@ -23,6 +22,13 @@ export interface TransportStrategyConfig {
   /** 音频转录配置 */
   inputAudioTranscription?: {
     model: string;
+  };
+  /** WebSocket配置（包括音频缓冲区等） */
+  websocket?: {
+    audio_buffer?: {
+      min_size?: number;
+      max_size?: number;
+    };
   };
 }
 

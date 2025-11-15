@@ -42,6 +42,17 @@ export interface RealtimeConfig {
   transport?: {
     type: 'webrtc' | 'websocket';
   };
+  /** WebSocket配置（包括音频缓冲区等） */
+  websocket?: {
+    ping_interval?: number;
+    ping_timeout?: number;
+    reconnect_interval?: number;
+    max_reconnect_attempts?: number;
+    audio_buffer?: {
+      min_size?: number;
+      max_size?: number;
+    };
+  };
 }
 
 /**

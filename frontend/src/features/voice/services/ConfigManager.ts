@@ -38,6 +38,13 @@ export interface VoiceAgentConfig {
   };
   /** 传输层类型 */
   transportType?: 'webrtc' | 'websocket';
+  /** WebSocket配置（包括音频缓冲区等） */
+  websocket?: {
+    audio_buffer?: {
+      min_size?: number;
+      max_size?: number;
+    };
+  };
 }
 
 /**
@@ -113,12 +120,19 @@ export class ConfigManager {
         globalConfig.transport?.type || 
         'webrtc'; // 默认使用 WebRTC
 
+      // WebSocket配置（从全局配置或personality配置读取）
+      const websocketConfig = 
+        personalityRealtimeConfig.websocket || 
+        globalConfig.websocket || 
+        undefined;
+
       console.log('[ConfigManager] 配置合并完成:', {
         global: globalConfig.voice,
         personality: personalityRealtimeConfig.voice,
         final: voice,
         inputAudioTranscription,
         transportType,
+        websocket: websocketConfig,
       });
 
       // 6. 构建完整配置
@@ -133,6 +147,7 @@ export class ConfigManager {
         openai: openaiConfig,
         inputAudioTranscription,
         transportType,
+        websocket: websocketConfig,
       };
 
       // 缓存配置

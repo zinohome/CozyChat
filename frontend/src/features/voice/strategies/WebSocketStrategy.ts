@@ -62,6 +62,19 @@ export class WebSocketStrategy implements ITransportStrategy {
   ): Promise<RealtimeSession> {
     console.log('[WebSocketStrategy] 创建 WebSocket Session...');
 
+    // ✅ 从配置读取音频缓冲区大小（如果提供）
+    const sampleRate = 24000; // 采样率：24kHz
+    if (config.websocket?.audio_buffer) {
+      const minSize = config.websocket.audio_buffer.min_size ?? 3.0;
+      const maxSize = config.websocket.audio_buffer.max_size ?? 5.0;
+      this.minBufferSize = sampleRate * minSize;
+      this.maxBufferSize = sampleRate * maxSize;
+      console.log(`[WebSocketStrategy] 音频缓冲区配置: min=${minSize}s (${this.minBufferSize}采样点), max=${maxSize}s (${this.maxBufferSize}采样点)`);
+    } else {
+      // 使用默认值（保持向后兼容）
+      console.log(`[WebSocketStrategy] 使用默认音频缓冲区: min=${this.minBufferSize / sampleRate}s, max=${this.maxBufferSize / sampleRate}s`);
+    }
+
     // 1. 创建用户音频流（用于捕获和发送）
     // 如果流不存在或已停止，重新创建
     if (!this.mediaStream || this.mediaStream.getTracks().every(track => track.readyState === 'ended')) {
