@@ -7,8 +7,11 @@ engines:
     # OpenAI Realtime API配置
     openai:
       provider: "openai"
-      model: "gpt-4o-realtime-preview-2024-12-17"  # 最新稳定版本
+      model: "gpt-realtime-2025-08-28"  # 最新稳定版本
       voice: "shimmer"  # alloy, echo, fable, onyx, nova, shimmer
+      # 传输层配置
+      transport:
+        type: "webrtc"  # webrtc 或 websocket
       # 语音配置
       voice_settings:
         stability: 0.5

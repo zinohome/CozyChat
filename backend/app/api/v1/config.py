@@ -5,7 +5,7 @@
 """
 
 # 标准库
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -50,6 +50,10 @@ class RealtimeConfigResponse(BaseModel):
     """温度"""
     max_response_output_tokens: int
     """最大输出token数"""
+    input_audio_transcription: Optional[Dict[str, str]] = None
+    """音频转录配置"""
+    transport: Optional[Dict[str, Any]] = None
+    """传输层配置（例如：{"type": "webrtc"} 或 {"type": "websocket"}）"""
 
 
 # ===== API路由 =====
@@ -341,11 +345,19 @@ async def get_realtime_config(
             extra={"user_id": str(user.id)}
         )
         
+        # 获取传输层配置
+        transport_config = openai_config.get('transport', {})
+        
+        # 获取音频转录配置
+        input_audio_transcription = openai_config.get('input_audio_transcription')
+        
         return RealtimeConfigResponse(
             voice=openai_config.get('voice', 'shimmer'),
             model=openai_config.get('model', settings.openai_realtime_model),
             temperature=openai_config.get('temperature', 0.8),
-            max_response_output_tokens=openai_config.get('max_response_output_tokens', 4096)
+            max_response_output_tokens=openai_config.get('max_response_output_tokens', 4096),
+            input_audio_transcription=input_audio_transcription,
+            transport=transport_config if transport_config else None
         )
     except Exception as e:
         logger.error(f"Failed to get realtime config: {e}", exc_info=True)

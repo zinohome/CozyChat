@@ -26,6 +26,8 @@ export interface VoiceAgentConfig {
   apiKey: string;
   /** 基础 URL */
   baseUrl: string;
+  /** WebSocket URL（用于 WebSocket 传输层） */
+  wsUrl?: string;
   /** 工具列表 */
   tools: any[];
   /** OpenAI 配置（完整） */
@@ -34,6 +36,8 @@ export interface VoiceAgentConfig {
   inputAudioTranscription?: {
     model: string;
   };
+  /** 传输层类型 */
+  transportType?: 'webrtc' | 'websocket';
 }
 
 /**
@@ -103,11 +107,18 @@ export class ConfigManager {
         globalConfig.input_audio_transcription || 
         { model: 'whisper-1' }; // 默认启用 whisper-1
 
+      // 传输层类型（从全局配置或personality配置读取）
+      const transportType = 
+        personalityRealtimeConfig.transport?.type || 
+        globalConfig.transport?.type || 
+        'webrtc'; // 默认使用 WebRTC
+
       console.log('[ConfigManager] 配置合并完成:', {
         global: globalConfig.voice,
         personality: personalityRealtimeConfig.voice,
         final: voice,
         inputAudioTranscription,
+        transportType,
       });
 
       // 6. 构建完整配置
@@ -117,9 +128,11 @@ export class ConfigManager {
         model: realtimeToken.model,
         apiKey: realtimeToken.token,
         baseUrl: openaiConfig.base_url,
+        wsUrl: realtimeToken.url, // WebSocket URL（用于 WebSocket 传输层）
         tools: [], // 工具列表将由 VoiceAgentService 加载
         openai: openaiConfig,
         inputAudioTranscription,
+        transportType,
       };
 
       // 缓存配置

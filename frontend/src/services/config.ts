@@ -38,6 +38,10 @@ export interface RealtimeConfig {
   input_audio_transcription?: {
     model: string;
   };
+  /** 传输层配置 */
+  transport?: {
+    type: 'webrtc' | 'websocket';
+  };
 }
 
 /**

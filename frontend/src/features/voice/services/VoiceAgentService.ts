@@ -4,20 +4,20 @@
  * 核心服务，协调所有模块：
  * - ConfigManager：配置管理
  * - ToolManager：工具管理
- * - TransportFactory：传输层创建
+ * - TransportStrategy：传输层策略（WebRTC/WebSocket）
  * - SessionManager：会话管理
- * - AudioVisualizer：音频可视化
  * - EventHandler：事件处理
+ * 
+ * 使用策略模式，将 WebRTC 和 WebSocket 的逻辑完全分离
  */
 
 import { RealtimeAgent } from '@openai/agents/realtime';
-import { ConfigManager, type VoiceAgentConfig } from './ConfigManager';
+import { ConfigManager } from './ConfigManager';
 import { SessionManager } from './SessionManager';
 import { ToolManager } from './ToolManager';
 import { EventHandler, type EventHandlerCallbacks } from './EventHandler';
-import { TransportFactory } from '../transports/TransportFactory';
-import { AudioVisualizer } from '../visualization/AudioVisualizer';
-import type { ITransport } from '../transports/TransportInterface';
+import { TransportStrategyFactory } from '../strategies/TransportStrategyFactory';
+import type { ITransportStrategy } from '../strategies/ITransportStrategy';
 
 /**
  * Voice Agent 服务配置
@@ -43,8 +43,9 @@ export class VoiceAgentService {
   private sessionManager: SessionManager;
   private toolManager: ToolManager;
   private eventHandler: EventHandler;
-  private audioVisualizer: AudioVisualizer;
-  private transport: ITransport | null = null;
+  
+  // 传输层策略（根据配置动态创建）
+  private transportStrategy: ITransportStrategy | null = null;
 
   // 状态
   private isConnected: boolean = false;
@@ -58,7 +59,6 @@ export class VoiceAgentService {
     this.sessionManager = new SessionManager();
     this.toolManager = new ToolManager();
     this.eventHandler = new EventHandler();
-    this.audioVisualizer = new AudioVisualizer();
 
     console.log('[VoiceAgentService] 服务已创建');
   }
@@ -94,10 +94,6 @@ export class VoiceAgentService {
 
       // ✅ 只做初始化工作，不创建 transport 和 session
       // transport 和 session 在 startCall() 中创建，确保每次通话都是全新的
-      
-      // 预加载配置（可选，用于验证配置是否正确）
-      // const config = await this.configManager.loadConfig();
-      // console.log('[VoiceAgentService] 配置已预加载');
 
       this.isConnected = true;
       console.log('[VoiceAgentService] 连接成功（已初始化）');
@@ -118,6 +114,8 @@ export class VoiceAgentService {
 
   /**
    * 开始通话
+   * 
+   * 使用策略模式，根据配置选择 WebRTC 或 WebSocket 策略
    */
   async startCall(): Promise<void> {
     if (!this.isConnected) {
@@ -132,37 +130,29 @@ export class VoiceAgentService {
     try {
       console.log('[VoiceAgentService] 开始通话');
 
-      // 注意：不立即设置 isCalling，等音频可视化初始化完成后再设置
-      // 避免UI状态提前显示"可以说话"
-
       // ✅ 关键修复：每次 startCall 都重新创建 session 和 transport，确保完全初始化
-      // 这样可以避免第二次通话时的问题
       console.log('[VoiceAgentService] 重新创建 Session 和 Transport 以确保完全初始化');
       
-      // 清理旧的 session
+      // 清理旧的 session 和策略
       this.sessionManager.close();
-      
-      // ✅ 关键修复：重新创建 transport，确保 WebRTC 连接是全新的
-      // 因为 session.close() 可能会关闭底层的 WebRTC 连接
-      if (this.transport) {
-        console.log('[VoiceAgentService] 断开旧的 Transport');
-        this.transport.disconnect();
-        this.transport = null;
+      if (this.transportStrategy) {
+        this.transportStrategy.cleanup();
+        this.transportStrategy = null;
       }
       
-      // 重新创建 transport
+      // 1. 加载配置
       const config = await this.configManager.loadConfig();
-      this.transport = TransportFactory.create('webrtc', {
-        baseUrl: config.baseUrl,
-      });
-      await this.transport.connect({});
-      console.log('[VoiceAgentService] 新的 Transport 已创建并连接');
+      const transportType = config.transportType || 'webrtc';
       
-      // 重新创建 session（使用新的 transport）
+      // 2. 创建传输层策略（根据配置选择 WebRTC 或 WebSocket）
+      this.transportStrategy = TransportStrategyFactory.create(transportType);
+      console.log(`[VoiceAgentService] 使用 ${transportType.toUpperCase()} 传输层策略`);
+      
+      // 3. 加载工具
       const toolInfos = await this.toolManager.getTools(this.config.personalityId, 'builtin');
       const tools = this.toolManager.convertToRealtimeFormat(toolInfos);
       
-      // 创建新的 agent
+      // 4. 创建 Agent
       const agent = new RealtimeAgent({
         name: 'cozychat-agent',
         instructions: config.instructions,
@@ -170,33 +160,30 @@ export class VoiceAgentService {
         tools: tools.length > 0 ? (tools as any) : undefined,
       });
 
-      // 创建新的 session
-      const session = await this.sessionManager.createSession(agent, this.transport, {
+      // 5. 使用策略创建 Session
+      const session = await this.transportStrategy.createSession(agent, {
         apiKey: config.apiKey,
         model: config.model,
+        baseUrl: config.baseUrl,
+        wsUrl: config.wsUrl,
         inputAudioTranscription: config.inputAudioTranscription,
       });
 
-      // ✅ 关键修复：先清理旧的事件监听器，再设置新的
+      // 6. 设置事件处理器
       this.eventHandler.cleanup();
-      
-      // ✅ 关键修复：设置新的 session 和回调函数
       this.eventHandler.setSession(session);
       
-      // ✅ 关键修复：使用最新的回调函数（确保不是旧的引用）
       const callbacks = this.config.callbacks || {};
       console.log('[VoiceAgentService] 设置回调函数:', {
         hasOnUserTranscript: !!callbacks.onUserTranscript,
         hasOnAssistantTranscript: !!callbacks.onAssistantTranscript,
         hasOnToolCall: !!callbacks.onToolCall,
         hasOnToolResult: !!callbacks.onToolResult,
-        callbacksObject: callbacks, // 打印完整对象以便调试
       });
       
       this.eventHandler.setCallbacks(callbacks);
       
       // ✅ 关键修复：在 connect() 之前设置事件监听器！
-      // 参考旧版本代码：事件监听器必须在 connect() 之前设置，才能捕获所有事件
       if (tools.length > 0) {
         this.eventHandler.setupToolCallListeners();
       }
@@ -204,12 +191,12 @@ export class VoiceAgentService {
       this.eventHandler.setupAssistantTranscriptListener();
       console.log('[VoiceAgentService] 事件处理器已设置（在连接前）');
       
+      // 7. 连接 Session
       console.log('[VoiceAgentService] 正在连接 RealtimeSession...', {
         model: config.model,
         inputAudioTranscription: config.inputAudioTranscription,
       });
       
-      // ✅ 关键修复：连接 session（事件监听器已在连接前设置）
       await session.connect({
         apiKey: config.apiKey,
         model: config.model,
@@ -218,48 +205,32 @@ export class VoiceAgentService {
       console.log('[VoiceAgentService] RealtimeSession 已连接到 OpenAI');
       
       // ✅ 关键修复：等待一小段时间，确保历史记录事件能够正确触发
-      // 新连接的 session 需要时间初始化历史记录
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 获取用户和助手的音频流
-      const userStream = this.transport?.getUserMediaStream();
-      const assistantAudioElement = this.transport?.getAssistantAudioStream();
+      // 8. 初始化音频可视化（使用策略）
+      await this.transportStrategy.initAudioVisualization(
+        session,
+        () => {
+          // 频率数据回调将由 Hook 层订阅
+        },
+        () => {
+          // 频率数据回调将由 Hook 层订阅
+        }
+      );
+      
+      // 9. 启动音频可视化
+      this.transportStrategy.startAudioVisualization();
 
-      if (!userStream) {
-        throw new Error('无法获取用户音频流');
-      }
-
-      // 初始化音频可视化
-      if (userStream) {
-        await this.audioVisualizer.initUserVisualization(
-          userStream,
-          () => {
-            // 频率数据回调将由 Hook 层订阅
-          }
-        );
-        this.audioVisualizer.startUserFrequencyExtraction();
-      }
-
-      if (assistantAudioElement instanceof HTMLAudioElement) {
-        this.audioVisualizer.initAssistantVisualization(
-          assistantAudioElement,
-          () => {
-            // 频率数据回调将由 Hook 层订阅
-          }
-        );
-        this.audioVisualizer.startAssistantFrequencyExtraction();
-      }
-
-      // ✅ 通话启动成功，设置 Service 层内部状态（用于内部逻辑判断）
-      // 注意：UI状态由 Hook 层的 isCalling 控制
+      // ✅ 通话启动成功，设置 Service 层内部状态
       this.isCalling = true;
-      this.audioVisualizer.setCallingState(true);
       
       console.log('[VoiceAgentService] 通话已开始（Service 层）');
     } catch (error) {
       // 如果失败，恢复状态
       this.isCalling = false;
-      this.audioVisualizer.setCallingState(false);
+      if (this.transportStrategy) {
+        this.transportStrategy.stopAudioVisualization();
+      }
       console.error('[VoiceAgentService] 开始通话失败:', error);
       throw error;
     }
@@ -279,11 +250,15 @@ export class VoiceAgentService {
 
     console.log('[VoiceAgentService] 结束通话');
 
-    // 停止音频可视化
-    this.audioVisualizer.setCallingState(false);
-    this.audioVisualizer.stopFrequencyExtraction();
+    // ✅ 关键修复：先立即停止通话（停止音频播放）
+    if (this.transportStrategy?.stopCall) {
+      this.transportStrategy.stopCall();
+    } else {
+      // 如果没有 stopCall 方法，至少停止音频可视化
+      this.transportStrategy?.stopAudioVisualization();
+    }
 
-    // 关闭 RealtimeSession 连接（这会停止AI语音播放）
+    // 关闭 RealtimeSession 连接
     // 注意：只是关闭连接，session 对象还在，可以重新 connect
     this.sessionManager.close();
 
@@ -302,10 +277,38 @@ export class VoiceAgentService {
   }
 
   /**
-   * 获取 AudioVisualizer 实例
+   * 获取音频可视化器
+   * 
+   * 注意：音频可视化器由策略管理，这里返回策略的音频可视化器
+   * 为了保持接口兼容，返回策略对象本身（如果它实现了 getCurrentUserFrequencyData 等方法）
    */
-  getAudioVisualizer(): AudioVisualizer {
-    return this.audioVisualizer;
+  getAudioVisualizer(): any {
+    // 返回策略对象，Hook 层可以通过策略获取频率数据
+    return this.transportStrategy;
+  }
+
+  /**
+   * 获取用户音频频率数据
+   * 
+   * 从策略中获取当前的用户音频频率数据
+   */
+  getUserFrequencyData(): Uint8Array | null {
+    if (this.transportStrategy?.getCurrentUserFrequencyData) {
+      return this.transportStrategy.getCurrentUserFrequencyData();
+    }
+    return null;
+  }
+
+  /**
+   * 获取助手音频频率数据
+   * 
+   * 从策略中获取当前的助手音频频率数据
+   */
+  getAssistantFrequencyData(): Uint8Array | null {
+    if (this.transportStrategy?.getCurrentAssistantFrequencyData) {
+      return this.transportStrategy.getCurrentAssistantFrequencyData();
+    }
+    return null;
   }
 
   /**
@@ -318,11 +321,11 @@ export class VoiceAgentService {
     console.log('[VoiceAgentService] 开始清理所有资源');
 
     // 停止音频可视化
-    this.audioVisualizer.setCallingState(false);
-    this.audioVisualizer.stopFrequencyExtraction();
-
-    // 清理音频可视化资源
-    this.audioVisualizer.cleanup();
+    if (this.transportStrategy) {
+      this.transportStrategy.stopAudioVisualization();
+      this.transportStrategy.cleanup();
+      this.transportStrategy = null;
+    }
 
     // 清理事件处理器
     this.eventHandler.cleanup();
@@ -330,16 +333,9 @@ export class VoiceAgentService {
     // 关闭 session
     this.sessionManager.close();
 
-    // 断开 transport（这会释放 mediaStream）
-    if (this.transport) {
-      this.transport.disconnect();
-      this.transport = null;
-    }
-
     this.isConnected = false;
     this.isCalling = false;
 
     console.log('[VoiceAgentService] 所有资源已清理');
   }
 }
-

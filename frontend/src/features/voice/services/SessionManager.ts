@@ -40,20 +40,24 @@ export class SessionManager {
    */
   async createSession(
     agent: RealtimeAgent,
-    transport: ITransport,
+    transport: any, // 可以是 ITransport 对象或 'websocket' 字符串
     config: SessionConfig
   ): Promise<RealtimeSession> {
     try {
       console.log('[SessionManager] 创建 RealtimeSession...', {
         model: config.model,
         inputAudioTranscription: config.inputAudioTranscription,
+        transportType: typeof transport === 'string' ? transport : transport?.type || 'unknown',
       });
 
       // 创建 RealtimeSession
       // 注意：转录配置已经在后端创建 ephemeral token 时完成，不需要前端再传入！
       const session = new RealtimeSession(agent, {
         apiKey: config.apiKey, // 使用后端生成的 ephemeral key（已包含转录配置）
-        transport: transport.getUnderlyingTransport(), // 使用传输层的底层对象
+        // ✅ 关键：如果 transport 是字符串 'websocket'，直接传递；否则使用 transport 对象
+        transport: typeof transport === 'string' 
+          ? transport 
+          : transport?.getUnderlyingTransport?.() || transport,
         model: config.model, // 使用后端返回的模型名称
       });
 

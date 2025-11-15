@@ -1,16 +1,10 @@
+
 # Caddy 反向代理配置 - OpenAI API
 # 域名: oneapi.naivehero.top
 # 用途: 代理 OpenAI API 以绕过 GFW 限制，并保护真实的 OpenAI API Key
 
-# 自定义 API Key（对外暴露的Key，可以硬编码，因为这是公开的）
-# 真实的生产环境建议也使用环境变量：export CUSTOM_API_KEY="sk-xxx"
-{$CUSTOM_API_KEY:sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH}
-
-# 真实的 OpenAI API Key（必须从环境变量读取）
-# 设置方式：export OPENAI_API_KEY="sk-your-real-openai-key"
-{$OPENAI_API_KEY}
-
 oneapi.naivehero.top {
+    tls ibmzhangjun@139.com
     # 启用日志记录
     log {
         output file /var/log/caddy/access.log
@@ -18,23 +12,258 @@ oneapi.naivehero.top {
     }
 
     # 处理 CORS 预检请求（必须在其他处理之前）
+    # 包括 WebRTC 需要的 /v1/realtime/calls 端点
     @cors_preflight {
         method OPTIONS
     }
     handle @cors_preflight {
         header Access-Control-Allow-Origin "*"
         header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
         header Access-Control-Max-Age "86400"
         respond 204
     }
 
-    # 匹配使用自定义 API Key 的请求（使用正则表达式匹配）
-    @custom_key {
-        header Authorization =~ "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+    # 匹配 WebSocket 升级请求（/v1/realtime 端点，但不包括 /v1/realtime/calls）
+    # WebSocket 使用子协议传递 API Key，无法通过 HTTP header 匹配
+    # 因此需要特殊处理 WebSocket 连接
+    @websocket_upgrade {
+        header Connection "Upgrade"
+        header Upgrade "websocket"
+        path /v1/realtime
+        not path /v1/realtime/calls*
     }
 
-    # 处理自定义 Key 的请求：替换为真实的 OpenAI Key
+    # 处理 WebSocket 连接：允许通过并转发子协议
+    # OpenAI Realtime API 的 WebSocket 连接使用子协议传递 ephemeral key
+    # 关键：必须转发 Sec-WebSocket-Protocol 头，让子协议中的 ephemeral key 传递到 OpenAI
+    handle @websocket_upgrade {
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK, Sec-WebSocket-Protocol"
+        reverse_proxy https://api.openai.com {
+            # ✅ 关键：转发 WebSocket 子协议（包含 ephemeral key）
+            # 客户端通过子协议传递 ephemeral key，必须转发到 OpenAI
+            header_up Sec-WebSocket-Protocol {http.request.header.Sec-WebSocket-Protocol}
+            
+            # ✅ 关键：转发 WebSocket 升级头（Caddy 通常会自动处理，但显式转发更安全）
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
+            
+            # ✅ 关键：转发其他 WebSocket 相关头
+            header_up Sec-WebSocket-Key {http.request.header.Sec-WebSocket-Key}
+            header_up Sec-WebSocket-Version {http.request.header.Sec-WebSocket-Version}
+            header_up Sec-WebSocket-Extensions {http.request.header.Sec-WebSocket-Extensions}
+            
+            # ✅ 关键：不要替换 Authorization header
+            # WebSocket 使用子协议认证，不需要 Authorization header
+            # 如果 OpenAI 需要，它会从子协议中提取 ephemeral key
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # WebSocket 支持配置
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 流式响应设置（用于 WebSocket）
+            flush_interval -1
+        }
+    }
+
+    # 匹配 WebRTC client_secrets 端点（获取临时密钥）
+    # 这个端点用于获取 WebRTC 会话的临时密钥
+    @webrtc_client_secrets {
+        path /v1/realtime/client_secrets*
+    }
+
+    # 匹配使用自定义 Key 的 client_secrets 请求
+    @webrtc_client_secrets_with_key {
+        path /v1/realtime/client_secrets*
+        header Authorization "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+    }
+
+    # 处理使用自定义 Key 的 client_secrets 请求
+    handle @webrtc_client_secrets_with_key {
+        reverse_proxy https://api.openai.com {
+            # 替换为真实的 OpenAI API Key
+            header_up Authorization "Bearer {$OPENAI_API_KEY}"
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 显式转发 Content-Type
+            header_up Content-Type {http.request.header.Content-Type}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # 删除上游返回的 CORS header，避免重复
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
+            header_down -Access-Control-Allow-Headers
+            header_down -Access-Control-Allow-Credentials
+            
+            # 支持 HTTP/1.1 和 HTTP/2
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 流式响应设置
+            flush_interval -1
+        }
+        # 添加我们自己的 CORS 头（在 reverse_proxy 之后）
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # 处理其他 client_secrets 请求（直接转发，可能是临时密钥）
+    handle @webrtc_client_secrets {
+        reverse_proxy https://api.openai.com {
+            # 直接转发 Authorization header（可能是临时密钥或其他 Key）
+            header_up Authorization {http.request.header.Authorization}
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 显式转发 Content-Type
+            header_up Content-Type {http.request.header.Content-Type}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # 删除上游返回的 CORS header，避免重复
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
+            header_down -Access-Control-Allow-Headers
+            header_down -Access-Control-Allow-Credentials
+            
+            # 支持 HTTP/1.1 和 HTTP/2
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 流式响应设置
+            flush_interval -1
+        }
+        # 添加我们自己的 CORS 头（在 reverse_proxy 之后）
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # 匹配 WebRTC 端点（/v1/realtime/calls）
+    # WebRTC 使用 HTTP POST 创建会话，需要 CORS 支持
+    # 注意：这个端点使用临时密钥（EPHEMERAL_KEY），不是 API Key
+    @webrtc_with_key {
+        path /v1/realtime/calls*
+        header Authorization "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+    }
+
+    # 处理使用自定义 Key 的 WebRTC 端点请求
+    # 注意：如果客户端发送的是临时密钥（EPHEMERAL_KEY），应该直接转发，不替换
+    # 但如果发送的是自定义 Key，则需要替换为真实的 API Key（用于获取临时密钥）
+    handle @webrtc_with_key {
+        reverse_proxy https://api.openai.com {
+            # 替换为真实的 OpenAI API Key（用于获取临时密钥的场景）
+            # 注意：如果客户端已经使用临时密钥，这个匹配器不会匹配
+            header_up Authorization "Bearer {$OPENAI_API_KEY}"
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 显式转发 Content-Type（WebRTC 需要 application/sdp）
+            header_up Content-Type {http.request.header.Content-Type}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # 删除上游返回的 CORS header，避免重复
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
+            header_down -Access-Control-Allow-Headers
+            header_down -Access-Control-Allow-Credentials
+            
+            # 支持 HTTP/1.1 和 HTTP/2
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 流式响应设置
+            flush_interval -1
+        }
+        # 添加我们自己的 CORS 头（在 reverse_proxy 之后）
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # 匹配其他 WebRTC 端点请求（没有自定义 Key，允许通过但添加真实 Key）
+    # 注意：这允许任何请求通过，但会添加真实的 OpenAI API Key
+    @webrtc_endpoint {
+        path /v1/realtime/calls*
+    }
+
+    # 处理其他 WebRTC 端点请求（使用临时密钥的场景）
+    # 注意：这个端点应该直接转发临时密钥，不替换
+    handle @webrtc_endpoint {
+        reverse_proxy https://api.openai.com {
+            # 直接转发客户端发送的 Authorization header（可能是临时密钥）
+            # 不替换，因为 WebRTC 需要使用临时密钥
+            header_up Authorization {http.request.header.Authorization}
+            
+            # 保持原始主机头
+            header_up Host {upstream_hostport}
+            
+            # 显式转发 Content-Type（WebRTC 需要 application/sdp）
+            header_up Content-Type {http.request.header.Content-Type}
+            
+            # 转发其他必要的请求头
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # 删除上游返回的 CORS header，避免重复
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
+            header_down -Access-Control-Allow-Headers
+            header_down -Access-Control-Allow-Credentials
+            
+            # 支持 HTTP/1.1 和 HTTP/2
+            transport http {
+                versions 1.1 2
+            }
+            
+            # 流式响应设置
+            flush_interval -1
+        }
+        # 添加我们自己的 CORS 头（在 reverse_proxy 之后）
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # 匹配使用自定义 API Key 的 HTTP 请求（排除 WebRTC 端点，避免重复处理）
+    # 使用 header 匹配器（简单字符串匹配）
+    @custom_key {
+        header Authorization "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+        not path /v1/realtime/calls*
+    }
+
+    # 处理自定义 Key 的 HTTP 请求：替换为真实的 OpenAI Key
     handle @custom_key {
         reverse_proxy https://api.openai.com {
             # 替换 Authorization header 为真实的 OpenAI API Key
@@ -49,57 +278,39 @@ oneapi.naivehero.top {
             header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto {scheme}
             
-            # WebSocket 支持配置
-            # Caddy 2 默认支持 WebSocket，会自动处理 WebSocket 升级
-            # 不需要手动转发 WebSocket 相关的请求头，Caddy 会自动处理
+            # 删除上游返回的 CORS header，避免重复
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
+            header_down -Access-Control-Allow-Headers
+            header_down -Access-Control-Allow-Credentials
             
             # 支持 HTTP/1.1 和 HTTP/2
-            # WebSocket 需要 HTTP/1.1，但 Caddy 会自动降级到 HTTP/1.1 用于 WebSocket 连接
             transport http {
                 versions 1.1 2
             }
             
-            # 3. 健康检查（仅用于 HTTP 请求，不影响 WebSocket）
-            health_uri /v1/models
-            health_interval 30s
-            health_timeout 5s
+            # 健康检查已禁用
+            # 注意：OpenAI API 需要认证，健康检查会返回401，导致上游被标记为不可用
+            # 如果需要健康检查，可以取消注释下面的配置并添加认证header
+            # health_uri /v1/models
+            # health_interval 30s
+            # health_timeout 5s
+            # health_header Authorization "Bearer {$OPENAI_API_KEY}"
             
-            # 4. 流式响应设置（用于 SSE 和 WebSocket）
+            # 流式响应设置（用于 SSE 和 WebRTC 信令）
             # -1 表示立即刷新，确保流式数据及时传输
             flush_interval -1
-            
-            # 注意：Caddy 2 默认支持长时间 WebSocket 连接，无需额外配置超时
-            # 对于 OpenAI Realtime API 等长时间运行的 WebSocket 连接，Caddy 会自动保持连接
         }
+        # 添加我们自己的 CORS 头（在 reverse_proxy 之后）
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
     }
 
     # 处理其他请求：拒绝未授权的请求（推荐，更安全）
-    # 只允许使用自定义Key的请求通过
+    # 只允许使用自定义Key的 HTTP 请求或 WebSocket/WebRTC 连接通过
     handle {
         respond "Unauthorized: Invalid API Key. Please use the provided custom API key." 401
     }
 
-    # 为所有响应添加 CORS 头（可选，如果需要前端直接访问）
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
-    }
-
-    # 选项2：如果允许直接使用真实Key（不推荐，会暴露真实Key）
-    # 取消注释下面的代码，并注释掉上面的 handle 拒绝处理
-    # reverse_proxy https://api.openai.com {
-    #     header_up Host {upstream_hostport}
-    #     header_up X-Real-IP {remote_host}
-    #     header_up X-Forwarded-For {remote_host}
-    #     header_up X-Forwarded-Proto {scheme}
-    #     transport http {
-    #         versions 1.1 2
-    #     }
-    #     health_uri /v1/models
-    #     health_interval 30s
-    #     health_timeout 5s
-    #     flush_interval -1
-    # }
 }
-

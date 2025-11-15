@@ -6,7 +6,7 @@
 
 import type { ITransport, TransportType } from './TransportInterface';
 import { WebRTCTransport } from './WebRTCTransport';
-// import { WebSocketTransport } from './WebSocketTransport'; // 阶段3实现
+import { WebSocketTransport } from './WebSocketTransport';
 
 /**
  * 传输层工厂类
@@ -24,9 +24,7 @@ export class TransportFactory {
       case 'webrtc':
         return new WebRTCTransport(config);
       case 'websocket':
-        // 阶段3实现
-        // return new WebSocketTransport(config);
-        throw new Error('WebSocket transport is not implemented yet');
+        return new WebSocketTransport(config);
       default:
         throw new Error(`Unsupported transport type: ${type}`);
     }

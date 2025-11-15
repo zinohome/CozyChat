@@ -146,16 +146,30 @@ oneapi.naivehero.top {
         not path /v1/realtime/calls*
     }
 
-    # 处理 WebSocket 连接：允许通过并添加真实的 OpenAI API Key
-    # OpenAI Realtime API 的 WebSocket 连接使用子协议传递 API Key
-    # 但服务器端也接受 Authorization header，所以我们可以添加它
+    # 处理 WebSocket 连接：允许通过并转发子协议
+    # OpenAI Realtime API 的 WebSocket 连接使用子协议传递 ephemeral key
+    # 关键：必须转发 Sec-WebSocket-Protocol 头，让子协议中的 ephemeral key 传递到 OpenAI
     handle @websocket_upgrade {
         header Access-Control-Allow-Origin "*"
         header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK, Sec-WebSocket-Protocol"
         reverse_proxy https://api.openai.com {
-            # 添加 Authorization header（即使客户端使用子协议，服务器也接受 header）
-            header_up Authorization "Bearer {$OPENAI_API_KEY}"
+            # ✅ 关键：转发 WebSocket 子协议（包含 ephemeral key）
+            # 客户端通过子协议传递 ephemeral key，必须转发到 OpenAI
+            header_up Sec-WebSocket-Protocol {http.request.header.Sec-WebSocket-Protocol}
+            
+            # ✅ 关键：转发 WebSocket 升级头（Caddy 通常会自动处理，但显式转发更安全）
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
+            
+            # ✅ 关键：转发其他 WebSocket 相关头
+            header_up Sec-WebSocket-Key {http.request.header.Sec-WebSocket-Key}
+            header_up Sec-WebSocket-Version {http.request.header.Sec-WebSocket-Version}
+            header_up Sec-WebSocket-Extensions {http.request.header.Sec-WebSocket-Extensions}
+            
+            # ✅ 关键：不要替换 Authorization header
+            # WebSocket 使用子协议认证，不需要 Authorization header
+            # 如果 OpenAI 需要，它会从子协议中提取 ephemeral key
             
             # 保持原始主机头
             header_up Host {upstream_hostport}
