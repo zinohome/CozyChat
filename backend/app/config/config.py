@@ -125,7 +125,7 @@ class Settings(BaseSettings):
         alias="OPENAI_BASE_URL"
     )
     openai_realtime_model: str = Field(
-        default="gpt-4o-realtime-preview-2025-06-03",
+        default="gpt-4o-realtime-preview-2024-12-17",
         alias="OPENAI_REALTIME_MODEL",
         description="OpenAI Realtime API 使用的模型名称"
     )

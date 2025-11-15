@@ -7,7 +7,7 @@ engines:
     # OpenAI Realtime API配置
     openai:
       provider: "openai"
-      model: "gpt-4o-realtime-preview-2024-10-01"
+      model: "gpt-4o-realtime-preview-2024-12-17"  # 最新稳定版本
       voice: "shimmer"  # alloy, echo, fable, onyx, nova, shimmer
       # 语音配置
       voice_settings:

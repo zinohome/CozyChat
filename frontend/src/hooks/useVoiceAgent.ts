@@ -4,6 +4,9 @@ import { RealtimeAgent, RealtimeSession, OpenAIRealtimeWebRTC } from '@openai/ag
 import { configApi } from '@/services/config';
 import { personalityApi } from '@/services/personality';
 import type { OpenAIConfig } from '@/services/config';
+import { ToolManager } from '@/features/voice/services/ToolManager';
+import { EventHandler } from '@/features/voice/services/EventHandler';
+import type { EventHandlerCallbacks } from '@/features/voice/services/EventHandler';
 
 /**
  * Voice Agent Hook返回值
@@ -48,6 +51,8 @@ export const useVoiceAgent = (
   callbacks?: {
     onUserTranscript?: (text: string) => void;
     onAssistantTranscript?: (text: string) => void;
+    onToolCall?: (toolName: string, parameters: Record<string, any>) => void;
+    onToolResult?: (toolName: string, result: any) => void;
   }
 ): UseVoiceAgentReturn => {
   const [isConnected, setIsConnected] = useState(false);
@@ -58,6 +63,10 @@ export const useVoiceAgent = (
   const sessionRef = useRef<RealtimeSession | null>(null);
   const configRef = useRef<OpenAIConfig | null>(null);
   const isCallingRef = useRef(false);
+  
+  // 工具管理器和事件处理器
+  const toolManagerRef = useRef<ToolManager | null>(null);
+  const eventHandlerRef = useRef<EventHandler | null>(null);
   
   // 音频流和元素引用（用于可视化）
   const userMediaStreamRef = useRef<MediaStream | null>(null);
@@ -75,6 +84,9 @@ export const useVoiceAgent = (
   // 用于防止无限更新的标志
   const isUpdatingUserVisualizationRef = useRef(false);
   const isUpdatingAssistantVisualizationRef = useRef(false);
+  // 节流：记录上次更新时间
+  const lastUserUpdateTimeRef = useRef<number>(0);
+  const lastAssistantUpdateTimeRef = useRef<number>(0);
   
   // 获取 personality 配置
   const { data: personality } = useQuery({
@@ -141,27 +153,33 @@ export const useVoiceAgent = (
         }
         
         try {
-          const bufferLength = userAnalyserRef.current.frequencyBinCount;
-          const dataArray = new Uint8Array(bufferLength);
-          userAnalyserRef.current.getByteFrequencyData(dataArray);
-          
-          // 使用函数式更新，避免依赖问题
-          setUserFrequencyData((prev) => {
-            // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
-            if (prev && prev.length === dataArray.length) {
-              let isEqual = true;
-              for (let i = 0; i < dataArray.length; i++) {
-                if (prev[i] !== dataArray[i]) {
-                  isEqual = false;
-                  break;
+          // 节流：限制更新频率为 20fps（每50ms更新一次）
+          const now = Date.now();
+          if (now - lastUserUpdateTimeRef.current >= 50) {
+            const bufferLength = userAnalyserRef.current.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            userAnalyserRef.current.getByteFrequencyData(dataArray);
+            
+            // 使用函数式更新，避免依赖问题
+            setUserFrequencyData((prev) => {
+              // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
+              if (prev && prev.length === dataArray.length) {
+                let isEqual = true;
+                for (let i = 0; i < dataArray.length; i++) {
+                  if (prev[i] !== dataArray[i]) {
+                    isEqual = false;
+                    break;
+                  }
+                }
+                if (isEqual) {
+                  return prev; // 返回旧值，不触发更新
                 }
               }
-              if (isEqual) {
-                return prev; // 返回旧值，不触发更新
-              }
-            }
-            return dataArray;
-          });
+              return dataArray;
+            });
+            
+            lastUserUpdateTimeRef.current = now;
+          }
           
           // 继续下一帧
           userAnimationFrameRef.current = requestAnimationFrame(updateUserAudioVisualization) as any;
@@ -281,27 +299,33 @@ export const useVoiceAgent = (
         }
         
         try {
-          const bufferLength = assistantAnalyserRef.current.frequencyBinCount;
-          const dataArray = new Uint8Array(bufferLength);
-          assistantAnalyserRef.current.getByteFrequencyData(dataArray);
-          
-          // 使用函数式更新，避免依赖问题
-          setAssistantFrequencyData((prev) => {
-            // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
-            if (prev && prev.length === dataArray.length) {
-              let isEqual = true;
-              for (let i = 0; i < dataArray.length; i++) {
-                if (prev[i] !== dataArray[i]) {
-                  isEqual = false;
-                  break;
+          // 节流：限制更新频率为 20fps（每50ms更新一次）
+          const now = Date.now();
+          if (now - lastAssistantUpdateTimeRef.current >= 50) {
+            const bufferLength = assistantAnalyserRef.current.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            assistantAnalyserRef.current.getByteFrequencyData(dataArray);
+            
+            // 使用函数式更新，避免依赖问题
+            setAssistantFrequencyData((prev) => {
+              // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
+              if (prev && prev.length === dataArray.length) {
+                let isEqual = true;
+                for (let i = 0; i < dataArray.length; i++) {
+                  if (prev[i] !== dataArray[i]) {
+                    isEqual = false;
+                    break;
+                  }
+                }
+                if (isEqual) {
+                  return prev; // 返回旧值，不触发更新
                 }
               }
-              if (isEqual) {
-                return prev; // 返回旧值，不触发更新
-              }
-            }
-            return dataArray;
-          });
+              return dataArray;
+            });
+            
+            lastAssistantUpdateTimeRef.current = now;
+          }
           
           // 继续下一帧
           assistantAnimationFrameRef.current = requestAnimationFrame(updateAssistantAudioVisualization) as any;
@@ -362,11 +386,28 @@ export const useVoiceAgent = (
         final: voice,
       });
       
+      // ========== 工具调用支持 ==========
+      // 1. 初始化工具管理器
+      if (!toolManagerRef.current) {
+        toolManagerRef.current = new ToolManager();
+      }
+      
+      // 2. 获取工具列表（支持缓存）
+      let tools: any[] = [];
+      try {
+        const toolInfos = await toolManagerRef.current.getTools(personalityId, 'builtin');
+        tools = toolManagerRef.current.convertToRealtimeFormat(toolInfos);
+        console.log('🛠️ 工具列表已加载:', tools.length, '个工具');
+      } catch (error) {
+        console.error('⚠️ 加载工具列表失败，将不使用工具:', error);
+      }
+      
       // 创建 RealtimeAgent
       const agent = new RealtimeAgent({
         name: 'cozychat-agent',
         instructions: instructions,
         voice: voice,
+        tools: tools.length > 0 ? tools : undefined, // 如果有工具，传递给 agent
       });
       
       // 创建用户音频流（用于可视化）
@@ -581,6 +622,28 @@ export const useVoiceAgent = (
         });
       });
       
+      // ========== 设置工具调用事件处理器 ==========
+      if (tools.length > 0) {
+        // 创建事件处理器
+        if (!eventHandlerRef.current) {
+          eventHandlerRef.current = new EventHandler();
+        }
+        
+        // 设置 session 和回调
+        eventHandlerRef.current.setSession(session);
+        eventHandlerRef.current.setCallbacks({
+          onUserTranscript: callbacks?.onUserTranscript,
+          onAssistantTranscript: callbacks?.onAssistantTranscript,
+          onToolCall: callbacks?.onToolCall,
+          onToolResult: callbacks?.onToolResult,
+        });
+        
+        // 设置工具调用事件监听
+        eventHandlerRef.current.setupToolCallListeners();
+        
+        console.log('🛠️ 工具调用事件监听已设置');
+      }
+      
       sessionRef.current = session;
       setIsConnected(true);
       
@@ -597,6 +660,12 @@ export const useVoiceAgent = (
    */
   const disconnect = useCallback(() => {
     try {
+      // 清理事件处理器
+      if (eventHandlerRef.current) {
+        eventHandlerRef.current.cleanup();
+        eventHandlerRef.current = null;
+      }
+      
       if (sessionRef.current) {
         sessionRef.current.close(); // 使用 close() 方法断开连接
         sessionRef.current = null;
