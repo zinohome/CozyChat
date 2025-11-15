@@ -72,6 +72,9 @@ export const useVoiceAgent = (
   const [assistantFrequencyData, setAssistantFrequencyData] = useState<Uint8Array | null>(null);
   const userAnimationFrameRef = useRef<number | null>(null);
   const assistantAnimationFrameRef = useRef<number | null>(null);
+  // 用于防止无限更新的标志
+  const isUpdatingUserVisualizationRef = useRef(false);
+  const isUpdatingAssistantVisualizationRef = useRef(false);
   
   // 获取 personality 配置
   const { data: personality } = useQuery({
@@ -98,6 +101,15 @@ export const useVoiceAgent = (
    */
   const initUserAudioVisualization = useCallback(async (stream: MediaStream) => {
     try {
+      // 如果已经在更新，先停止
+      if (isUpdatingUserVisualizationRef.current) {
+        if (userAnimationFrameRef.current) {
+          cancelAnimationFrame(userAnimationFrameRef.current);
+          userAnimationFrameRef.current = null;
+        }
+        isUpdatingUserVisualizationRef.current = false;
+      }
+      
       // 检查 AudioContext 状态
       let audioContext: AudioContext;
       try {
@@ -119,9 +131,12 @@ export const useVoiceAgent = (
       
       source.connect(analyser);
       
-      // 启动用户音频可视化
+      // 启动用户音频可视化（使用稳定的更新函数）
       const updateUserAudioVisualization = () => {
-        if (!userAnalyserRef.current || !isCallingRef.current) {
+        // 检查是否应该继续更新
+        if (!userAnalyserRef.current || !isCallingRef.current || !isUpdatingUserVisualizationRef.current) {
+          isUpdatingUserVisualizationRef.current = false;
+          userAnimationFrameRef.current = null;
           return;
         }
         
@@ -130,22 +145,44 @@ export const useVoiceAgent = (
           const dataArray = new Uint8Array(bufferLength);
           userAnalyserRef.current.getByteFrequencyData(dataArray);
           
-          setUserFrequencyData(dataArray);
+          // 使用函数式更新，避免依赖问题
+          setUserFrequencyData((prev) => {
+            // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
+            if (prev && prev.length === dataArray.length) {
+              let isEqual = true;
+              for (let i = 0; i < dataArray.length; i++) {
+                if (prev[i] !== dataArray[i]) {
+                  isEqual = false;
+                  break;
+                }
+              }
+              if (isEqual) {
+                return prev; // 返回旧值，不触发更新
+              }
+            }
+            return dataArray;
+          });
           
-          userAnimationFrameRef.current = requestAnimationFrame(() => {
-            updateUserAudioVisualization();
-          }) as any;
+          // 继续下一帧
+          userAnimationFrameRef.current = requestAnimationFrame(updateUserAudioVisualization) as any;
         } catch (err) {
           console.error('更新用户音频可视化失败:', err);
+          isUpdatingUserVisualizationRef.current = false;
+          userAnimationFrameRef.current = null;
         }
       };
       
+      // 设置更新标志并启动
+      isUpdatingUserVisualizationRef.current = true;
       // 延迟启动，确保 isCallingRef 已设置
       setTimeout(() => {
-        updateUserAudioVisualization();
+        if (isCallingRef.current && userAnalyserRef.current && isUpdatingUserVisualizationRef.current) {
+          updateUserAudioVisualization();
+        }
       }, 200);
     } catch (err: any) {
       console.error('初始化用户音频可视化失败:', err);
+      isUpdatingUserVisualizationRef.current = false;
     }
   }, []);
 
@@ -154,6 +191,15 @@ export const useVoiceAgent = (
    */
   const initAssistantAudioVisualization = useCallback((audioElement: HTMLAudioElement) => {
     try {
+      // 如果已经在更新，先停止
+      if (isUpdatingAssistantVisualizationRef.current) {
+        if (assistantAnimationFrameRef.current) {
+          cancelAnimationFrame(assistantAnimationFrameRef.current);
+          assistantAnimationFrameRef.current = null;
+        }
+        isUpdatingAssistantVisualizationRef.current = false;
+      }
+      
       // 清理之前的连接（如果存在）
       if (assistantSourceRef.current) {
         try {
@@ -225,9 +271,12 @@ export const useVoiceAgent = (
       source.connect(analyser);
       analyser.connect(audioContext.destination);
       
-      // 启动助手音频可视化
+      // 启动助手音频可视化（使用稳定的更新函数）
       const updateAssistantAudioVisualization = () => {
-        if (!assistantAnalyserRef.current || !isCallingRef.current) {
+        // 检查是否应该继续更新
+        if (!assistantAnalyserRef.current || !isCallingRef.current || !isUpdatingAssistantVisualizationRef.current) {
+          isUpdatingAssistantVisualizationRef.current = false;
+          assistantAnimationFrameRef.current = null;
           return;
         }
         
@@ -236,34 +285,49 @@ export const useVoiceAgent = (
           const dataArray = new Uint8Array(bufferLength);
           assistantAnalyserRef.current.getByteFrequencyData(dataArray);
           
-          setAssistantFrequencyData(dataArray);
+          // 使用函数式更新，避免依赖问题
+          setAssistantFrequencyData((prev) => {
+            // 简单比较：如果数据完全相同，不更新（减少不必要的渲染）
+            if (prev && prev.length === dataArray.length) {
+              let isEqual = true;
+              for (let i = 0; i < dataArray.length; i++) {
+                if (prev[i] !== dataArray[i]) {
+                  isEqual = false;
+                  break;
+                }
+              }
+              if (isEqual) {
+                return prev; // 返回旧值，不触发更新
+              }
+            }
+            return dataArray;
+          });
           
-          assistantAnimationFrameRef.current = requestAnimationFrame(() => {
-            updateAssistantAudioVisualization();
-          }) as any;
+          // 继续下一帧
+          assistantAnimationFrameRef.current = requestAnimationFrame(updateAssistantAudioVisualization) as any;
         } catch (err) {
           console.error('更新助手音频可视化失败:', err);
-          // 如果出错，停止更新
-          if (assistantAnimationFrameRef.current) {
-            cancelAnimationFrame(assistantAnimationFrameRef.current);
-            assistantAnimationFrameRef.current = null;
-          }
+          isUpdatingAssistantVisualizationRef.current = false;
+          assistantAnimationFrameRef.current = null;
         }
       };
       
+      // 设置更新标志并启动
+      isUpdatingAssistantVisualizationRef.current = true;
       // 立即启动可视化循环
       if (isCallingRef.current && assistantAnalyserRef.current) {
         updateAssistantAudioVisualization();
       } else {
         // 延迟启动，等待条件满足
         setTimeout(() => {
-          if (isCallingRef.current && assistantAnalyserRef.current) {
+          if (isCallingRef.current && assistantAnalyserRef.current && isUpdatingAssistantVisualizationRef.current) {
             updateAssistantAudioVisualization();
           }
-      }, 200);
+        }, 200);
       }
     } catch (err: any) {
       console.error('初始化助手音频可视化失败:', err);
+      isUpdatingAssistantVisualizationRef.current = false;
     }
   }, []);
 
@@ -552,6 +616,8 @@ export const useVoiceAgent = (
       }
       
       // 停止音频可视化
+      isUpdatingUserVisualizationRef.current = false;
+      isUpdatingAssistantVisualizationRef.current = false;
       if (userAnimationFrameRef.current) {
         cancelAnimationFrame(userAnimationFrameRef.current);
         userAnimationFrameRef.current = null;
@@ -561,11 +627,11 @@ export const useVoiceAgent = (
         assistantAnimationFrameRef.current = null;
       }
       
-             setUserFrequencyData(null);
-             setAssistantFrequencyData(null);
-             setIsConnected(false);
-             setIsCalling(false);
-             isCallingRef.current = false;
+      setUserFrequencyData(null);
+      setAssistantFrequencyData(null);
+      setIsConnected(false);
+      setIsCalling(false);
+      isCallingRef.current = false;
       
       console.log('断开 Voice Agent 连接');
     } catch (err) {
@@ -746,6 +812,8 @@ export const useVoiceAgent = (
       }
       
       // 停止音频可视化
+      isUpdatingUserVisualizationRef.current = false;
+      isUpdatingAssistantVisualizationRef.current = false;
       if (userAnimationFrameRef.current) {
         cancelAnimationFrame(userAnimationFrameRef.current);
         userAnimationFrameRef.current = null;
