@@ -17,6 +17,7 @@ from app.api.deps import get_current_active_user
 from app.config.config import settings
 from app.models.user import User
 from app.utils.logger import logger
+from app.utils.config_loader import get_config_loader
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -37,6 +38,18 @@ class RealtimeTokenResponse(BaseModel):
     """WebSocket URL（用于 WebSocket 传输层）"""
     model: str
     """Model name"""
+
+
+class RealtimeConfigResponse(BaseModel):
+    """Realtime 全局配置响应"""
+    voice: str
+    """默认语音"""
+    model: str
+    """默认模型"""
+    temperature: float
+    """温度"""
+    max_response_output_tokens: int
+    """最大输出token数"""
 
 
 # ===== API路由 =====
@@ -138,6 +151,8 @@ async def get_realtime_token(
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     # New API 请求格式：使用 session 对象（与 OpenAI 官方格式相同）
+                    # 关键：必须在创建 ephemeral token 时配置转录功能
+                    # 参考 curl 成功的响应格式，正确的结构是：session.audio.input.transcription
                     response = await client.post(
                         client_secrets_url,
                         headers={
@@ -147,7 +162,15 @@ async def get_realtime_token(
                         json={
                             'session': {
                                 'type': 'realtime',
-                                'model': 'gpt-realtime'  # 使用 gpt-realtime 而不是 gpt-4o-realtime-preview-2024-10-01
+                                'model': settings.openai_realtime_model,  # 使用配置文件中的模型名称
+                                # ✅ 关键：使用正确的嵌套结构配置转录功能
+                                'audio': {
+                                    'input': {
+                                        'transcription': {
+                                            'model': 'whisper-1'
+                                        }
+                                    }
+                                }
                             }
                         }
                     )
@@ -217,7 +240,7 @@ async def get_realtime_token(
                     json={
                         'session': {
                             'type': 'realtime',
-                            'model': 'gpt-4o-realtime-preview-2024-10-01'
+                            'model': settings.openai_realtime_model
                         }
                     }
                 )
@@ -253,9 +276,9 @@ async def get_realtime_token(
                 ws_base_url = ws_base_url[:-3]
             elif ws_base_url.endswith('/v1/'):
                 ws_base_url = ws_base_url[:-4]
-            ws_url = f"{ws_base_url.rstrip('/')}/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+            ws_url = f"{ws_base_url.rstrip('/')}/v1/realtime?model={settings.openai_realtime_model}"
         else:
-            ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+            ws_url = f"wss://api.openai.com/v1/realtime?model={settings.openai_realtime_model}"
         
         logger.info(
             "Generated realtime token successfully",
@@ -268,7 +291,7 @@ async def get_realtime_token(
         return RealtimeTokenResponse(
             token=client_secret,
             url=ws_url,
-            model='gpt-4o-realtime-preview-2024-10-01'
+            model=settings.openai_realtime_model
         )
             
     except httpx.HTTPError as e:
@@ -284,6 +307,51 @@ async def get_realtime_token(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate ephemeral client key: {str(e)}"
+        )
+
+
+@router.get("/realtime-config", response_model=RealtimeConfigResponse)
+async def get_realtime_config(
+    user: User = Depends(get_current_active_user)
+) -> RealtimeConfigResponse:
+    """
+    获取 Realtime 全局默认配置
+    
+    从 realtime.yaml 加载全局默认配置，personality 可以覆盖这些配置。
+    
+    Args:
+        user: 当前用户（需要认证）
+        
+    Returns:
+        RealtimeConfigResponse: Realtime全局配置信息
+        
+    Raises:
+        HTTPException: 如果配置加载失败
+    """
+    try:
+        # 加载 realtime.yaml 配置
+        config_loader = get_config_loader()
+        realtime_config = config_loader.load_voice_config('realtime')
+        
+        # 获取 OpenAI 引擎配置
+        openai_config = realtime_config.get('openai', {})
+        
+        logger.info(
+            "Retrieved realtime global config",
+            extra={"user_id": str(user.id)}
+        )
+        
+        return RealtimeConfigResponse(
+            voice=openai_config.get('voice', 'shimmer'),
+            model=openai_config.get('model', settings.openai_realtime_model),
+            temperature=openai_config.get('temperature', 0.8),
+            max_response_output_tokens=openai_config.get('max_response_output_tokens', 4096)
+        )
+    except Exception as e:
+        logger.error(f"Failed to get realtime config: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get realtime config"
         )
 
 

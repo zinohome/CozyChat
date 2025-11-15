@@ -23,6 +23,20 @@ export interface RealtimeToken {
 }
 
 /**
+ * Realtime 全局配置
+ */
+export interface RealtimeConfig {
+  /** 默认语音 */
+  voice: string;
+  /** 默认模型 */
+  model: string;
+  /** 温度 */
+  temperature: number;
+  /** 最大输出token数 */
+  max_response_output_tokens: number;
+}
+
+/**
  * 配置API服务
  *
  * 封装配置相关的API调用。
@@ -48,6 +62,17 @@ export const configApi = {
    */
   async getRealtimeToken(): Promise<RealtimeToken> {
     return apiClient.post<RealtimeToken>('/v1/config/realtime-token');
+  },
+
+  /**
+   * 获取 Realtime 全局默认配置
+   *
+   * 从 realtime.yaml 加载全局默认配置，personality 可以覆盖这些配置。
+   *
+   * @returns Realtime 全局配置信息
+   */
+  async getRealtimeConfig(): Promise<RealtimeConfig> {
+    return apiClient.get<RealtimeConfig>('/v1/config/realtime-config');
   },
 };
 

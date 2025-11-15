@@ -95,15 +95,12 @@ export const useVoiceAgent = (
    */
   const initUserAudioVisualization = useCallback(async (stream: MediaStream) => {
     try {
-      console.log('开始初始化用户音频可视化，stream:', stream, 'tracks:', stream.getTracks().length);
-      
       // 检查 AudioContext 状态
       let audioContext: AudioContext;
       try {
         audioContext = new AudioContext({ sampleRate: 24000 });
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
-          console.log('AudioContext 已恢复');
         }
       } catch (e) {
         console.error('创建 AudioContext 失败:', e);
@@ -113,23 +110,15 @@ export const useVoiceAgent = (
       const source = audioContext.createMediaStreamSource(stream);
       
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256; // 增加 fftSize 以获得更好的频率分辨率
-      analyser.smoothingTimeConstant = 0.3; // 降低平滑度，提高响应速度
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.3;
       userAnalyserRef.current = analyser;
       
       source.connect(analyser);
-      console.log('用户音频源已连接到分析器');
       
-      // 启动用户音频可视化（使用 requestAnimationFrame 提高响应速度）
+      // 启动用户音频可视化
       const updateUserAudioVisualization = () => {
-        if (!userAnalyserRef.current) {
-          console.log('用户分析器不存在，停止更新');
-          return;
-        }
-        
-        // 检查 isCalling 状态（使用 ref 而不是闭包中的值）
-        if (!isCallingRef.current) {
-          console.log('不在通话中，停止用户音频可视化');
+        if (!userAnalyserRef.current || !isCallingRef.current) {
           return;
         }
         
@@ -140,7 +129,6 @@ export const useVoiceAgent = (
           
           setUserFrequencyData(dataArray);
           
-          // 使用 requestAnimationFrame 提高响应速度（约 60fps）
           userAnimationFrameRef.current = requestAnimationFrame(() => {
             updateUserAudioVisualization();
           }) as any;
@@ -163,8 +151,6 @@ export const useVoiceAgent = (
    */
   const initAssistantAudioVisualization = useCallback((audioElement: HTMLAudioElement) => {
     try {
-      console.log('开始初始化助手音频可视化，audioElement:', audioElement, 'srcObject:', audioElement.srcObject);
-      
       // 清理之前的连接（如果存在）
       if (assistantSourceRef.current) {
         try {
@@ -190,9 +176,7 @@ export const useVoiceAgent = (
         audioContext = new AudioContext({ sampleRate: 24000 });
         assistantAudioContextRef.current = audioContext;
         if (audioContext.state === 'suspended') {
-          audioContext.resume().then(() => {
-            console.log('助手 AudioContext 已恢复');
-          });
+          audioContext.resume();
         }
       } catch (e) {
         console.error('创建助手 AudioContext 失败:', e);
@@ -205,30 +189,22 @@ export const useVoiceAgent = (
       
       if (audioElement.srcObject instanceof MediaStream) {
         // 如果 audioElement 有 srcObject（MediaStream），直接使用它
-        console.log('✅ 使用 audioElement.srcObject (MediaStream) 创建音频源', {
-          streamId: audioElement.srcObject.id,
-          tracks: audioElement.srcObject.getTracks().length,
-          active: audioElement.srcObject.active,
-        });
         try {
           const streamSource = audioContext.createMediaStreamSource(audioElement.srcObject);
           assistantSourceRef.current = streamSource as any;
           source = streamSource;
         } catch (e: any) {
-          console.error('❌ 从 MediaStream 创建音频源失败:', e);
+          console.error('从 MediaStream 创建音频源失败:', e);
           throw e;
         }
       } else {
         // 如果没有 srcObject，尝试从 audioElement 创建 MediaElementSource
-        // 但要注意：如果 audioElement 已经被连接过，会报错
-        console.log('⚠️ audioElement 没有 srcObject，尝试创建 MediaElementSource');
         try {
           source = audioContext.createMediaElementSource(audioElement);
           assistantSourceRef.current = source;
         } catch (e: any) {
           if (e.name === 'InvalidStateError' && e.message.includes('already connected')) {
-            console.warn('⚠️ 音频元素已被连接，跳过可视化（避免重复播放）');
-            // 不抛出错误，只是跳过可视化
+            // 音频元素已被连接，跳过可视化（避免重复播放）
             return;
           } else {
             throw e;
@@ -237,30 +213,18 @@ export const useVoiceAgent = (
       }
       
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512; // 增加 fftSize 以获得更好的频率分辨率
-      analyser.smoothingTimeConstant = 0.1; // 进一步降低平滑度，提高响应速度
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.1;
       analyser.minDecibels = -90;
       analyser.maxDecibels = -10;
       assistantAnalyserRef.current = analyser;
       
       source.connect(analyser);
       analyser.connect(audioContext.destination);
-      console.log('助手音频源已连接到分析器', {
-        fftSize: analyser.fftSize,
-        frequencyBinCount: analyser.frequencyBinCount,
-        smoothingTimeConstant: analyser.smoothingTimeConstant,
-      });
       
-      // 启动助手音频可视化（使用 requestAnimationFrame 提高响应速度）
+      // 启动助手音频可视化
       const updateAssistantAudioVisualization = () => {
-        if (!assistantAnalyserRef.current) {
-          console.log('助手分析器不存在，停止更新');
-          return;
-        }
-        
-        // 检查 isCalling 状态（使用 ref 而不是闭包中的值）
-        if (!isCallingRef.current) {
-          console.log('不在通话中，停止助手音频可视化');
+        if (!assistantAnalyserRef.current || !isCallingRef.current) {
           return;
         }
         
@@ -269,33 +233,8 @@ export const useVoiceAgent = (
           const dataArray = new Uint8Array(bufferLength);
           assistantAnalyserRef.current.getByteFrequencyData(dataArray);
           
-          // 计算平均音量和最大值用于调试（仅在开发环境，且节流输出）
-          if (process.env.NODE_ENV === 'development') {
-            const avgVolume = dataArray.reduce((sum, val) => sum + val, 0) / bufferLength;
-            const maxVolume = Math.max(...Array.from(dataArray));
-            
-            // 节流日志输出（每 500ms 输出一次，或音量变化超过 20%）
-            const now = Date.now();
-            const lastLogTime = (assistantAnalyserRef.current as any).__lastLogTime || 0;
-            const lastAvgVolume = (assistantAnalyserRef.current as any).__lastAvgVolume || 0;
-            const volumeChange = Math.abs(avgVolume - lastAvgVolume) / (lastAvgVolume || 1);
-            
-            if (now - lastLogTime > 500 || volumeChange > 0.2) {
-              if (avgVolume > 1 || maxVolume > 5) {
-                console.log('🎵 助手音频数据更新:', {
-                  平均音量: avgVolume.toFixed(2),
-                  最大值: maxVolume,
-                  数据长度: bufferLength,
-                });
-                (assistantAnalyserRef.current as any).__lastLogTime = now;
-                (assistantAnalyserRef.current as any).__lastAvgVolume = avgVolume;
-              }
-            }
-          }
-          
           setAssistantFrequencyData(dataArray);
           
-          // 使用 requestAnimationFrame 提高响应速度（约 60fps）
           assistantAnimationFrameRef.current = requestAnimationFrame(() => {
             updateAssistantAudioVisualization();
           }) as any;
@@ -309,26 +248,14 @@ export const useVoiceAgent = (
         }
       };
       
-      // 立即启动可视化循环（不延迟）
-      // 因为 isCallingRef 已经在 startCall 中设置了
+      // 立即启动可视化循环
       if (isCallingRef.current && assistantAnalyserRef.current) {
-        console.log('✅ 立即启动助手音频可视化');
         updateAssistantAudioVisualization();
       } else {
-        console.warn('⚠️ 助手音频可视化启动条件不满足，延迟启动', {
-          isCalling: isCallingRef.current,
-          hasAnalyser: !!assistantAnalyserRef.current,
-        });
         // 延迟启动，等待条件满足
         setTimeout(() => {
           if (isCallingRef.current && assistantAnalyserRef.current) {
-            console.log('✅ 延迟启动助手音频可视化');
             updateAssistantAudioVisualization();
-          } else {
-            console.error('❌ 助手音频可视化启动失败', {
-              isCalling: isCallingRef.current,
-              hasAnalyser: !!assistantAnalyserRef.current,
-            });
           }
       }, 200);
       }
@@ -349,25 +276,30 @@ export const useVoiceAgent = (
       
       // 获取 ephemeral client key (临时密钥)
       const realtimeToken = await configApi.getRealtimeToken();
-      console.log('获取 Realtime Token 成功:', {
-        tokenPrefix: realtimeToken.token.substring(0, 10) + '...',
-        url: realtimeToken.url,
-        model: realtimeToken.model,
-      });
+      
+      // 获取全局默认配置（来自 realtime.yaml）
+      const globalConfig = await configApi.getRealtimeConfig();
       
       // 获取 personality 配置
       const personalityConfig = (personality as any)?.config || {};
       const voiceConfig = personalityConfig?.voice || {};
-      const realtimeConfig = voiceConfig?.realtime || {};
+      const personalityRealtimeConfig = voiceConfig?.realtime || {};
       
-      // 获取 instructions（优先使用 realtime.instructions，否则使用 system_prompt）
-      const instructions = realtimeConfig.instructions || personalityConfig?.ai?.system_prompt || 'You are a helpful assistant.';
+      // 合并配置：personality 配置 > 全局配置 > 代码默认值
+      const voice = personalityRealtimeConfig.voice || globalConfig.voice || 'shimmer';
+      const instructions = personalityRealtimeConfig.instructions || personalityConfig?.ai?.system_prompt || 'You are a helpful assistant.';
+      
+      console.log('🎙️ Realtime Voice 配置:', {
+        global: globalConfig.voice,
+        personality: personalityRealtimeConfig.voice,
+        final: voice,
+      });
       
       // 创建 RealtimeAgent
       const agent = new RealtimeAgent({
         name: 'cozychat-agent',
         instructions: instructions,
-        voice: realtimeConfig.voice || 'shimmer',
+        voice: voice,
       });
       
       // 创建用户音频流（用于可视化）
@@ -384,9 +316,10 @@ export const useVoiceAgent = (
       
       // 创建助手音频元素（仅用于可视化，不自动播放）
       // 注意：WebRTC transport 会自动处理音频播放，我们只需要可视化
+      // 关键：必须静音，否则会和 transport 的播放重叠，导致回声
       const assistantAudioElement = new Audio();
-      assistantAudioElement.autoplay = false; // 禁用自动播放，避免重复播放
-      assistantAudioElement.muted = false; // 不静音，但由 transport 控制播放
+      assistantAudioElement.autoplay = false; // 禁用自动播放
+      assistantAudioElement.muted = true; // 静音！只用于可视化，不用于播放（避免与 transport 播放重叠）
       assistantAudioElementRef.current = assistantAudioElement;
       
       // 创建 WebRTC 传输层（浏览器环境）
@@ -404,14 +337,6 @@ export const useVoiceAgent = (
       // 添加 /v1/realtime/calls 路径（WebRTC 端点）
       const webrtcEndpoint = `${baseUrl}/v1/realtime/calls`;
       
-      console.log('WebRTC Transport 配置:', {
-        baseUrl: baseUrl,
-        webrtcEndpoint: webrtcEndpoint,
-        hasMediaStream: !!userMediaStream,
-        hasAudioElement: !!assistantAudioElement,
-        useEphemeralKey: true, // 使用 ephemeral key
-      });
-      
       const transport = new OpenAIRealtimeWebRTC({
         baseUrl: webrtcEndpoint, // 使用完整的端点 URL（例如：https://oneapi.naivehero.top/v1/realtime/calls）
         // 不使用 useInsecureApiKey，因为我们现在有 ephemeral key
@@ -419,115 +344,37 @@ export const useVoiceAgent = (
         audioElement: assistantAudioElement, // 使用我们自己创建的音频元素
       });
       
-      // 创建 RealtimeSession，配置输入音频转录
-      // 注意：配置格式必须正确，否则转录功能不会启用
-      const sessionConfig = {
-        inputAudioTranscription: {
-          model: 'whisper-1', // 使用 Whisper 模型进行转录
-        },
-        // 其他可能的配置项
-        inputAudioFormat: 'pcm16',
-        outputAudioFormat: 'pcm16',
-      };
-      
-      console.log('📋 创建 RealtimeSession，配置:', JSON.stringify(sessionConfig, null, 2));
-      
+      // 创建 RealtimeSession
+      // 注意：转录配置已经在后端创建 ephemeral token 时完成
       const session = new RealtimeSession(agent, {
-        apiKey: realtimeToken.token, // 使用 ephemeral key 而不是 API key
+        apiKey: realtimeToken.token, // 使用后端生成的 ephemeral key（已包含转录配置）
         transport: transport, // 使用自定义的 WebRTC 传输层
-        model: realtimeToken.model,
-        // 配置输入音频转录（关键！）
-        config: sessionConfig,
-      });
-      
-      // 验证配置是否正确设置
-      console.log('📋 Session 创建后，检查配置:', {
-        hasConfig: !!(session as any).config,
-        config: (session as any).config,
-        hasInputAudioTranscription: !!(session as any).config?.inputAudioTranscription,
-        sessionKeys: Object.keys(session as any),
+        model: realtimeToken.model, // 使用后端返回的模型名称
       });
       
       // 保存 webrtcEndpoint 到 session 的某个地方，以便在 connect 时使用
       (session as any).__webrtcEndpoint = webrtcEndpoint;
       
       // ========== 正确的事件监听方式 ==========
-      // 根据 OpenAI Realtime API 文档，应该使用以下事件：
+      // 根据社区讨论：https://community.openai.com/t/input-audio-transcription-in-realtime-api/1007401/5
+      // 正确的事件名是：conversation.item.input_audio_transcription.completed
       
       // 1. 用户语音转文本事件（完成）
-      // 注意：这个事件可能不会触发，如果配置不正确或 SDK 版本不支持
-      session.on('input_audio_transcription.done', (event: any) => {
-        const transcript = event?.transcript || event?.text || event?.content;
-        console.log('🎤 input_audio_transcription.done 事件触发:', { 
-          transcript, 
-          event,
-          eventKeys: Object.keys(event || {}),
-          fullEvent: JSON.stringify(event, null, 2),
-        });
+      (session as any).on('conversation.item.input_audio_transcription.completed', (event: any) => {
+        const transcript = event?.transcript;
         if (transcript && typeof transcript === 'string' && transcript.trim() && callbacks?.onUserTranscript) {
-          console.log('✅ 获取用户转录文本:', transcript);
           callbacks.onUserTranscript(transcript);
-        } else {
-          console.warn('⚠️ input_audio_transcription.done 事件中没有有效的转录文本:', {
-            transcript,
-            transcriptType: typeof transcript,
-            hasCallback: !!callbacks?.onUserTranscript,
-          });
         }
       });
       
-      // 监听所有可能的事件，用于调试
-      // 注意：某些事件可能不存在，但监听它们不会报错
-      const debugEvents = [
-        'input_audio_transcription.done',
-        'input_audio_transcription.delta',
-        'input_audio_transcription.partial',
-        'conversation.item.input_audio_transcription.completed',
-        'conversation.item.input_audio_transcription.delta',
-      ];
-      
-      debugEvents.forEach((eventName) => {
-        try {
-          session.on(eventName as any, (event: any) => {
-            console.log(`🔍 调试事件 ${eventName} 触发:`, event);
-          });
-        } catch (e) {
-          // 忽略不存在的监听器
-        }
-      });
-      
-      // 2. 用户语音转文本事件（增量，可选，用于实时显示）
-      session.on('input_audio_transcription.delta', (event: any) => {
-        const delta = event?.delta;
-        console.log('🎤 input_audio_transcription.delta 事件:', { delta, event });
-        // 可以用于实时显示转录过程
-      });
-      
-      // 3. 助手文本回复事件（完成）
-      session.on('response.text.done', (event: any) => {
-        const text = event?.text || event?.content;
-        console.log('🤖 response.text.done 事件:', { text, event });
-              if (text && typeof text === 'string' && text.trim() && callbacks?.onAssistantTranscript) {
-          console.log('✅ 获取助手文本:', text);
-                callbacks.onAssistantTranscript(text);
-              }
-      });
-      
-      // 4. 助手文本回复事件（增量，可选）
-      session.on('response.text.delta', (event: any) => {
-        const delta = event?.delta;
-        console.log('🤖 response.text.delta 事件:', { delta, event });
-        // 可以用于实时显示文本生成过程
-      });
-      
-      // 5. 从 history_added 和 history_updated 提取文本（主要方式，因为专用事件可能不工作）
+      // 2. 从 history_added 和 history_updated 提取文本
       // 用于去重的 Set（存储已处理的消息ID和文本内容）
       const processedMessageIds = new Set<string>();
       const processedTexts = new Set<string>(); // 存储已处理的文本内容（消息ID:文本内容）
       
       // 提取用户转录文本的辅助函数
       const extractUserTranscript = (item: any): string | null => {
-        // 首先检查 item 的直接字段
+        // 1. 首先检查 item 的直接字段
         if (item.transcript && typeof item.transcript === 'string' && item.transcript.trim()) {
           return item.transcript.trim();
         }
@@ -535,20 +382,22 @@ export const useVoiceAgent = (
           return item.input_audio_transcript.trim();
         }
         
-        // 检查 content 数组
+        // 2. 检查 content 数组（转录文本在这里）
         if (Array.isArray(item.content)) {
           for (const c of item.content) {
-            // 优先检查 input_audio 类型
+            // 优先检查 input_audio 类型（这是用户语音输入）
             if (c.type === 'input_audio') {
               if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
                 return c.transcript.trim();
               }
-              // 检查 input_audio 的其他可能字段
               if (c.input_audio_transcript && typeof c.input_audio_transcript === 'string' && c.input_audio_transcript.trim()) {
                 return c.input_audio_transcript.trim();
               }
+              if (c.text && typeof c.text === 'string' && c.text.trim()) {
+                return c.text.trim();
+              }
             }
-            // 检查任何包含 transcript 的项
+            // 检查任何包含 transcript 的项（备用）
             if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
               return c.transcript.trim();
             }
@@ -559,7 +408,7 @@ export const useVoiceAgent = (
           }
         }
         
-        // 如果 content 是字符串，直接返回
+        // 3. 如果 content 是字符串，直接返回（备用）
         if (typeof item.content === 'string' && item.content.trim()) {
           return item.content.trim();
         }
@@ -608,17 +457,8 @@ export const useVoiceAgent = (
               if (!processedTexts.has(textKey)) {
                 processedMessageIds.add(messageId);
                 processedTexts.add(textKey);
-                console.log('✅ 从 history_added 获取用户转录:', transcript, '消息ID:', messageId);
-                callbacks.onUserTranscript(transcript);
+              callbacks.onUserTranscript(transcript);
               }
-            } else {
-              // 如果没有转录文本，输出调试信息
-              console.log('⚠️ history_added - 用户消息没有转录文本:', {
-                messageId,
-                content: item.content,
-                status: item.status,
-                item: JSON.stringify(item, null, 2),
-              });
             }
           } else if (item.role === 'assistant') {
             const text = extractAssistantText(item);
@@ -627,8 +467,7 @@ export const useVoiceAgent = (
               if (!processedTexts.has(textKey)) {
                 processedMessageIds.add(messageId);
                 processedTexts.add(textKey);
-                console.log('✅ 从 history_added 获取助手文本:', text, '消息ID:', messageId);
-                callbacks.onAssistantTranscript(text);
+              callbacks.onAssistantTranscript(text);
               }
             }
           }
@@ -654,16 +493,8 @@ export const useVoiceAgent = (
                 if (!processedTexts.has(textKey) && callbacks?.onUserTranscript) {
                   processedMessageIds.add(messageId);
                   processedTexts.add(textKey);
-                  console.log('✅ 从 history_updated 获取用户转录:', transcript, '消息ID:', messageId);
-                  callbacks.onUserTranscript(transcript);
+                callbacks.onUserTranscript(transcript);
                 }
-              } else {
-                // 如果没有转录文本，输出调试信息
-                console.log('⚠️ 用户消息没有转录文本:', {
-                  messageId,
-                  content: item.content,
-                  status: item.status,
-                });
               }
             } else if (item.role === 'assistant') {
               const text = extractAssistantText(item);
@@ -675,22 +506,13 @@ export const useVoiceAgent = (
                 if (!processedTexts.has(textKey) && callbacks?.onAssistantTranscript) {
                   processedMessageIds.add(messageId);
                   processedTexts.add(textKey);
-                  console.log('✅ 从 history_updated 获取助手文本:', text, '消息ID:', messageId);
-                  callbacks.onAssistantTranscript(text);
+                callbacks.onAssistantTranscript(text);
                 }
               }
             }
           }
         });
       });
-      
-      // 音频转录文本增量更新事件（如果 SDK 支持）
-      // 注意：这个事件在文本还在生成时触发，可以用于实时显示
-      // 但最终文本会在 history_added 或 history_updated 中获取
-      // session.on('audio_transcript_delta', (_event: any) => {
-      //   // event.deltaEvent 包含 itemId, delta, responseId
-      //   // 可以根据 itemId 判断是用户还是助手
-      // });
       
       sessionRef.current = session;
       setIsConnected(true);
@@ -782,89 +604,11 @@ export const useVoiceAgent = (
         }
       }
       
-      console.log('准备连接 RealtimeSession:', {
-        hasEphemeralKey: !!realtimeToken.token,
-        tokenPrefix: realtimeToken.token.substring(0, 10) + '...',
-        model: realtimeToken.model,
-        webrtcEndpoint: webrtcEndpoint,
-        transportInternalUrl: transportInternalUrl,
-        transportType: currentTransport?.constructor?.name,
-      });
-      
       try {
-        console.log('开始连接 RealtimeSession...');
-        console.log('Transport 状态:', {
-          status: currentTransport instanceof OpenAIRealtimeWebRTC ? currentTransport.status : 'N/A',
-          hasTransport: !!currentTransport,
-        });
-        
-        // 不传递 url 参数，让 transport 使用它自己的 baseUrl（webrtcEndpoint）
-        // 尝试在 connect 时也传递配置（某些 SDK 版本可能需要这样做）
-        const connectConfig = {
-          input_audio_transcription: {
-            model: 'whisper-1',
-          },
-        };
-        
-        console.log('📋 连接时传递配置:', JSON.stringify(connectConfig, null, 2));
-        
         await sessionRef.current.connect({
-          apiKey: realtimeToken.token, // 使用 ephemeral key
+          apiKey: realtimeToken.token,
           model: realtimeToken.model,
-          // 尝试在 connect 时传递配置
-          config: connectConfig as any,
-          // 不传递 url，使用 transport 的 baseUrl
         });
-        console.log('RealtimeSession 连接成功');
-        
-        // 输出当前 session 的配置，用于调试
-        console.log('📋 Session 连接后配置检查:', {
-          hasConfig: !!(sessionRef.current as any).config,
-          config: (sessionRef.current as any).config,
-          hasInputAudioTranscription: !!(sessionRef.current as any).config?.inputAudioTranscription,
-          sessionKeys: Object.keys(sessionRef.current as any),
-          // 检查是否有其他配置相关的属性
-          hasSessionConfig: !!(sessionRef.current as any).sessionConfig,
-          hasSettings: !!(sessionRef.current as any).settings,
-        });
-        
-        // 尝试通过 transport 发送 session.update 消息来启用转录
-        // 注意：这是直接操作 transport，可能不是标准方式，但值得尝试
-        try {
-          const currentTransport = sessionRef.current?.transport;
-          if (currentTransport && typeof (currentTransport as any).send === 'function') {
-            const updateMessage = {
-              type: 'session.update',
-              session: {
-                input_audio_transcription: {
-                  model: 'whisper-1',
-                },
-              },
-            };
-            console.log('📤 尝试通过 transport.send 发送 session.update:', updateMessage);
-            (currentTransport as any).send(updateMessage);
-            console.log('✅ session.update 消息已发送');
-          } else {
-            console.warn('⚠️ transport 没有 send 方法，无法发送 session.update');
-            // 尝试其他方式
-            if (currentTransport && typeof (currentTransport as any).dispatch === 'function') {
-              console.log('📤 尝试通过 transport.dispatch 发送 session.update');
-              (currentTransport as any).dispatch({
-                type: 'session.update',
-                session: {
-                  input_audio_transcription: {
-                    model: 'whisper-1',
-                  },
-                },
-              });
-            }
-          }
-        } catch (updateErr: any) {
-          console.warn('⚠️ 发送 session.update 失败:', {
-            error: updateErr,
-            message: updateErr?.message,
-          });
-        }
       } catch (connectErr: any) {
         console.error('RealtimeSession 连接失败:', {
           error: connectErr,
@@ -932,17 +676,12 @@ export const useVoiceAgent = (
         await new Promise<void>((resolve) => {
           const checkAudioElement = () => {
             if (assistantAudioElementRef.current?.srcObject) {
-              console.log('助手音频元素已设置 srcObject');
               resolve();
             } else {
               setTimeout(checkAudioElement, 100);
             }
           };
-          // 最多等待 5 秒
-          setTimeout(() => {
-            console.warn('等待助手音频元素超时');
-            resolve();
-          }, 5000);
+          setTimeout(() => resolve(), 5000);
           checkAudioElement();
         });
       }
@@ -952,45 +691,19 @@ export const useVoiceAgent = (
       isCallingRef.current = true;
       
       // 初始化音频可视化
-      // 使用我们之前创建的 mediaStream（用户音频）
       if (userMediaStreamRef.current) {
-        console.log('初始化用户音频可视化，stream tracks:', userMediaStreamRef.current.getTracks().length);
         await initUserAudioVisualization(userMediaStreamRef.current);
       }
       
-      // 使用 transport 设置的 audioElement（助手音频）
-      // 延迟一点，确保音频流已经设置好
       if (assistantAudioElementRef.current) {
-        console.log('初始化助手音频可视化，srcObject:', !!assistantAudioElementRef.current.srcObject);
-        
-        // 等待音频流设置完成，然后初始化可视化
         const initAssistantVisualization = () => {
           if (assistantAudioElementRef.current?.srcObject) {
-            console.log('助手音频流已准备好，开始初始化可视化');
         initAssistantAudioVisualization(assistantAudioElementRef.current);
           } else {
-            // 如果还没有 srcObject，等待一下再试
-            console.log('助手音频流尚未准备好，等待...');
             setTimeout(initAssistantVisualization, 200);
           }
         };
-        
-        // 延迟初始化，确保 isCallingRef 已设置且音频流已准备好
         setTimeout(initAssistantVisualization, 300);
-      }
-      
-      // 另外，尝试从 transport 直接获取音频流（如果支持）
-      if (sessionTransport instanceof OpenAIRealtimeWebRTC) {
-        try {
-          // 检查 transport 是否有 getMediaStream 方法
-          const transportStream = (sessionTransport as any).getMediaStream?.();
-          if (transportStream instanceof MediaStream) {
-            console.log('从 transport 获取音频流成功，tracks:', transportStream.getTracks().length);
-            // 可以尝试使用这个流进行可视化（作为备选方案）
-          }
-        } catch (e) {
-          console.warn('无法从 transport 获取音频流:', e);
-        }
       }
       
       console.log('开始语音通话');

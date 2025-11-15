@@ -59,6 +59,12 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 # 默认值（官方API）
 OPENAI_BASE_URL=https://api.openai.com/v1
 
+# OpenAI Realtime API 模型名称（语音通话功能）
+# 默认值（推荐）
+OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview-2025-06-03
+# 其他可用模型
+# OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview-2024-10-01
+
 # 国内代理示例
 OPENAI_BASE_URL=https://api.openai-proxy.com/v1
 
@@ -74,10 +80,15 @@ OPENAI_BASE_URL=https://your-custom-api.com/v1
 配置文件 `backend/app/config/config.py`:
 - `OPENAI_API_KEY`: OpenAI API密钥（可选，如果不使用OpenAI可以留空）
 - `OPENAI_BASE_URL`: OpenAI API基础URL（默认为官方API）
+- `OPENAI_REALTIME_MODEL`: OpenAI Realtime API使用的模型（默认：`gpt-4o-realtime-preview-2025-06-03`）
 
 OpenAI引擎 `backend/app/engines/ai/openai_engine.py`:
 - 自动使用配置中的 `base_url`
 - 支持任何OpenAI兼容的API端点
+
+语音通话功能 `backend/app/api/v1/config.py`:
+- 使用 `OPENAI_REALTIME_MODEL` 配置项
+- 在创建 ephemeral token 时自动应用正确的模型名称
 
 ### 可选配置项
 

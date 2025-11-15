@@ -68,7 +68,8 @@ class Settings(BaseSettings):
         env_file=find_env_file(),
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
+        env_prefix=""  # 明确指定环境变量前缀为空
     )
     
     # ===== 应用配置 =====
@@ -122,6 +123,11 @@ class Settings(BaseSettings):
     openai_base_url: str = Field(
         default="https://api.openai.com/v1", 
         alias="OPENAI_BASE_URL"
+    )
+    openai_realtime_model: str = Field(
+        default="gpt-4o-realtime-preview-2025-06-03",
+        alias="OPENAI_REALTIME_MODEL",
+        description="OpenAI Realtime API 使用的模型名称"
     )
     
     # ===== Ollama配置 =====
@@ -248,6 +254,8 @@ class Settings(BaseSettings):
 
 
 # 创建全局配置实例
-settings = Settings()
+# 注意：Pydantic Settings 会自动从环境变量加载必需参数
+# 类型检查器无法理解这一点，因此需要忽略此处的类型检查
+settings = Settings()  # type: ignore[call-arg]
 
 

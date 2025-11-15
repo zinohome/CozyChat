@@ -8,7 +8,7 @@ engines:
     openai:
       provider: "openai"
       model: "gpt-4o-realtime-preview-2024-10-01"
-      voice: "alloy"  # alloy, echo, fable, onyx, nova, shimmer
+      voice: "shimmer"  # alloy, echo, fable, onyx, nova, shimmer
       # 语音配置
       voice_settings:
         stability: 0.5

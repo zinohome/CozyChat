@@ -486,67 +486,8 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       {/* 语音通话指示器 */}
       {isVoiceCallActive && (
         <VoiceCallIndicator
-          sessionId={currentSessionId || undefined}
-          personalityId={personalityId}
           userFrequencyData={userFrequencyData}
           assistantFrequencyData={assistantFrequencyData}
-          onEndCall={async () => {
-            // 结束通话逻辑
-            try {
-              // 结束通话
-              await endCall();
-              
-              // 保存语音通话消息到数据库，并添加到 React Query 缓存
-              if (voiceCallMessages.length > 0 && currentSessionId) {
-                try {
-                  // 保存到数据库（添加 is_voice_call 标记）
-                  await chatApi.saveVoiceCallMessages(
-                    currentSessionId,
-                    voiceCallMessages.map((msg) => ({
-                      role: msg.role as 'user' | 'assistant',
-                      content: typeof msg.content === 'string' ? msg.content : (msg.content as any)?.text || '',
-                      timestamp: typeof msg.timestamp === 'string' 
-                        ? msg.timestamp 
-                        : msg.timestamp instanceof Date 
-                          ? msg.timestamp.toISOString()
-                          : new Date(msg.timestamp).toISOString(),
-                      is_voice_call: true, // 标记为语音通话消息
-                    }))
-                  );
-                  console.log('语音通话消息已保存到数据库');
-                  
-                  // 将消息添加到 React Query 缓存，保留在会话历史中
-                  queryClient.setQueryData(
-                    ['chat', 'messages', currentSessionId],
-                    (old: Message[] = []) => {
-                      // 合并消息，去重（基于ID）
-                      const existingIds = new Set(old.map(m => m.id));
-                      const newMessages = voiceCallMessages.filter(msg => !existingIds.has(msg.id));
-                      return [...old, ...newMessages].sort((a, b) => {
-                        const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
-                                     typeof a.timestamp === 'number' ? a.timestamp : 
-                                     a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-                        const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
-                                     typeof b.timestamp === 'number' ? b.timestamp : 
-                                     b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
-                        return timeA - timeB;
-                      });
-                    }
-                  );
-                } catch (error) {
-                  console.error('保存语音通话消息失败:', error);
-                  showError(error, '保存语音通话消息失败');
-                }
-              }
-              
-              // 清空状态（不影响已添加到缓存的消息）
-              clearVoiceCallMessages();
-              endVoiceCall();
-            } catch (error) {
-              console.error('结束通话失败:', error);
-              showError(error, '结束通话失败');
-            }
-          }}
         />
       )}
       
