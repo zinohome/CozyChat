@@ -19,6 +19,7 @@ from app.utils.logger import logger
 from app.utils.config_loader import get_config_loader
 from .base import MemoryEngineBase
 from .chromadb_engine import ChromaDBMemoryEngine
+from .qdrant_engine import QdrantMemoryEngine
 from .models import Memory, MemorySearchResult, MemoryType
 
 
@@ -71,6 +72,9 @@ class MemoryManager:
                 if default_engine == "chromadb":
                     # ChromaDBMemoryEngine 接受 config 字典，不是 persist_directory 关键字参数
                     engine = ChromaDBMemoryEngine(config=engine_config)
+                elif default_engine == "qdrant":
+                    # Qdrant引擎
+                    engine = QdrantMemoryEngine(config=engine_config)
                 else:
                     # 其他引擎待实现
                     logger.warning(f"Engine {default_engine} not implemented, using ChromaDB")

@@ -19,6 +19,7 @@ from qdrant_client.models import (
     FieldCondition,
     MatchValue,
 )
+from sentence_transformers import SentenceTransformer
 
 # 本地库
 from app.config.config import settings
@@ -162,15 +163,13 @@ class QdrantMemoryEngine(MemoryEngineBase):
             if memory.expires_at:
                 payload["expires_at"] = memory.expires_at.timestamp()
             
-            # 如果没有提供embedding，使用Qdrant的自动嵌入
-            # 注意：这需要在Qdrant配置中设置embedding模型
-            # 或者我们可以使用外部embedding服务（如sentence-transformers）
+            # 如果没有提供embedding，使用sentence-transformers生成
             if not memory.embedding:
-                # 这里我们暂时创建一个零向量，实际应该使用embedding模型
-                # TODO: 集成sentence-transformers或其他embedding模型
-                from sentence_transformers import SentenceTransformer
-                model = SentenceTransformer('all-MiniLM-L6-v2')
-                memory.embedding = model.encode(memory.content).tolist()
+                embedding_model = self.config.get("embedding", {}).get("model", "all-MiniLM-L6-v2")
+                model = SentenceTransformer(embedding_model)
+                embedding = model.encode(memory.content)
+                # 处理numpy数组和list（用于测试mock）
+                memory.embedding = embedding.tolist() if hasattr(embedding, 'tolist') else embedding
             
             # 创建point
             point = PointStruct(
@@ -222,9 +221,11 @@ class QdrantMemoryEngine(MemoryEngineBase):
             results = []
             
             # 生成查询向量
-            from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer('all-MiniLM-L6-v2')
-            query_vector = model.encode(query).tolist()
+            embedding_model = self.config.get("embedding", {}).get("model", "all-MiniLM-L6-v2")
+            model = SentenceTransformer(embedding_model)
+            query_embedding = model.encode(query)
+            # 处理numpy数组和list（用于测试mock）
+            query_vector = query_embedding.tolist() if hasattr(query_embedding, 'tolist') else query_embedding
             
             # 确定要搜索的集合
             collections_to_search = []

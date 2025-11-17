@@ -1,6 +1,6 @@
 memory:
   # 默认向量数据库引擎
-  default_engine: "chromadb"
+  default_engine: "qdrant"  # chromadb 或 qdrant
   
   # ChromaDB配置
   chromadb:
@@ -16,15 +16,19 @@ memory:
       batch_size: 100
       max_retries: 3
   
-  # Qdrant配置（待实现）
+  # Qdrant配置
   qdrant:
     engine: "qdrant"
-    url: "http://192.168.66.10:6333"
-    collection_name: "cozychat_memories"
+    url: "http://192.168.32.11:6333"
+    collection_prefix: "cozychat_"
     # 向量化配置
     embedding:
       model: "all-MiniLM-L6-v2"
       dimension: 384
+    # 性能配置
+    performance:
+      batch_size: 100
+      max_retries: 3
   
   # 缓存配置
   cache:

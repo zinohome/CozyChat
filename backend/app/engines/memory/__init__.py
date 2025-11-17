@@ -4,11 +4,15 @@
 """
 
 from .base import MemoryEngineBase
+from .chromadb_engine import ChromaDBMemoryEngine
+from .qdrant_engine import QdrantMemoryEngine
 from .manager import MemoryManager
 from .models import Memory, MemoryType
 
 __all__ = [
     "MemoryEngineBase",
+    "ChromaDBMemoryEngine",
+    "QdrantMemoryEngine",
     "MemoryManager",
     "Memory",
     "MemoryType",
