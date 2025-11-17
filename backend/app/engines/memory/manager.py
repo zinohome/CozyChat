@@ -402,7 +402,8 @@ class MemoryManager:
         max_results: int = 5,
         include_user_memory: bool = True,
         include_ai_memory: bool = True,
-        timeout: float = 0.5
+        timeout: float = 0.5,
+        similarity_threshold: float = 0.7
     ) -> Dict[str, List[MemorySearchResult]]:
         """检索相关记忆（用于orchestrator）
         
@@ -414,6 +415,7 @@ class MemoryManager:
             include_user_memory: 是否包含用户记忆
             include_ai_memory: 是否包含AI记忆
             timeout: 搜索超时时间（秒）
+            similarity_threshold: 相似度阈值
             
         Returns:
             Dict[str, List[MemorySearchResult]]: 包含user_memories和ai_memories的字典
@@ -425,13 +427,16 @@ class MemoryManager:
         # 如果启用跨Session记忆，则不传递session_id，检索所有Session的记忆
         search_session_id: Optional[str] = None if self.cross_session_enabled else session_id
         
-        logger.debug(
-            f"Retrieving memories",
+        logger.info(
+            f"Retrieving memories with similarity threshold",
             extra={
                 "user_id": user_id,
                 "session_id": session_id,
+                "query": query,
                 "cross_session_enabled": self.cross_session_enabled,
-                "search_session_id": search_session_id
+                "search_session_id": search_session_id,
+                "similarity_threshold": similarity_threshold,
+                "max_results": max_results
             }
         )
         
@@ -445,12 +450,42 @@ class MemoryManager:
                         session_id=search_session_id,
                         memory_type=MemoryType.USER,
                         limit=max_results,
-                        similarity_threshold=0.7,
+                        similarity_threshold=similarity_threshold,
                         use_cache=True
                     ),
                     timeout=timeout
                 )
                 user_memories = user_results
+                # 记录检索到的记忆内容（用于调试）- 显示所有记忆及其相似度
+                if user_memories:
+                    logger.info(
+                        f"Retrieved user memories (all results with similarity scores)",
+                        extra={
+                            "user_id": user_id,
+                            "query": query,
+                            "count": len(user_memories),
+                            "similarity_threshold": similarity_threshold,
+                            "memories": [
+                                {
+                                    "content": mem.memory.content[:100],
+                                    "similarity": round(mem.similarity, 4),
+                                    "memory_id": mem.memory.id,
+                                    "session_id": mem.memory.session_id
+                                }
+                                for mem in user_memories
+                            ]
+                        }
+                    )
+                else:
+                    logger.warning(
+                        f"No user memories retrieved",
+                        extra={
+                            "user_id": user_id,
+                            "query": query,
+                            "similarity_threshold": similarity_threshold,
+                            "search_session_id": search_session_id
+                        }
+                    )
             except asyncio.TimeoutError:
                 logger.warning(f"User memory search timeout after {timeout}s")
             except Exception as e:
@@ -466,12 +501,23 @@ class MemoryManager:
                         session_id=search_session_id,
                         memory_type=MemoryType.ASSISTANT,
                         limit=max_results,
-                        similarity_threshold=0.7,
+                        similarity_threshold=similarity_threshold,
                         use_cache=True
                     ),
                     timeout=timeout
                 )
                 ai_memories = ai_results
+                # 记录检索到的记忆内容（用于调试）
+                if ai_memories:
+                    logger.debug(
+                        f"Retrieved AI memories",
+                        extra={
+                            "user_id": user_id,
+                            "query": query,
+                            "count": len(ai_memories),
+                            "memories": [mem.memory.content[:50] for mem in ai_memories[:3]]  # 只记录前3条的前50个字符
+                        }
+                    )
             except asyncio.TimeoutError:
                 logger.warning(f"AI memory search timeout after {timeout}s")
             except Exception as e:

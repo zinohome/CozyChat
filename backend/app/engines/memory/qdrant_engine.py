@@ -451,20 +451,38 @@ class QdrantMemoryEngine(MemoryEngineBase):
             )
             
             # 搜索每个集合
+            # 注意：不在这里应用score_threshold，而是获取更多结果后在代码中过滤
+            # 这样可以记录所有结果，便于调试
+            search_limit = limit * 3  # 获取更多结果，以便在应用阈值后仍有足够的结果
+            all_raw_results = []  # 用于记录所有原始结果（用于调试）
+            
             for collection_name, mem_type in collections_to_search:
                 try:
                     search_results = self.client.search(
                         collection_name=collection_name,
                         query_vector=query_vector,
-                        limit=limit,
-                        query_filter=query_filter,
-                        score_threshold=similarity_threshold
+                        limit=search_limit,  # 获取更多结果
+                        query_filter=query_filter
+                        # 不在这里应用score_threshold，在代码中应用
                     )
                     
                     # 处理结果
                     for scored_point in search_results:
                         payload = scored_point.payload
                         similarity = scored_point.score
+                        
+                        # 记录所有原始结果（用于调试）
+                        all_raw_results.append({
+                            "collection": collection_name,
+                            "memory_type": mem_type.value,
+                            "similarity": similarity,
+                            "content": str(payload.get("content", ""))[:50] if payload else "N/A",
+                            "session_id": str(payload.get("session_id", "")) if payload else "N/A"
+                        })
+                        
+                        # 应用相似度阈值
+                        if similarity < similarity_threshold:
+                            continue
                         
                         # 检查 payload 是否存在
                         if not payload:
@@ -498,9 +516,44 @@ class QdrantMemoryEngine(MemoryEngineBase):
                     logger.warning(f"Search failed for {mem_type.value} memories: {e}")
                     continue
             
-            # 按相似度排序并限制数量
+            # 记录所有原始结果（用于调试）
+            logger.debug(
+                f"Qdrant search raw results (before threshold filter)",
+                extra={
+                    "user_id": user_id,
+                    "query": query[:50],
+                    "similarity_threshold": similarity_threshold,
+                    "total_raw_results": len(all_raw_results),
+                    "raw_results": all_raw_results[:20]  # 只记录前20条
+                }
+            )
+            
+            # 按相似度排序
             results.sort(key=lambda x: x.similarity, reverse=True)
-            results = results[:limit]
+            
+            # 去重：相同内容的记忆只保留相似度最高的一条
+            # 这样可以避免返回多条相同内容的记忆，让结果更加多样化
+            seen_contents = {}
+            deduplicated_results = []
+            for result in results:
+                content = result.memory.content
+                # 如果内容已存在，只保留相似度更高的
+                if content in seen_contents:
+                    existing_similarity = seen_contents[content].similarity
+                    if result.similarity > existing_similarity:
+                        # 替换为相似度更高的
+                        deduplicated_results.remove(seen_contents[content])
+                        deduplicated_results.append(result)
+                        seen_contents[content] = result
+                else:
+                    deduplicated_results.append(result)
+                    seen_contents[content] = result
+            
+            # 重新按相似度排序（因为去重可能改变了顺序）
+            deduplicated_results.sort(key=lambda x: x.similarity, reverse=True)
+            
+            # 限制数量
+            results = deduplicated_results[:limit]
             
             logger.debug(
                 "Memory search completed",

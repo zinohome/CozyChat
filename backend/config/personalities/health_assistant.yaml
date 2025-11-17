@@ -74,7 +74,7 @@ personality:
     # 检索配置
     retrieval:
       max_results: 5
-      similarity_threshold: 0.7
+      similarity_threshold: 0.3  # 进一步降低阈值以提高召回率（"我是哪里人？"和"我是湖北人"的语义相似度可能不够高）
       timeout_seconds: 0.5
       cache_ttl_seconds: 300
   

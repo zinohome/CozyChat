@@ -199,6 +199,24 @@ class Orchestrator:
             include_user = memory_config.save_mode in ["both", "user_only"]
             include_ai = memory_config.save_mode in ["both", "assistant_only"]
             
+            # 记录使用的相似度阈值（用于调试）
+            similarity_threshold = memory_config.retrieval.similarity_threshold
+            logger.warning(  # 使用warning级别确保日志一定会输出
+                f"Using similarity threshold from personality config",
+                extra={
+                    "personality_id": personality.id,
+                    "similarity_threshold": similarity_threshold,
+                    "similarity_threshold_type": type(similarity_threshold).__name__,
+                    "retrieval_config": {
+                        "max_results": memory_config.retrieval.max_results,
+                        "similarity_threshold": memory_config.retrieval.similarity_threshold,
+                        "timeout_seconds": memory_config.retrieval.timeout_seconds
+                    },
+                    "memory_config_type": type(memory_config).__name__,
+                    "retrieval_type": type(memory_config.retrieval).__name__
+                }
+            )
+            
             results = await self.memory_manager.retrieve_memories(
                 user_id=user_id,
                 session_id=session_id,
@@ -206,16 +224,34 @@ class Orchestrator:
                 max_results=memory_config.retrieval.max_results,
                 include_user_memory=include_user,
                 include_ai_memory=include_ai,
-                timeout=memory_config.retrieval.timeout_seconds
+                timeout=memory_config.retrieval.timeout_seconds,
+                similarity_threshold=similarity_threshold
             )
             
+            # 再次记录，确认传递的参数
+            logger.warning(  # 使用warning级别确保日志一定会输出
+                f"After calling retrieve_memories",
+                extra={
+                    "personality_id": personality.id,
+                    "similarity_threshold_passed": similarity_threshold,
+                    "user_memories_count": len(results.get("user_memories", [])),
+                    "ai_memories_count": len(results.get("ai_memories", []))
+                }
+            )
+            
+            # 记录检索到的记忆详情（用于调试）
+            user_mems = results.get("user_memories", [])
+            ai_mems = results.get("ai_memories", [])
             logger.debug(
                 f"Retrieved memories",
                 extra={
                     "user_id": user_id,
                     "session_id": session_id,
-                    "user_memories_count": len(results.get("user_memories", [])),
-                    "ai_memories_count": len(results.get("ai_memories", []))
+                    "query": last_user_message,
+                    "user_memories_count": len(user_mems),
+                    "ai_memories_count": len(ai_mems),
+                    "user_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in user_mems[:5]],
+                    "ai_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in ai_mems[:5]]
                 }
             )
             
@@ -246,16 +282,21 @@ class Orchestrator:
         ai_memories = memories.get("ai_memories", [])
         
         if user_memories or ai_memories:
+            # 使用配置中的max_results，而不是硬编码
+            max_results = personality.memory.retrieval.max_results
+            
             memory_context = "\n\n## 相关记忆\n\n"
             
             if user_memories:
                 memory_context += "### 用户记忆\n"
-                for mem in user_memories[:3]:  # 只取前3条
+                # 使用配置的max_results
+                for mem in user_memories[:max_results]:
                     memory_context += f"- {mem.memory.content}\n"
             
             if ai_memories:
                 memory_context += "\n### AI记忆\n"
-                for mem in ai_memories[:3]:  # 只取前3条
+                # 使用配置的max_results
+                for mem in ai_memories[:max_results]:
                     memory_context += f"- {mem.memory.content}\n"
             
             system_prompt += memory_context

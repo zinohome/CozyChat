@@ -172,9 +172,20 @@ class Personality:
                 )
         
         retrieval_data = memory_data.get("retrieval", {})
+        similarity_threshold = retrieval_data.get("similarity_threshold", 0.7)
+        # 记录加载的相似度阈值（用于调试）
+        from app.utils.logger import logger
+        logger.debug(
+            f"Loading similarity_threshold from config",
+            extra={
+                "personality_id": config.get("id", "unknown"),
+                "similarity_threshold": similarity_threshold,
+                "retrieval_data": retrieval_data
+            }
+        )
         retrieval = MemoryRetrieval(
             max_results=retrieval_data.get("max_results", 5),
-            similarity_threshold=retrieval_data.get("similarity_threshold", 0.7),
+            similarity_threshold=similarity_threshold,
             timeout_seconds=retrieval_data.get("timeout_seconds", 0.5),
             cache_ttl_seconds=retrieval_data.get("cache_ttl_seconds", 300)
         )

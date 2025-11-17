@@ -281,6 +281,23 @@ async def create_chat_completion(
                                 include_user = memory_config.save_mode in ["both", "user_only"]
                                 include_ai = memory_config.save_mode in ["both", "assistant_only"]
                                 
+                                # 获取similarity_threshold并记录（用于调试）
+                                similarity_threshold = memory_config.retrieval.similarity_threshold
+                                logger.warning(
+                                    f"chat.py: Calling retrieve_memories with similarity_threshold",
+                                    extra={
+                                        "personality_id": personality_id,
+                                        "similarity_threshold": similarity_threshold,
+                                        "similarity_threshold_type": type(similarity_threshold).__name__,
+                                        "memory_config_retrieval": {
+                                            "max_results": memory_config.retrieval.max_results,
+                                            "similarity_threshold": memory_config.retrieval.similarity_threshold,
+                                            "timeout_seconds": memory_config.retrieval.timeout_seconds
+                                        },
+                                        "personality_memory_retrieval_type": type(memory_config.retrieval).__name__
+                                    }
+                                )
+                                
                                 retrieved_memories = await memory_manager.retrieve_memories(
                                     user_id=user_id,
                                     session_id=request.session_id,
@@ -288,7 +305,8 @@ async def create_chat_completion(
                                     max_results=memory_config.retrieval.max_results,
                                     include_user_memory=include_user,
                                     include_ai_memory=include_ai,
-                                    timeout=memory_config.retrieval.timeout_seconds
+                                    timeout=memory_config.retrieval.timeout_seconds,
+                                    similarity_threshold=similarity_threshold
                                 )
                                 
                                 # 如果有检索到的记忆，添加到系统提示中
@@ -296,12 +314,28 @@ async def create_chat_completion(
                                     user_memories = retrieved_memories.get("user_memories", [])
                                     ai_memories = retrieved_memories.get("ai_memories", [])
                                     
+                                    # 记录传入系统提示的记忆（用于调试）
+                                    logger.warning(
+                                        f"chat.py: Building memory context for system prompt",
+                                        extra={
+                                            "personality_id": personality_id,
+                                            "user_memories_count": len(user_memories),
+                                            "ai_memories_count": len(ai_memories),
+                                            "user_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in user_memories[:5]] if user_memories else [],
+                                            "ai_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in ai_memories[:5]] if ai_memories else []
+                                        }
+                                    )
+                                    
                                     if user_memories or ai_memories:
+                                        # 使用配置中的max_results，而不是硬编码
+                                        max_results = memory_config.retrieval.max_results
+                                        
                                         memory_context = "\n\n## 相关记忆\n\n"
                                         
                                         if user_memories:
                                             memory_context += "### 用户记忆\n"
-                                            for mem in user_memories[:3]:  # 只取前3条
+                                            # 使用配置的max_results
+                                            for mem in user_memories[:max_results]:
                                                 # MemorySearchResult 对象，通过 .memory.content 访问
                                                 if hasattr(mem, 'memory') and hasattr(mem.memory, 'content'):
                                                     memory_context += f"- {mem.memory.content}\n"
@@ -310,7 +344,8 @@ async def create_chat_completion(
                                         
                                         if ai_memories:
                                             memory_context += "\n### AI记忆\n"
-                                            for mem in ai_memories[:3]:  # 只取前3条
+                                            # 使用配置的max_results
+                                            for mem in ai_memories[:max_results]:
                                                 # MemorySearchResult 对象，通过 .memory.content 访问
                                                 if hasattr(mem, 'memory') and hasattr(mem.memory, 'content'):
                                                     memory_context += f"- {mem.memory.content}\n"
