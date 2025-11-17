@@ -11,6 +11,7 @@ import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
 import { MessageBubble } from './MessageBubble';
 import { VoiceCallIndicator, VoiceWaveform } from './VoiceCallIndicator';
+import { ChatSessionHeader } from './ChatSessionHeader';
 import { showError } from '@/utils/errorHandler';
 import { userApi } from '@/services/user';
 import { playTTS } from '@/utils/tts';
@@ -488,9 +489,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         maxWidth: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'var(--bg-primary)',
+        background:
+          chatBackgroundStyle === 'gradient'
+            ? 'var(--chat-bg-gradient)'
+            : 'var(--bg-primary)',
         overflow: 'hidden',
-        transition: 'background-color 0.3s ease',
+        transition: 'background 0.3s ease',
       }}
     >
 
@@ -499,6 +503,14 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         <VoiceCallIndicator
           userFrequencyData={userFrequencyData}
           assistantFrequencyData={assistantFrequencyData}
+        />
+      )}
+
+      {/* 会话管理头部（移动端显示） */}
+      {isMobile && (
+        <ChatSessionHeader
+          currentSessionId={currentSessionId || undefined}
+          personalityId={personalityId}
         />
       )}
       
@@ -513,11 +525,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          background:
-            chatBackgroundStyle === 'gradient'
-              ? 'var(--chat-bg-gradient)'
-              : 'var(--bg-primary)',
-          transition: 'background 0.3s ease',
+          background: 'transparent', // 继承父容器的渐变背景
           width: '100%',
           maxWidth: '100%',
           boxSizing: 'border-box',

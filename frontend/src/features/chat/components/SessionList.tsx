@@ -12,6 +12,8 @@ interface SessionListProps {
   currentSessionId?: string;
   /** 会话选择回调 */
   onSessionSelect?: (sessionId: string) => void;
+  /** 是否在Popover中显示（影响样式） */
+  inPopover?: boolean;
 }
 
 /**
@@ -22,6 +24,7 @@ interface SessionListProps {
 export const SessionList: React.FC<SessionListProps> = ({
   currentSessionId,
   onSessionSelect,
+  inPopover = false,
 }) => {
   const { sessions, isLoading, deleteSession, updateSession } = useSessions();
 
@@ -48,11 +51,22 @@ export const SessionList: React.FC<SessionListProps> = ({
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div 
+      style={{ 
+        height: inPopover ? 'auto' : '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        maxHeight: inPopover ? '400px' : 'none',
+      }}
+    >
       <List
         dataSource={sessions}
         loading={isLoading}
-        style={{ flex: 1, overflow: 'auto' }}
+        style={{ 
+          flex: 1, 
+          overflow: inPopover ? 'auto' : 'auto',
+          maxHeight: inPopover ? '400px' : 'none',
+        }}
         renderItem={(session) => (
           <SessionItem
             key={session.id}
