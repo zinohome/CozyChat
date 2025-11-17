@@ -222,4 +222,81 @@ class QueryOptimizer:
         """
         # 只选择需要的列
         return query.with_entities(*columns)
+    
+    @staticmethod
+    def batch_query_by_ids(
+        db: Session,
+        model: Any,
+        ids: list,
+        batch_size: int = 1000,
+        order_by: Optional[Any] = None
+    ) -> list:
+        """批量查询ID列表
+        
+        将大量ID分批查询，避免单次查询过大导致性能问题
+        
+        Args:
+            db: 数据库会话
+            model: SQLAlchemy模型类
+            ids: ID列表
+            batch_size: 每批大小
+            order_by: 排序字段（可选）
+            
+        Returns:
+            查询结果列表
+        """
+        if not ids:
+            return []
+        
+        results = []
+        for i in range(0, len(ids), batch_size):
+            batch_ids = ids[i:i + batch_size]
+            query = db.query(model).filter(model.id.in_(batch_ids))
+            
+            if order_by:
+                query = query.order_by(order_by)
+            
+            batch_results = query.all()
+            results.extend(batch_results)
+        
+        return results
+    
+    @staticmethod
+    def bulk_insert(
+        db: Session,
+        model: Any,
+        objects: list,
+        batch_size: int = 100
+    ) -> int:
+        """批量插入
+        
+        将大量对象分批插入，提高性能
+        
+        Args:
+            db: 数据库会话
+            model: SQLAlchemy模型类
+            objects: 对象列表（字典或模型实例）
+            batch_size: 每批大小
+            
+        Returns:
+            插入的对象数量
+        """
+        if not objects:
+            return 0
+        
+        inserted_count = 0
+        for i in range(0, len(objects), batch_size):
+            batch = objects[i:i + batch_size]
+            
+            # 如果是字典，转换为模型实例
+            if isinstance(batch[0], dict):
+                instances = [model(**obj) for obj in batch]
+            else:
+                instances = batch
+            
+            db.bulk_save_objects(instances)
+            inserted_count += len(instances)
+        
+        db.commit()
+        return inserted_count
 

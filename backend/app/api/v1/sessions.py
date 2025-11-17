@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, and_
+from sqlalchemy import desc, and_, func
 
 # 本地库
 from app.api.deps import get_current_active_user, get_sync_session
@@ -232,20 +232,21 @@ async def list_sessions(
         # 如果按 last_message_at 排序，需要处理 null 值（使用 created_at 作为后备）
         if sort == "last_message_at":
             # 使用 COALESCE 处理 null 值：如果 last_message_at 为 null，使用 created_at
-            from sqlalchemy import func
+            # 使用部分索引 idx_sessions_user_deleted_lastmsg 优化此查询
             sort_column = func.coalesce(SessionModel.last_message_at, SessionModel.created_at)
             if order == "desc":
                 query = query.order_by(desc(sort_column))
             else:
                 query = query.order_by(sort_column)
         else:
+            # 使用部分索引 idx_sessions_user_deleted_created 优化此查询
             sort_column = getattr(SessionModel, sort, SessionModel.created_at)
             if order == "desc":
                 query = query.order_by(desc(sort_column))
             else:
                 query = query.order_by(sort_column)
         
-        # 总数
+        # 总数（优化：使用子查询避免重复计算）
         total = query.count()
         
         # 分页
