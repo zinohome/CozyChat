@@ -17,16 +17,28 @@ engines:
         max_retries: 3
         retry_delay: 1.0
     
-    # 腾讯ASR配置（待实现）
+    # 腾讯ASR配置
     tencent:
       provider: "tencent"
-      model: "16k_zh"
+      model: "16k_zh"  # 16k_zh: 中文普通话，16k_en: 英语
       language: "zh-CN"
+      
+      # 识别模式
+      recognition_mode: "auto"  # flash: 一句话识别, realtime: 实时识别, auto: 自动选择
+      realtime_threshold: 1048576  # 1MB，超过此大小使用实时识别
+      
+      # 识别参数
+      filter_modal: 1  # 过滤语气词（0: 不过滤, 1: 过滤, 2: 只保留语气词）
+      filter_punc: 1   # 过滤标点符号（0: 不过滤, 1: 过滤）
+      filter_dirty: 1  # 过滤脏词（0: 不过滤, 1: 过滤, 2: 只保留脏词）
+      need_vad: 1      # 是否需要VAD（0: 不需要, 1: 需要）
+      voice_format: "wav"  # 音频格式（wav, mp3, opus等）
+      
       # API配置
       api:
-        app_id: null  # 从环境变量获取
-        secret_id: null
-        secret_key: null
+        app_id: null  # 从环境变量TENCENT_APP_ID获取
+        secret_id: null  # 从环境变量TENCENT_SECRET_ID获取
+        secret_key: null  # 从环境变量TENCENT_SECRET_KEY获取
         timeout: 30
         max_retries: 2
         retry_delay: 1.0

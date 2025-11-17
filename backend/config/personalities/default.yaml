@@ -96,13 +96,20 @@ personality:
   # 语音配置
   voice:
     stt:
-      provider: "openai"    # openai / tencent / custom
-      model: "whisper-1"
+      provider: "tencent"    # openai / tencent / custom
+      model: "16k_zh"        # 16k_zh: 中文，16k_en: 英语
       language: "zh-CN"
+      # 识别模式
+      recognition_mode: "auto"  # flash: 一句话，realtime: 实时，auto: 自动选择
+      # 过滤选项
+      filter_modal: 1        # 过滤语气词（0: 不过滤, 1: 过滤）
+      filter_punc: 1         # 过滤标点符号（0: 不过滤, 1: 过滤）
+      filter_dirty: 1        # 过滤脏词（0: 不过滤, 1: 过滤）
     
     tts:
-      provider: "openai"    # openai / tencent / custom
-      voice: "shimmer"
+      provider: "tencent"    # openai / tencent / custom
+      voice: "ai_female"      # AI女声
+      voice_type: 01
       speed: 1.0
     
     realtime:

@@ -12,6 +12,7 @@ from app.config.config import settings
 from app.utils.logger import logger
 from .base import STTEngineBase, STTProvider
 from .openai_stt import OpenAISTTEngine
+from .tencent_stt import TencentSTTEngine
 
 
 class STTEngineFactory:
@@ -52,8 +53,15 @@ class STTEngineFactory:
             engine = OpenAISTTEngine(config)
             
         elif provider_lower == STTProvider.TENCENT.value:
-            # 腾讯ASR实现（待实现）
-            raise NotImplementedError("Tencent ASR engine not implemented yet")
+            # 设置默认配置
+            if "app_id" not in config:
+                config["app_id"] = settings.tencent_app_id
+            if "secret_id" not in config:
+                config["secret_id"] = settings.tencent_secret_id
+            if "secret_key" not in config:
+                config["secret_key"] = settings.tencent_secret_key
+            
+            engine = TencentSTTEngine(config)
             
         else:
             available_providers = [p.value for p in STTProvider]
@@ -104,7 +112,7 @@ class STTEngineFactory:
         """
         return {
             STTProvider.OPENAI.value: "OpenAI Whisper",
-            STTProvider.TENCENT.value: "Tencent ASR (待实现)",
+            STTProvider.TENCENT.value: "Tencent ASR",
             STTProvider.CUSTOM.value: "Custom STT Engine"
         }
 

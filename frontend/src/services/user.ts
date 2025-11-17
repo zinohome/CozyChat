@@ -1,5 +1,8 @@
 import { apiClient } from './api';
 import type { User, UserProfile, UserPreferences } from '@/types/user';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('userApi');
 
 /**
  * 用户API服务

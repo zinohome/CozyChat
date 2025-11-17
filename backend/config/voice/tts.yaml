@@ -21,18 +21,39 @@ engines:
         enabled: true
         chunk_size: 4096
     
-    # 腾讯TTS配置（待实现）
+    # 腾讯TTS配置
     tencent:
       provider: "tencent"
-      voice_type: 0  # 0-亲和女声, 1-亲和男声, 2-成熟男声, 3-活力男声, 4-温暖女声, 5-温暖男声
-      speed: 0  # -2到2，默认0
-      volume: 0  # -10到10，默认0
+      
+      # 音色配置
+      voice: "ai_female"  # 基础音色：female(0), male(1), mature_male(2), energetic_male(3), warm_female(4), warm_male(5)
+                          # AI大模型音色（需要大模型语音合成资源包）：
+                          #   ai_female(101001), ai_male(101002), ai_narrator(101003), 
+                          #   ai_warm_female(101004), ai_energetic(101005)
+                          # 也可以直接使用数字编号
+      voice_type: 101001  # 音色类型编号（0-5: 基础音色，101001+: AI大模型音色）
+      fast_voice_type: ""  # 大模型音色的快速音色类型（可选，通常为空）
+      
+      # 合成参数
+      speed: 1.0       # 语速（OpenAI格式：0.25-4.0，会自动转换为腾讯格式-2到2）
+      volume: 0        # 音量（-10到10，默认0）
+      codec: "mp3"     # 音频格式（pcm, mp3）
+      sample_rate: 16000  # 采样率（8000, 16000）
+      
+      # 合成模式
+      tts_mode: "http"  # http: HTTP流式合成, websocket: WebSocket流式合成
+      
       # API配置
       api:
-        app_id: null  # 从环境变量获取
-        secret_id: null
-        secret_key: null
+        app_id: null  # 从环境变量TENCENT_APP_ID获取
+        secret_id: null  # 从环境变量TENCENT_SECRET_ID获取
+        secret_key: null  # 从环境变量TENCENT_SECRET_KEY获取
         timeout: 30
         max_retries: 2
         retry_delay: 1.0
+      
+      # 流式配置
+      streaming:
+        enabled: true
+        use_websocket: false  # 是否强制使用WebSocket
 

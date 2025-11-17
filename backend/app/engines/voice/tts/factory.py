@@ -12,6 +12,7 @@ from app.config.config import settings
 from app.utils.logger import logger
 from .base import TTSEngineBase, TTSProvider
 from .openai_tts import OpenAITTSEngine
+from .tencent_tts import TencentTTSEngine
 
 
 class TTSEngineFactory:
@@ -52,8 +53,15 @@ class TTSEngineFactory:
             engine = OpenAITTSEngine(config)
             
         elif provider_lower == TTSProvider.TENCENT.value:
-            # 腾讯TTS实现（待实现）
-            raise NotImplementedError("Tencent TTS engine not implemented yet")
+            # 设置默认配置
+            if "app_id" not in config:
+                config["app_id"] = settings.tencent_app_id
+            if "secret_id" not in config:
+                config["secret_id"] = settings.tencent_secret_id
+            if "secret_key" not in config:
+                config["secret_key"] = settings.tencent_secret_key
+            
+            engine = TencentTTSEngine(config)
             
         else:
             available_providers = [p.value for p in TTSProvider]
@@ -104,7 +112,7 @@ class TTSEngineFactory:
         """
         return {
             TTSProvider.OPENAI.value: "OpenAI TTS",
-            TTSProvider.TENCENT.value: "Tencent TTS (待实现)",
+            TTSProvider.TENCENT.value: "Tencent TTS",
             TTSProvider.CUSTOM.value: "Custom TTS Engine"
         }
 
