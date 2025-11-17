@@ -54,7 +54,7 @@ personality:
   # 记忆配置
   memory:
     enabled: true
-    vector_db: "chromadb"  # chromadb / qdrant
+    vector_db: "qdrant"  # chromadb / qdrant
     save_mode: "both"      # both / user_only / assistant_only
     
     # 记忆策略

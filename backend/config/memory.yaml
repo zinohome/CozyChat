@@ -2,6 +2,12 @@ memory:
   # 默认向量数据库引擎
   default_engine: "qdrant"  # chromadb 或 qdrant
   
+  # 跨Session记忆配置
+  cross_session_memory:
+    enabled: true  # 是否启用跨Session记忆检索
+    # true: 检索时会包含该用户在所有Session中的记忆（跨Session）
+    # false: 检索时只包含当前Session的记忆（默认，更私密）
+  
   # ChromaDB配置
   chromadb:
     engine: "chromadb"
@@ -9,7 +15,13 @@ memory:
     collection_prefix: "cozychat_"
     # 向量化配置
     embedding:
-      model: "all-MiniLM-L6-v2"  # 默认embedding模型
+      # 推荐模型（按场景选择）：
+      # - all-MiniLM-L6-v2: 轻量级，384维，适合资源受限（当前使用，兼容PyTorch 2.2.2）
+      # - BAAI/bge-base-zh-v1.5: 中文优化，768维，平衡性能和速度（需要PyTorch 2.6+）
+      # - BAAI/bge-large-zh-v1.5: 中文优化，1024维，最佳性能（需要PyTorch 2.6+）
+      # - BAAI/bge-m3: 多语言，1024维，最强性能（需要PyTorch 2.6+）
+      # 注意：BGE模型需要PyTorch 2.6+，当前PyTorch版本为2.2.2，暂时使用all-MiniLM-L6-v2
+      model: "all-MiniLM-L6-v2"  # 暂时使用，等PyTorch 2.6发布后切换回BGE
       dimension: 384
     # 性能配置
     performance:
@@ -23,7 +35,13 @@ memory:
     collection_prefix: "cozychat_"
     # 向量化配置
     embedding:
-      model: "all-MiniLM-L6-v2"
+      # 推荐模型（按场景选择）：
+      # - all-MiniLM-L6-v2: 轻量级，384维，适合资源受限（当前使用，兼容PyTorch 2.2.2）
+      # - BAAI/bge-base-zh-v1.5: 中文优化，768维，平衡性能和速度（需要PyTorch 2.6+）
+      # - BAAI/bge-large-zh-v1.5: 中文优化，1024维，最佳性能（需要PyTorch 2.6+）
+      # - BAAI/bge-m3: 多语言，1024维，最强性能（需要PyTorch 2.6+）
+      # 注意：BGE模型需要PyTorch 2.6+，当前PyTorch版本为2.2.2，暂时使用all-MiniLM-L6-v2
+      model: "all-MiniLM-L6-v2"  # 暂时使用，等PyTorch 2.6发布后切换回BGE
       dimension: 384
     # 性能配置
     performance:

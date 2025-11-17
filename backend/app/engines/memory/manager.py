@@ -58,11 +58,15 @@ class MemoryManager:
             config_loader = get_config_loader()
             memory_config = config_loader.load_memory_config()
             cache_config = memory_config.get("cache", {})
+            cross_session_config = memory_config.get("cross_session_memory", {})
             
             if cache_ttl is None:
                 cache_ttl = cache_config.get("ttl_seconds", 300)
             if cache_maxsize is None:
                 cache_maxsize = cache_config.get("max_size", 100)
+            
+            # 跨Session记忆配置
+            self.cross_session_enabled = cross_session_config.get("enabled", False)
             
             # 如果引擎未提供，从配置创建
             if engine is None:
@@ -93,6 +97,9 @@ class MemoryManager:
                 cache_maxsize = 100
             if engine is None:
                 engine = ChromaDBMemoryEngine()
+            
+            # 跨Session记忆配置（默认关闭）
+            self.cross_session_enabled = False
         
         self.engine = engine
         self.cache: TTLCache = TTLCache(maxsize=cache_maxsize, ttl=cache_ttl)
@@ -106,6 +113,7 @@ class MemoryManager:
                 "engine": self.engine.engine_name,
                 "cache_ttl": cache_ttl,
                 "cache_maxsize": cache_maxsize,
+                "cross_session_enabled": self.cross_session_enabled,
                 "config_source": "yaml"
             }
         )
@@ -385,4 +393,92 @@ class MemoryManager:
             bool: 管理器是否健康
         """
         return await self.engine.health_check()
+    
+    async def retrieve_memories(
+        self,
+        user_id: str,
+        session_id: str,
+        query: str,
+        max_results: int = 5,
+        include_user_memory: bool = True,
+        include_ai_memory: bool = True,
+        timeout: float = 0.5
+    ) -> Dict[str, List[MemorySearchResult]]:
+        """检索相关记忆（用于orchestrator）
+        
+        Args:
+            user_id: 用户ID
+            session_id: 会话ID
+            query: 查询文本
+            max_results: 每种类型记忆的最大结果数
+            include_user_memory: 是否包含用户记忆
+            include_ai_memory: 是否包含AI记忆
+            timeout: 搜索超时时间（秒）
+            
+        Returns:
+            Dict[str, List[MemorySearchResult]]: 包含user_memories和ai_memories的字典
+        """
+        user_memories: List[MemorySearchResult] = []
+        ai_memories: List[MemorySearchResult] = []
+        
+        # 根据配置决定是否使用session_id过滤
+        # 如果启用跨Session记忆，则不传递session_id，检索所有Session的记忆
+        search_session_id: Optional[str] = None if self.cross_session_enabled else session_id
+        
+        logger.debug(
+            f"Retrieving memories",
+            extra={
+                "user_id": user_id,
+                "session_id": session_id,
+                "cross_session_enabled": self.cross_session_enabled,
+                "search_session_id": search_session_id
+            }
+        )
+        
+        # 搜索用户记忆
+        if include_user_memory:
+            try:
+                user_results = await asyncio.wait_for(
+                    self.search_memories(
+                        query=query,
+                        user_id=user_id,
+                        session_id=search_session_id,
+                        memory_type=MemoryType.USER,
+                        limit=max_results,
+                        similarity_threshold=0.7,
+                        use_cache=True
+                    ),
+                    timeout=timeout
+                )
+                user_memories = user_results
+            except asyncio.TimeoutError:
+                logger.warning(f"User memory search timeout after {timeout}s")
+            except Exception as e:
+                logger.error(f"Failed to retrieve user memories: {e}", exc_info=True)
+        
+        # 搜索AI记忆
+        if include_ai_memory:
+            try:
+                ai_results = await asyncio.wait_for(
+                    self.search_memories(
+                        query=query,
+                        user_id=user_id,
+                        session_id=search_session_id,
+                        memory_type=MemoryType.ASSISTANT,
+                        limit=max_results,
+                        similarity_threshold=0.7,
+                        use_cache=True
+                    ),
+                    timeout=timeout
+                )
+                ai_memories = ai_results
+            except asyncio.TimeoutError:
+                logger.warning(f"AI memory search timeout after {timeout}s")
+            except Exception as e:
+                logger.error(f"Failed to retrieve AI memories: {e}", exc_info=True)
+        
+        return {
+            "user_memories": user_memories,
+            "ai_memories": ai_memories
+        }
 

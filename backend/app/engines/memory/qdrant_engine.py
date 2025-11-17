@@ -5,6 +5,7 @@ Qdrant记忆引擎实现
 """
 
 # 标准库
+import threading
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -39,6 +40,10 @@ class QdrantMemoryEngine(MemoryEngineBase):
         assistant_collection_name: AI记忆集合名称
         embedding_dimension: 向量维度
     """
+    
+    # 类级别的模型缓存（所有实例共享）
+    _model_cache: Dict[str, SentenceTransformer] = {}
+    _model_cache_lock = threading.Lock()
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """初始化Qdrant引擎
@@ -86,14 +91,98 @@ class QdrantMemoryEngine(MemoryEngineBase):
             }
         )
     
-    def _ensure_collections(self):
-        """确保集合存在"""
-        try:
-            # 检查并创建用户记忆集合
-            collections = self.client.get_collections().collections
-            collection_names = [c.name for c in collections]
+    def _convert_to_qdrant_id(self, memory_id: str) -> str:
+        """将记忆ID转换为Qdrant兼容的UUID格式
+        
+        Qdrant只接受标准UUID格式（xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）
+        或无符号整数。我们的ID格式是 mem-{hex}，需要转换。
+        
+        Args:
+            memory_id: 原始记忆ID（格式：mem-{hex}）
             
-            if self.user_collection_name not in collection_names:
+        Returns:
+            str: 标准UUID格式的字符串
+        """
+        # 如果已经是标准UUID格式，直接返回
+        try:
+            uuid.UUID(memory_id)
+            return memory_id
+        except ValueError:
+            pass
+        
+        # 如果是 mem-{hex} 格式，提取hex部分并转换为标准UUID
+        if memory_id.startswith("mem-"):
+            hex_str = memory_id[4:]  # 去掉 "mem-" 前缀
+            # 将32位hex字符串转换为标准UUID格式
+            # 格式：xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+            uuid_str = f"{hex_str[:8]}-{hex_str[8:12]}-{hex_str[12:16]}-{hex_str[16:20]}-{hex_str[20:]}"
+            return uuid_str
+        
+        # 其他格式，尝试作为UUID解析
+        try:
+            return str(uuid.UUID(memory_id))
+        except ValueError:
+            # 如果无法转换，生成一个新的UUID
+            logger.warning(f"Invalid memory ID format: {memory_id}, generating new UUID")
+            return str(uuid.uuid4())
+    
+    def _convert_from_qdrant_id(self, qdrant_id: str) -> str:
+        """将Qdrant的UUID格式ID转换回mem-{hex}格式
+        
+        为了保持与系统其他部分的兼容性，将UUID格式转换回mem-{hex}格式
+        
+        Args:
+            qdrant_id: Qdrant返回的UUID格式ID
+            
+        Returns:
+            str: mem-{hex}格式的ID
+        """
+        # 如果是mem-格式，直接返回
+        if qdrant_id.startswith("mem-"):
+            return qdrant_id
+        
+        # 如果是UUID格式，转换为mem-{hex}
+        try:
+            uuid_obj = uuid.UUID(qdrant_id)
+            # 将UUID转换为32位hex字符串，然后加上mem-前缀
+            hex_str = uuid_obj.hex
+            return f"mem-{hex_str}"
+        except ValueError:
+            # 如果无法解析，直接返回原值
+            return qdrant_id
+    
+    def _ensure_collections(self):
+        """确保集合存在，且维度匹配配置"""
+        try:
+            collections = self.client.get_collections().collections
+            collection_info = {c.name: c for c in collections}
+            
+            # 检查用户记忆集合
+            if self.user_collection_name in collection_info:
+                # 检查维度是否匹配
+                collection = self.client.get_collection(self.user_collection_name)
+                vectors_config = collection.config.params.vectors
+                # 处理不同的向量配置类型
+                if hasattr(vectors_config, 'size'):
+                    current_dim = vectors_config.size  # type: ignore
+                elif isinstance(vectors_config, dict):
+                    # 如果是字典类型，取第一个向量的size
+                    first_vector = next(iter(vectors_config.values())) if vectors_config else None
+                    current_dim = first_vector.size if first_vector and hasattr(first_vector, 'size') else None  # type: ignore
+                else:
+                    current_dim = None
+                
+                if current_dim is None or current_dim != self.embedding_dimension:
+                    if current_dim is not None:
+                        logger.warning(
+                            f"Collection {self.user_collection_name} dimension mismatch: "
+                            f"expected {self.embedding_dimension}, got {current_dim}. "
+                            "Deleting and recreating..."
+                        )
+                    self.client.delete_collection(self.user_collection_name)
+                    collection_info.pop(self.user_collection_name, None)
+            
+            if self.user_collection_name not in collection_info:
                 self.client.create_collection(
                     collection_name=self.user_collection_name,
                     vectors_config=VectorParams(
@@ -101,10 +190,37 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         distance=Distance.COSINE
                     )
                 )
-                logger.info(f"Created collection: {self.user_collection_name}")
+                logger.info(
+                    f"Created collection: {self.user_collection_name} "
+                    f"(dimension: {self.embedding_dimension})"
+                )
             
-            # 检查并创建AI记忆集合
-            if self.assistant_collection_name not in collection_names:
+            # 检查AI记忆集合
+            if self.assistant_collection_name in collection_info:
+                # 检查维度是否匹配
+                collection = self.client.get_collection(self.assistant_collection_name)
+                vectors_config = collection.config.params.vectors
+                # 处理不同的向量配置类型
+                if hasattr(vectors_config, 'size'):
+                    current_dim = vectors_config.size  # type: ignore
+                elif isinstance(vectors_config, dict):
+                    # 如果是字典类型，取第一个向量的size
+                    first_vector = next(iter(vectors_config.values())) if vectors_config else None
+                    current_dim = first_vector.size if first_vector and hasattr(first_vector, 'size') else None  # type: ignore
+                else:
+                    current_dim = None
+                
+                if current_dim is None or current_dim != self.embedding_dimension:
+                    if current_dim is not None:
+                        logger.warning(
+                            f"Collection {self.assistant_collection_name} dimension mismatch: "
+                            f"expected {self.embedding_dimension}, got {current_dim}. "
+                            "Deleting and recreating..."
+                        )
+                    self.client.delete_collection(self.assistant_collection_name)
+                    collection_info.pop(self.assistant_collection_name, None)
+            
+            if self.assistant_collection_name not in collection_info:
                 self.client.create_collection(
                     collection_name=self.assistant_collection_name,
                     vectors_config=VectorParams(
@@ -112,7 +228,10 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         distance=Distance.COSINE
                     )
                 )
-                logger.info(f"Created collection: {self.assistant_collection_name}")
+                logger.info(
+                    f"Created collection: {self.assistant_collection_name} "
+                    f"(dimension: {self.embedding_dimension})"
+                )
                 
         except Exception as e:
             logger.error(f"Failed to ensure collections: {e}", exc_info=True)
@@ -136,6 +255,37 @@ class QdrantMemoryEngine(MemoryEngineBase):
             return self.assistant_collection_name
         else:
             raise ValueError(f"Unsupported memory type: {memory_type}")
+    
+    def _get_embedding_model(self, model_name: str) -> SentenceTransformer:
+        """获取或创建embedding模型（带缓存）
+        
+        使用类级别的缓存来避免重复加载模型，提升性能。
+        
+        Args:
+            model_name: 模型名称
+            
+        Returns:
+            SentenceTransformer: 模型实例
+        """
+        # 先检查缓存（不加锁，快速路径）
+        if model_name in QdrantMemoryEngine._model_cache:
+            return QdrantMemoryEngine._model_cache[model_name]
+        
+        # 加锁，确保线程安全
+        with QdrantMemoryEngine._model_cache_lock:
+            # 双重检查，避免重复加载
+            if model_name in QdrantMemoryEngine._model_cache:
+                return QdrantMemoryEngine._model_cache[model_name]
+            
+            # 创建新模型实例
+            logger.info(f"Loading embedding model: {model_name} (first time)")
+            model = SentenceTransformer(model_name, device='cpu')
+            
+            # 缓存模型
+            QdrantMemoryEngine._model_cache[model_name] = model
+            logger.debug(f"Cached embedding model: {model_name}")
+            
+            return model
     
     async def add_memory(self, memory: Memory) -> str:
         """添加记忆到向量数据库
@@ -166,15 +316,35 @@ class QdrantMemoryEngine(MemoryEngineBase):
             # 如果没有提供embedding，使用sentence-transformers生成
             if not memory.embedding:
                 embedding_model = self.config.get("embedding", {}).get("model", "all-MiniLM-L6-v2")
-                model = SentenceTransformer(embedding_model)
-                embedding = model.encode(memory.content)
-                # 处理numpy数组和list（用于测试mock）
-                memory.embedding = embedding.tolist() if hasattr(embedding, 'tolist') else embedding
+                # 使用缓存的模型实例（避免重复加载）
+                model = self._get_embedding_model(embedding_model)
+                # 使用convert_to_numpy=False返回tensor，然后手动转换
+                embedding = model.encode(memory.content, convert_to_numpy=False, convert_to_tensor=True)
+                # 将tensor移到CPU并直接转换为list（跳过numpy）
+                # 类型检查：embedding 可能是 tensor 或 numpy array
+                if hasattr(embedding, 'cpu') and callable(getattr(embedding, 'cpu', None)):
+                    embedding_raw = embedding.cpu().tolist()  # type: ignore
+                elif hasattr(embedding, 'tolist') and callable(getattr(embedding, 'tolist', None)):
+                    embedding_raw = embedding.tolist()  # type: ignore
+                elif isinstance(embedding, list):
+                    embedding_raw = embedding
+                else:
+                    embedding_raw = list(embedding)
+                
+                # 确保类型是 List[float]
+                memory.embedding = [float(x) for x in embedding_raw]
             
-            # 创建point
+            # 确保 embedding 是 List[float] 类型
+            if memory.embedding:
+                embedding_vector: List[float] = [float(x) for x in memory.embedding]
+            else:
+                raise ValueError("Memory embedding is required")
+            
+            # 创建point（将ID转换为Qdrant兼容的UUID格式）
+            qdrant_id = self._convert_to_qdrant_id(memory.id)
             point = PointStruct(
-                id=memory.id,
-                vector=memory.embedding,
+                id=qdrant_id,
+                vector=embedding_vector,
                 payload=payload
             )
             
@@ -222,10 +392,23 @@ class QdrantMemoryEngine(MemoryEngineBase):
             
             # 生成查询向量
             embedding_model = self.config.get("embedding", {}).get("model", "all-MiniLM-L6-v2")
-            model = SentenceTransformer(embedding_model)
-            query_embedding = model.encode(query)
-            # 处理numpy数组和list（用于测试mock）
-            query_vector = query_embedding.tolist() if hasattr(query_embedding, 'tolist') else query_embedding
+            # 使用缓存的模型实例（避免重复加载）
+            model = self._get_embedding_model(embedding_model)
+            # 使用convert_to_numpy=False返回tensor，然后手动转换
+            query_embedding = model.encode(query, convert_to_numpy=False, convert_to_tensor=True)
+            # 将tensor移到CPU并直接转换为list（跳过numpy）
+            # 类型检查：query_embedding 可能是 tensor 或 numpy array
+            if hasattr(query_embedding, 'cpu') and callable(getattr(query_embedding, 'cpu', None)):
+                query_vector_raw = query_embedding.cpu().tolist()  # type: ignore
+            elif hasattr(query_embedding, 'tolist') and callable(getattr(query_embedding, 'tolist', None)):
+                query_vector_raw = query_embedding.tolist()  # type: ignore
+            elif isinstance(query_embedding, list):
+                query_vector_raw = query_embedding
+            else:
+                query_vector_raw = list(query_embedding)
+            
+            # 确保类型是 List[float]
+            query_vector: List[float] = [float(x) for x in query_vector_raw]
             
             # 确定要搜索的集合
             collections_to_search = []
@@ -261,7 +444,11 @@ class QdrantMemoryEngine(MemoryEngineBase):
                     )
                 )
             
-            query_filter = Filter(must=filter_conditions) if filter_conditions else None
+            # 类型转换：将 list[FieldCondition] 转换为 List[Condition]
+            from qdrant_client.models import Condition
+            query_filter: Optional[Filter] = (
+                Filter(must=list(filter_conditions)) if filter_conditions else None  # type: ignore
+            )
             
             # 搜索每个集合
             for collection_name, mem_type in collections_to_search:
@@ -279,18 +466,26 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         payload = scored_point.payload
                         similarity = scored_point.score
                         
+                        # 检查 payload 是否存在
+                        if not payload:
+                            logger.warning(f"Scored point {scored_point.id} has no payload, skipping")
+                            continue
+                        
+                        # 将Qdrant返回的UUID格式ID转换回mem-{hex}格式
+                        original_id = self._convert_from_qdrant_id(str(scored_point.id))
+                        
                         # 构建Memory对象
                         memory = Memory(
-                            id=str(scored_point.id),
-                            user_id=payload["user_id"],
-                            session_id=payload["session_id"],
+                            id=original_id,
+                            user_id=str(payload.get("user_id", "")),
+                            session_id=str(payload.get("session_id", "")),
                             memory_type=mem_type,
-                            content=payload["content"],
-                            importance=payload.get("importance", 0.5),
+                            content=str(payload.get("content", "")),
+                            importance=float(payload.get("importance", 0.5)),
                             metadata={k: v for k, v in payload.items() 
                                      if k not in ["user_id", "session_id", "content", 
                                                   "importance", "created_at", "expires_at", "memory_type"]},
-                            created_at=datetime.fromtimestamp(payload["created_at"])
+                            created_at=datetime.fromtimestamp(float(payload.get("created_at", 0)))
                         )
                         
                         results.append(MemorySearchResult(
@@ -333,14 +528,17 @@ class QdrantMemoryEngine(MemoryEngineBase):
             bool: 是否删除成功
         """
         try:
+            # 将ID转换为Qdrant兼容的UUID格式
+            qdrant_id = self._convert_to_qdrant_id(memory_id)
+            
             # 尝试从两个集合中删除
             for collection_name in [self.user_collection_name, self.assistant_collection_name]:
                 try:
                     self.client.delete(
                         collection_name=collection_name,
-                        points_selector=[memory_id]
+                        points_selector=[qdrant_id]
                     )
-                    logger.info(f"Deleted memory {memory_id}")
+                    logger.info(f"Deleted memory {memory_id} (Qdrant ID: {qdrant_id})")
                     return True
                 except Exception:
                     continue
