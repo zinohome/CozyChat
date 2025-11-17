@@ -14,6 +14,14 @@ vi.mock('./api', () => ({
   },
 }));
 
+// Mock sessionApi
+const mockGetSession = vi.fn();
+vi.mock('./session', () => ({
+  sessionApi: {
+    getSession: (...args: any[]) => mockGetSession(...args),
+  },
+}));
+
 // Mock fetch for streamChat
 global.fetch = vi.fn();
 
@@ -28,6 +36,8 @@ global.localStorage = localStorageMock as any;
 describe('chatApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 重置mockGetSession
+    mockGetSession.mockClear();
   });
 
   describe('send', () => {
@@ -170,17 +180,21 @@ describe('chatApi', () => {
   describe('getHistory', () => {
     it('应该获取历史消息', async () => {
       const sessionId = 'session-1';
-      const messages = [
-        { id: '1', role: 'user', content: 'Hello', timestamp: new Date() },
-        { id: '2', role: 'assistant', content: 'Hi', timestamp: new Date() },
-      ];
+      const sessionDetail = {
+        id: sessionId,
+        messages: [
+          { id: '1', role: 'user', content: 'Hello', timestamp: new Date() },
+          { id: '2', role: 'assistant', content: 'Hi', timestamp: new Date() },
+        ],
+      };
 
-      (apiClient.get as any).mockResolvedValue(messages);
+      // chatApi.getHistory使用sessionApi.getSession
+      mockGetSession.mockResolvedValue(sessionDetail);
 
       const result = await chatApi.getHistory(sessionId);
 
-      expect(apiClient.get).toHaveBeenCalledWith(`/v1/sessions/${sessionId}/messages`);
-      expect(result).toEqual(messages);
+      expect(mockGetSession).toHaveBeenCalledWith(sessionId);
+      expect(result).toEqual(sessionDetail.messages || []);
     });
 
     it('应该处理空sessionId', async () => {

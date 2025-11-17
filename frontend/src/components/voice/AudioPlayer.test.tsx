@@ -85,8 +85,8 @@ describe('AudioPlayer', () => {
     expect(mockPause).toHaveBeenCalled();
   });
 
-  it('应该显示播放进度', () => {
-    const { useAudioPlayer } = require('@/hooks/useAudioPlayer');
+  it('应该显示播放进度', async () => {
+    const { useAudioPlayer } = await import('@/hooks/useAudioPlayer');
     vi.mocked(useAudioPlayer).mockReturnValue({
       status: 'playing',
       isPlaying: true,

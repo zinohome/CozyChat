@@ -86,13 +86,13 @@ describe('useStreamChat', () => {
     );
 
     try {
-      await result.current.sendStreamMessage('Test message');
+    await result.current.sendStreamMessage('Test message');
     } catch (e) {
       // Expected error
     }
 
-    expect(mockSetError).toHaveBeenCalled();
-  });
+      expect(mockSetError).toHaveBeenCalled();
+    });
 
   it('should handle empty content', async () => {
     const { result } = renderHook(

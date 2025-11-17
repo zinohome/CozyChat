@@ -164,7 +164,7 @@ class TestAudioProcessor:
         
         # 文件应该被删除
         assert not (audio_processor.cache_dir / "file1.mp3").exists()
-    
+
     def test_get_cache_key_same_inputs(self, audio_processor):
         """测试：相同输入生成相同key"""
         key1 = audio_processor.get_cache_key("test text", "alloy", 1.0)

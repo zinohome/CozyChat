@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@/test/utils';
+import userEvent from '@testing-library/user-event';
 import { EnhancedChatContainer } from './EnhancedChatContainer';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { useSessions } from '../hooks/useSessions';
 import { useStreamChat } from '../hooks/useStreamChat';
+import { useQuery } from '@tanstack/react-query';
 
 // Mock dependencies
 vi.mock('@/store/slices/chatSlice');
@@ -14,6 +16,32 @@ vi.mock('@/services/chat', () => ({
     getHistory: vi.fn(),
     streamChat: vi.fn(),
   },
+}));
+const mockRefetch = vi.fn();
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  return {
+    ...actual,
+    useQuery: vi.fn(() => ({
+      data: [],
+      isLoading: false,
+      refetch: mockRefetch,
+    })),
+    useQueryClient: vi.fn(() => ({
+      setQueryData: vi.fn(),
+    })),
+  };
+});
+vi.mock('@/services/user', () => ({
+  userApi: {
+    getCurrentUserPreferences: vi.fn(() => Promise.resolve({})),
+  },
+}));
+vi.mock('@/utils/errorHandler', () => ({
+  showError: vi.fn(),
+}));
+vi.mock('@/utils/tts', () => ({
+  playTTS: vi.fn(),
 }));
 
 describe('EnhancedChatContainer', () => {
@@ -33,16 +61,15 @@ describe('EnhancedChatContainer', () => {
 
     // Mock useChatStore
     (useChatStore as any).mockReturnValue({
-      messages: [],
-      setMessages: mockSetMessages,
-      addMessage: mockAddMessage,
-      updateMessage: mockUpdateMessage,
-      setLoading: mockSetLoading,
-      setError: mockSetError,
-      removeMessage: mockRemoveMessage,
-      setCurrentSessionId: mockSetCurrentSessionId,
+      currentSessionId: null,
       isLoading: false,
       error: null,
+      setLoading: mockSetLoading,
+      setError: mockSetError,
+      setCurrentSessionId: mockSetCurrentSessionId,
+      isVoiceCallActive: false,
+      voiceCallMessages: [],
+      voiceCallStartTime: null,
     });
 
     // Mock useSessions
@@ -85,7 +112,9 @@ describe('EnhancedChatContainer', () => {
   });
 
   it('应该在输入消息后可以发送', async () => {
-    const { user } = render(
+    const user = userEvent.setup();
+    
+    render(
       <EnhancedChatContainer
         sessionId="test-session"
         personalityId="test-personality"
@@ -104,10 +133,20 @@ describe('EnhancedChatContainer', () => {
   });
 
   it('应该在加载时禁用输入和发送按钮', () => {
+    (useQuery as any).mockReturnValue({
+      data: [],
+      isLoading: true,
+    });
+    
     (useChatStore as any).mockReturnValue({
-      messages: [],
+      currentSessionId: null,
       isLoading: true,
       error: null,
+      setError: mockSetError,
+      setCurrentSessionId: mockSetCurrentSessionId,
+      isVoiceCallActive: false,
+      voiceCallMessages: [],
+      voiceCallStartTime: null,
     });
 
     render(
@@ -126,9 +165,14 @@ describe('EnhancedChatContainer', () => {
 
   it('应该显示错误消息', () => {
     (useChatStore as any).mockReturnValue({
-      messages: [],
+      currentSessionId: null,
       isLoading: false,
       error: 'Network error',
+      setError: mockSetError,
+      setCurrentSessionId: mockSetCurrentSessionId,
+      isVoiceCallActive: false,
+      voiceCallMessages: [],
+      voiceCallStartTime: null,
     });
 
     render(

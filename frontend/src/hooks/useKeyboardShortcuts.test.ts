@@ -105,7 +105,9 @@ describe('commonShortcuts', () => {
     const handler = vi.fn();
     const shortcut = commonShortcuts.sendMessage(handler);
     expect(shortcut.key).toBe('Enter');
-    expect(shortcut.handler).toBe(handler);
+    // handler是包装函数，应该调用原始handler
+    shortcut.handler({} as KeyboardEvent);
+    expect(handler).toHaveBeenCalled();
   });
 
   it('应该创建新建会话快捷键', () => {

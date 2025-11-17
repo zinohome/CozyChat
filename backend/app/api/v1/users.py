@@ -8,7 +8,7 @@
 from typing import Any, Dict, Optional
 
 # 第三方库
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.config.config import settings
 from app.core.user.manager import UserManager
 from app.core.user.profile import UserProfileManager
 from app.core.user.stats import UserStatsManager
+from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
 
@@ -88,8 +89,11 @@ class AuthResponse(BaseModel):
 # ===== API路由 =====
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@rate_limit("3/minute", per_user=False)  # 按IP限流，防止注册滥用
 async def register_user(
-    request: UserRegisterRequest,
+    request: Request,
+    data: UserRegisterRequest,
+    response: Response,
     db: Session = Depends(get_sync_session)
 ) -> Dict[str, Any]:
     """用户注册
@@ -108,7 +112,7 @@ async def register_user(
     if not settings.allow_registration:
         logger.warning(
             "Registration attempt blocked",
-            extra={"username": request.username, "email": request.email}
+            extra={"username": data.username, "email": data.email}
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -118,10 +122,10 @@ async def register_user(
     try:
         manager = UserManager(db)
         user = await manager.register_user(
-            username=request.username,
-            email=request.email,
-            password=request.password,
-            display_name=request.display_name
+            username=data.username,
+            email=data.email,
+            password=data.password,
+            display_name=data.display_name
         )
         
         return {
@@ -146,8 +150,11 @@ async def register_user(
 
 
 @router.post("/login")
+@rate_limit("5/minute", per_user=False)  # 按IP限流，防止暴力破解
 async def login_user(
-    request: UserLoginRequest,
+    request: Request,
+    data: UserLoginRequest,
+    response: Response,
     db: Session = Depends(get_sync_session)
 ) -> AuthResponse:
     """用户登录
@@ -162,8 +169,8 @@ async def login_user(
     try:
         manager = UserManager(db)
         result = await manager.authenticate(
-            username=request.username,
-            password=request.password
+            username=data.username,
+            password=data.password
         )
         
         if not result:

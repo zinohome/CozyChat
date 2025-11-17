@@ -14,7 +14,12 @@ const mockMediaRecorder = {
   onstop: null,
 };
 
-global.MediaRecorder = vi.fn().mockImplementation(() => mockMediaRecorder) as any;
+// 确保每次创建新实例时返回同一个 mock 对象
+global.MediaRecorder = vi.fn().mockImplementation(() => {
+  // 重置状态
+  mockMediaRecorder.state = 'inactive';
+  return mockMediaRecorder;
+}) as any;
 
 // Mock navigator.mediaDevices
 const mockStream = {
@@ -57,9 +62,12 @@ describe('useAudioRecorder', () => {
     });
 
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({ audio: true });
-    expect(mockMediaRecorder.start).toHaveBeenCalled();
-    // 验证状态已更新（可能异步）
-    expect(['recording', 'idle']).toContain(result.current.status);
+    // MediaRecorder 应该被创建
+    expect(global.MediaRecorder).toHaveBeenCalled();
+    // 验证状态已更新
+    await waitFor(() => {
+      expect(result.current.status).toBe('recording');
+    });
   });
 
   it('应该停止录音', async () => {
@@ -69,7 +77,12 @@ describe('useAudioRecorder', () => {
       await result.current.startRecording();
     });
 
-    // 设置状态为recording
+    // 等待状态更新为 recording
+    await waitFor(() => {
+      expect(result.current.status).toBe('recording');
+    });
+
+    // 设置状态为recording（确保 stopRecording 能执行）
     mockMediaRecorder.state = 'recording';
 
     act(() => {
@@ -94,6 +107,11 @@ describe('useAudioRecorder', () => {
       await result.current.startRecording();
     });
 
+    // 等待状态更新为 recording
+    await waitFor(() => {
+      expect(result.current.status).toBe('recording');
+    });
+
     mockMediaRecorder.state = 'recording';
 
     act(() => {
@@ -101,6 +119,11 @@ describe('useAudioRecorder', () => {
     });
 
     expect(mockMediaRecorder.pause).toHaveBeenCalled();
+
+    // 等待状态更新为 paused
+    await waitFor(() => {
+      expect(result.current.status).toBe('paused');
+    });
 
     mockMediaRecorder.state = 'paused';
 

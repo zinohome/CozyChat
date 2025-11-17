@@ -14,6 +14,11 @@ export function useMediaQuery(query: string): boolean {
       return;
     }
 
+    // 测试环境可能没有matchMedia
+    if (!window.matchMedia) {
+      return;
+    }
+
     const media = window.matchMedia(query);
     
     // 设置初始值

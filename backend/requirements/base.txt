@@ -44,6 +44,9 @@ python-dotenv==1.2.1
 # 日志
 structlog==25.5.0
 
+# API限流
+slowapi==0.1.9
+
 # 腾讯语音SDK（通过本地包安装）
 # 安装方式：pip install -e packages/tencent-speech-sdk
 # 注意：需要先初始化git submodule: git submodule update --init --recursive

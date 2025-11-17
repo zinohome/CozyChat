@@ -28,6 +28,10 @@ export const SessionSearch: React.FC<SessionSearchProps> = ({
    * 过滤会话
    */
   const filteredSessions = useMemo(() => {
+    if (!sessions || !Array.isArray(sessions)) {
+      return [];
+    }
+    
     if (!searchText.trim()) {
       return sessions;
     }

@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useFileUpload } from './useFileUpload';
 
+// 设置DOM环境
+beforeEach(() => {
+  // 确保 document.body 存在
+  if (!document.body) {
+    const body = document.createElement('body');
+    document.appendChild(body);
+  }
+  // 确保有 root 容器
+  if (!document.getElementById('root')) {
+    const container = document.createElement('div');
+    container.id = 'root';
+    document.body.appendChild(container);
+  }
+});
+
 // Mock XMLHttpRequest
 class MockXMLHttpRequest {
   open = vi.fn();

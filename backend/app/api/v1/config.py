@@ -8,13 +8,14 @@
 from typing import Dict, Optional, Any
 
 # 第三方库
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Request, Response
 from pydantic import BaseModel, Field
 import httpx
 
 # 本地库
 from app.api.deps import get_current_active_user
 from app.config.config import settings
+from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
 from app.utils.config_loader import get_config_loader
@@ -111,8 +112,11 @@ class RealtimeTokenRequest(BaseModel):
 
 
 @router.post("/realtime-token", response_model=RealtimeTokenResponse)
+@rate_limit("10/minute", per_user=True)
 async def get_realtime_token(
-    request: Optional[RealtimeTokenRequest] = Body(None),
+    request: Request,
+    data: Optional[RealtimeTokenRequest] = Body(None),
+    response: Response = None,
     user: User = Depends(get_current_active_user)
 ) -> RealtimeTokenResponse:
     """
@@ -168,15 +172,15 @@ async def get_realtime_token(
                 
                 # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
                 # ✅ 统一逻辑：尝试加载 personality 配置，如果不存在或为 'default'，则使用全局配置
-                if request and request.personality_id:
+                if data and data.personality_id:
                     try:
                         from app.core.personality import PersonalityManager
                         personality_manager = PersonalityManager()
-                        personality = personality_manager.get_personality(request.personality_id)
+                        personality = personality_manager.get_personality(data.personality_id)
                         logger.debug(
-                            f"Loading personality voice config for {request.personality_id}",
+                            f"Loading personality voice config for {data.personality_id}",
                             extra={
-                                "personality_id": request.personality_id,
+                                "personality_id": data.personality_id,
                                 "has_personality": personality is not None,
                                 "has_voice": personality and personality.voice is not None,
                                 "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
@@ -191,23 +195,23 @@ async def get_realtime_token(
                                     f"✅ Using personality voice '{voice}' for ephemeral token",
                                     extra={
                                         "user_id": str(user.id),
-                                        "personality_id": request.personality_id,
+                                        "personality_id": data.personality_id,
                                         "voice": voice
                                     }
                                 )
                             else:
                                 logger.warning(
-                                    f"⚠️ Personality {request.personality_id} realtime config exists but voice is missing",
+                                    f"⚠️ Personality {data.personality_id} realtime config exists but voice is missing",
                                     extra={
-                                        "personality_id": request.personality_id,
+                                        "personality_id": data.personality_id,
                                         "realtime_config": personality.voice.realtime
                                     }
                                 )
                         else:
                             logger.debug(
-                                f"Personality {request.personality_id} has no realtime voice config",
+                                f"Personality {data.personality_id} has no realtime voice config",
                                 extra={
-                                    "personality_id": request.personality_id,
+                                    "personality_id": data.personality_id,
                                     "has_voice": personality and personality.voice is not None,
                                     "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
                                 }
@@ -216,7 +220,7 @@ async def get_realtime_token(
                         logger.error(
                             f"❌ Failed to load personality voice config: {e}",
                             extra={
-                                "personality_id": request.personality_id if request else None,
+                                "personality_id": data.personality_id if request else None,
                                 "error": str(e),
                                 "error_type": type(e).__name__
                             },
@@ -234,7 +238,7 @@ async def get_realtime_token(
                         f"Using global voice '{voice}' for ephemeral token",
                         extra={
                             "user_id": str(user.id),
-                            "personality_id": request.personality_id if request else None,
+                            "personality_id": data.personality_id if request else None,
                             "voice": voice
                         }
                     )
@@ -299,7 +303,7 @@ async def get_realtime_token(
                                 f"✅ Successfully generated ephemeral client key (New API) with voice '{voice}'",
                                 extra={
                                     "user_id": str(user.id),
-                                    "personality_id": request.personality_id if request else None,
+                                    "personality_id": data.personality_id if request else None,
                                     "voice": voice
                                 }
                             )
@@ -343,11 +347,11 @@ async def get_realtime_token(
             voice = 'shimmer'  # 默认值
             
             # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
-            if request and request.personality_id:
+            if request and data.personality_id:
                 try:
                     from app.core.personality import PersonalityManager
                     personality_manager = PersonalityManager()
-                    personality = personality_manager.get_personality(request.personality_id)
+                    personality = personality_manager.get_personality(data.personality_id)
                     if personality and personality.voice and personality.voice.realtime:
                         # personality.voice.realtime 是一个字典
                         personality_voice = personality.voice.realtime.get('voice')
@@ -357,28 +361,28 @@ async def get_realtime_token(
                                 f"Using personality voice '{voice}' for ephemeral token (OpenAI)",
                                 extra={
                                     "user_id": str(user.id),
-                                    "personality_id": request.personality_id,
+                                    "personality_id": data.personality_id,
                                     "voice": voice
                                 }
                             )
                         else:
                             logger.debug(
-                                f"Personality {request.personality_id} has no voice config, using default",
-                                extra={"personality_id": request.personality_id}
+                                f"Personality {data.personality_id} has no voice config, using default",
+                                extra={"personality_id": data.personality_id}
                             )
                 except Exception as e:
                     logger.warning(
                         f"Failed to load personality voice config: {e}",
-                        extra={"personality_id": request.personality_id if request else None}
+                        extra={"personality_id": data.personality_id if request else None}
                     )
             
             # 如果没有 personality 配置，使用全局配置
-            if not request or not request.personality_id or voice == 'shimmer':
+            if not request or not data.personality_id or voice == 'shimmer':
                 realtime_config = config_loader.load_voice_config('realtime')
                 openai_config = realtime_config.get('openai', {})
                 global_voice = openai_config.get('voice', 'shimmer')
                 # 只有在没有 personality 配置时才使用全局配置
-                if not request or not request.personality_id or voice == 'shimmer':
+                if not request or not data.personality_id or voice == 'shimmer':
                     voice = global_voice
                     logger.info(
                         f"Using global voice '{voice}' for ephemeral token (OpenAI)",

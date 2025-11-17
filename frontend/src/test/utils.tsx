@@ -33,7 +33,7 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
   queryClient = createTestQueryClient(),
 }) => {
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient as any}>
       <ConfigProvider locale={zhCN}>{children}</ConfigProvider>
     </QueryClientProvider>
   );

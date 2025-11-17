@@ -7,16 +7,18 @@ describe('authSlice', () => {
     // 重置store状态
     useAuthStore.setState({
       user: null,
-      loading: false,
+      isLoading: false,
       error: null,
+      isAuthenticated: false,
     });
   });
 
   it('应该初始化空状态', () => {
     const state = useAuthStore.getState();
     expect(state.user).toBe(null);
-    expect(state.loading).toBe(false);
+    expect(state.isLoading).toBe(false);
     expect(state.error).toBe(null);
+    expect(state.isAuthenticated).toBe(false);
   });
 
   it('应该设置用户', () => {
@@ -30,11 +32,12 @@ describe('authSlice', () => {
     const state = useAuthStore.getState();
 
     expect(state.user).toEqual(user);
+    expect(state.isAuthenticated).toBe(true);
   });
 
   it('应该设置加载状态', () => {
     useAuthStore.getState().setLoading(true);
-    expect(useAuthStore.getState().loading).toBe(true);
+    expect(useAuthStore.getState().isLoading).toBe(true);
   });
 
   it('应该设置错误', () => {

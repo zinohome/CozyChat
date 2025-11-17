@@ -3,12 +3,13 @@ import { useUIStore } from './uiSlice';
 
 describe('uiSlice', () => {
   beforeEach(() => {
-    // 重置store状态
+    // 重置store状态到初始值
     useUIStore.setState({
       sidebarOpen: true,
       mobileMenuOpen: false,
-      theme: 'light',
+      theme: 'blue', // 初始值是'blue'
       language: 'zh-CN',
+      chatBackgroundStyle: 'gradient',
     });
   });
 
@@ -16,7 +17,7 @@ describe('uiSlice', () => {
     const state = useUIStore.getState();
     expect(state.sidebarOpen).toBe(true);
     expect(state.mobileMenuOpen).toBe(false);
-    expect(state.theme).toBe('auto');
+    expect(state.theme).toBe('blue'); // 实际初始值是'blue'
     expect(state.language).toBe('zh-CN');
   });
 

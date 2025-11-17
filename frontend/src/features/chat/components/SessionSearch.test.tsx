@@ -31,7 +31,7 @@ describe('SessionSearch', () => {
   });
 
   it('应该渲染搜索输入框', () => {
-    customRender(<SessionSearch />);
+    customRender(<SessionSearch sessions={mockSessions} />);
     expect(screen.getByPlaceholderText(/搜索会话/i)).toBeInTheDocument();
   });
 
@@ -39,7 +39,7 @@ describe('SessionSearch', () => {
     const user = userEvent.setup();
     const onSearch = vi.fn();
 
-    customRender(<SessionSearch onSearch={onSearch} />);
+    customRender(<SessionSearch sessions={mockSessions} onSearch={onSearch} />);
 
     const searchInput = screen.getByPlaceholderText(/搜索会话/i);
     await user.type(searchInput, '测试会话1');

@@ -34,14 +34,16 @@ describe('LoginForm', () => {
     customRender(<LoginForm />);
     expect(screen.getByPlaceholderText(/请输入用户名或邮箱/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/请输入密码/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /登录/i })).toBeInTheDocument();
+    // 按钮文本是 "登 录"（有空格），使用更宽松的匹配
+    expect(screen.getByRole('button', { name: /登\s*录/i })).toBeInTheDocument();
   });
 
   it('应该验证必填字段', async () => {
     const user = userEvent.setup();
     customRender(<LoginForm />);
 
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    // 按钮文本是 "登 录"（有空格），使用更宽松的匹配
+    const submitButton = screen.getByRole('button', { name: /登\s*录/i });
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -57,7 +59,8 @@ describe('LoginForm', () => {
 
     const usernameInput = screen.getByPlaceholderText(/请输入用户名或邮箱/i);
     const passwordInput = screen.getByPlaceholderText(/请输入密码/i);
-    const submitButton = screen.getByRole('button', { name: /登录/i });
+    // 按钮文本是 "登 录"（有空格），使用更宽松的匹配
+    const submitButton = screen.getByRole('button', { name: /登\s*录/i });
 
     await user.type(usernameInput, 'testuser');
     await user.type(passwordInput, 'password123');

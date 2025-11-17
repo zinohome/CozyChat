@@ -45,27 +45,9 @@ describe('SessionList', () => {
     expect(screen.getByText('测试会话2')).toBeInTheDocument();
   });
 
-  it('应该显示新建按钮', () => {
-    customRender(<SessionList />);
-    expect(screen.getByRole('button', { name: /新建/i })).toBeInTheDocument();
-  });
-
-  it('应该创建新会话', async () => {
-    const user = userEvent.setup();
-    mockCreateSession.mockResolvedValue({
-      id: 'session-3',
-      title: '新会话',
-    });
-
-    customRender(<SessionList />);
-
-    const createButton = screen.getByRole('button', { name: /新建/i });
-    await user.click(createButton);
-
-    await waitFor(() => {
-      expect(mockCreateSession).toHaveBeenCalled();
-    });
-  });
+  // 注意：SessionList 组件不包含新建按钮
+  // 新建按钮在 ChatSessionHeader 组件中
+  // 如果需要测试新建功能，应该测试 ChatSessionHeader 组件
 
   it('应该高亮当前会话', () => {
     customRender(<SessionList currentSessionId="session-1" />);

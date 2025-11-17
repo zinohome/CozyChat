@@ -9,6 +9,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { showSuccess, showError } from '@/utils/errorHandler';
 import { playTTS } from '@/utils/tts';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/utils/timezone';
+import { sanitizeMarkdownHtml, sanitizeUrl } from '@/utils/xss';
 import { useQuery } from '@tanstack/react-query';
 import { userApi } from '@/services/user';
 import type { UserPreferences } from '@/types/user';
@@ -360,11 +361,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </code>
                 );
               },
-              // 优化链接样式
-              a({ node, ...props }: any) {
+              // 优化链接样式（XSS防护）
+              a({ node, href, ...props }: any) {
+                // 清理URL，确保安全
+                const safeHref = href ? sanitizeUrl(href) : '#';
                 return (
                   <a
                     {...props}
+                    href={safeHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{

@@ -8,11 +8,12 @@
 from typing import Dict
 
 # 第三方库
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request, Response
 from pydantic import BaseModel
 
 # 本地库
 from app.engines.memory import MemoryManager, MemoryType
+from app.middleware.rate_limit import rate_limit
 from app.schemas.memory import (
     MemoryCreate,
     MemoryResponse,
@@ -35,7 +36,8 @@ class MemoryCreateResponse(BaseModel):
 
 
 @router.post("/", response_model=MemoryCreateResponse)
-async def create_memory(memory: MemoryCreate):
+@rate_limit("20/minute", per_user=True)
+async def create_memory(request: Request, memory: MemoryCreate, response: Response):
     """创建记忆
     
     Args:
@@ -66,7 +68,8 @@ async def create_memory(memory: MemoryCreate):
 
 
 @router.post("/search", response_model=MemorySearchResponse)
-async def search_memories(request: MemorySearchRequest):
+@rate_limit("60/minute", per_user=True)
+async def search_memories(request: Request, data: MemorySearchRequest, response: Response):
     """搜索记忆
     
     Args:
@@ -78,18 +81,18 @@ async def search_memories(request: MemorySearchRequest):
     try:
         # 转换memory_type
         memory_type = None
-        if request.memory_type == "user":
+        if data.memory_type == "user":
             memory_type = MemoryType.USER
-        elif request.memory_type == "assistant":
+        elif data.memory_type == "assistant":
             memory_type = MemoryType.ASSISTANT
         
         results = await memory_manager.search_memories(
-            query=request.query,
-            user_id=request.user_id,
-            session_id=request.session_id,
+            query=data.query,
+            user_id=data.user_id,
+            session_id=data.session_id,
             memory_type=memory_type,
-            limit=request.limit,
-            similarity_threshold=request.similarity_threshold
+            limit=data.limit,
+            similarity_threshold=data.similarity_threshold
         )
         
         # 转换为响应格式

@@ -7,11 +7,12 @@ afterEach(() => {
   cleanup();
 });
 
-// Mock window.matchMedia
+// Mock window.matchMedia (在useMediaQuery.test.ts中会被覆盖)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
+  configurable: true,
   value: vi.fn().mockImplementation((query) => ({
-    matches: false,
+    matches: query === '(max-width: 767px)', // 默认返回移动端匹配
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -89,4 +90,5 @@ Object.defineProperty(navigator, 'mediaDevices', {
     ),
   },
 });
+
 

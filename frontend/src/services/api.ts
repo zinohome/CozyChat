@@ -6,8 +6,10 @@ import axios, {
 } from 'axios';
 import type { ApiResponse } from '@/types/api';
 
+// 开发环境使用相对路径（通过 Vite 代理），生产环境使用完整 URL
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://192.168.32.155:8000';
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? '' : 'http://192.168.32.155:8000');
 
 /**
  * API客户端类

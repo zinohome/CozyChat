@@ -8,13 +8,14 @@
 from typing import Any, Dict
 
 # 第三方库
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 
 # 本地库
 from app.api.deps import get_sync_session
 from app.core.user.auth import AuthService
+from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
 from sqlalchemy.orm import Session
@@ -39,8 +40,11 @@ class RefreshTokenResponse(BaseModel):
 # ===== API路由 =====
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
+@rate_limit("10/minute", per_user=True)
 async def refresh_token(
-    request: RefreshTokenRequest,
+    request: Request,
+    data: RefreshTokenRequest,
+    response: Response,
     db: Session = Depends(get_sync_session)
 ) -> RefreshTokenResponse:
     """刷新访问令牌
@@ -61,7 +65,7 @@ async def refresh_token(
         auth_service = AuthService()
         
         # 验证刷新令牌
-        payload = auth_service.verify_token(request.refresh_token)
+        payload = auth_service.verify_token(data.refresh_token)
         if not payload:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -21,8 +21,10 @@ from app.api.v1 import api_router
 from app.config.config import settings
 from app.models.base import close_db, init_db
 from app.middleware.performance import PerformanceMiddleware
+from app.middleware.rate_limit import limiter, rate_limit_handler
 from app.utils.logger import logger
 from app.utils.cache import cache_manager
+from slowapi.errors import RateLimitExceeded
 
 
 @asynccontextmanager
@@ -99,6 +101,10 @@ app.add_middleware(
 
 # ===== 配置性能监控中间件 =====
 app.add_middleware(PerformanceMiddleware)
+
+# ===== 配置限流中间件 =====
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # ===== 配置静态文件路由 =====
 # 挂载静态文件目录，提供 Swagger UI 和 ReDoc 的 JS 文件

@@ -10,7 +10,7 @@ from typing import AsyncIterator
 from datetime import timezone
 
 # 第三方库
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import StreamingResponse
 
 # 本地库
@@ -19,6 +19,7 @@ from app.core.personality import PersonalityManager
 from app.engines.ai import AIEngineFactory, ChatMessage as EngineChatMessage
 from app.engines.tools import builtin  # 导入以注册工具
 from app.engines.tools.manager import ToolManager
+from app.middleware.rate_limit import rate_limit
 from app.models.session import Session as SessionModel
 from app.models.message import Message as MessageModel
 from app.models.user import User
@@ -39,8 +40,11 @@ router = APIRouter()
 
 
 @router.post("/completions", response_model=ChatCompletionResponse)
+@rate_limit("30/minute", per_user=True)
 async def create_chat_completion(
-    request: ChatCompletionRequest,
+    request: Request,
+    data: ChatCompletionRequest,
+    response: Response,
     db: Session = Depends(get_sync_session)
 ):
     """创建聊天补全（OpenAI兼容接口）
@@ -60,14 +64,14 @@ async def create_chat_completion(
     """
     try:
         # 确定personality_id和user_id：优先使用请求中的，否则从session_id获取
-        personality_id = request.personality_id
-        user_id = request.user_id  # 默认使用请求中的 user_id
+        personality_id = data.personality_id
+        user_id = data.user_id  # 默认使用请求中的 user_id
         session = None
         
-        if request.session_id:
+        if data.session_id:
             try:
                 import uuid
-                session_uuid = uuid.UUID(request.session_id)
+                session_uuid = uuid.UUID(data.session_id)
                 session = db.query(SessionModel).filter(
                     SessionModel.id == session_uuid
                 ).first()
@@ -77,7 +81,7 @@ async def create_chat_completion(
                         personality_id = session.personality_id
                         logger.debug(
                             f"Got personality_id from session: {personality_id}",
-                            extra={"session_id": request.session_id}
+                            extra={"session_id": data.session_id}
                         )
                     
                     # 如果请求中没有 user_id，从 session 获取
@@ -85,7 +89,7 @@ async def create_chat_completion(
                         user_id = str(session.user_id)
                         logger.debug(
                             f"Got user_id from session: {user_id}",
-                            extra={"session_id": request.session_id}
+                            extra={"session_id": data.session_id}
                         )
             except Exception as e:
                 logger.warning(
@@ -94,12 +98,12 @@ async def create_chat_completion(
                 )
         
         # 确定使用的模型和引擎类型：优先使用personality配置，否则使用请求中的或默认值
-        actual_model = request.model
-        actual_engine_type = request.engine_type or "openai"
-        actual_max_tokens = request.max_tokens  # 默认使用请求中的 max_tokens
+        actual_model = data.model
+        actual_engine_type = data.engine_type or "openai"
+        actual_max_tokens = data.max_tokens  # 默认使用请求中的 max_tokens
         
         # 准备工具列表
-        tools = request.tools  # 默认使用请求中的工具
+        tools = data.tools  # 默认使用请求中的工具
         
         # 如果确定了personality_id，从人格配置加载工具和模型
         if personality_id:
@@ -243,7 +247,7 @@ async def create_chat_completion(
         )
         
         # 转换并添加用户消息
-        for msg in request.messages:
+        for msg in data.messages:
             full_messages.append(
             EngineChatMessage(
                 role=msg.role,
@@ -264,14 +268,14 @@ async def create_chat_completion(
                 if personality:
                     # 1. 如果启用了记忆系统，先检索相关记忆
                     retrieved_memories = None
-                    if personality.memory.enabled and request.use_memory and user_id and request.session_id:
+                    if personality.memory.enabled and data.use_memory and user_id and data.session_id:
                         try:
                             from app.engines.memory.manager import MemoryManager
                             memory_manager = MemoryManager()
                             
                             # 获取最后一条用户消息作为查询
                             last_user_message = None
-                            for msg in reversed(request.messages):
+                            for msg in reversed(data.messages):
                                 if msg.role == "user" and msg.content:
                                     last_user_message = msg.content
                                     break
@@ -300,7 +304,7 @@ async def create_chat_completion(
                                 
                                 retrieved_memories = await memory_manager.retrieve_memories(
                                     user_id=user_id,
-                                    session_id=request.session_id,
+                                    session_id=data.session_id,
                                     query=last_user_message,
                                     max_results=memory_config.retrieval.max_results,
                                     include_user_memory=include_user,
@@ -407,7 +411,7 @@ async def create_chat_completion(
         messages = full_messages
         
         # 流式输出
-        if request.stream:
+        if data.stream:
             async def generate_stream() -> AsyncIterator[str]:
                 """生成SSE流，支持工具调用"""
                 try:
@@ -438,7 +442,7 @@ async def create_chat_completion(
                         
                         async for chunk in engine.chat_stream(
                             messages=current_messages,
-                            temperature=request.temperature,
+                            temperature=data.temperature,
                             max_tokens=actual_max_tokens,
                             tools=tools
                         ):
@@ -676,7 +680,7 @@ async def create_chat_completion(
                         yield "data: [DONE]\n\n"
                         
                         # 保存记忆（如果启用了记忆系统）- 完全异步执行，不阻塞响应
-                        if personality_id and user_id and request.session_id:
+                        if personality_id and user_id and data.session_id:
                             # 获取最后一条用户消息和AI回复（在异步任务外获取，避免闭包问题）
                             last_user_message = None
                             for msg in reversed(current_messages):
@@ -701,7 +705,7 @@ async def create_chat_completion(
                                         
                                         async_db = next(get_sync_db())
                                         try:
-                                            session_uuid = uuid.UUID(request.session_id)
+                                            session_uuid = uuid.UUID(data.session_id)
                                             user_uuid = uuid.UUID(user_id)
                                             
                                             # 保存用户消息到数据库
@@ -742,7 +746,7 @@ async def create_chat_completion(
                                                     f"Saved messages to database (stream)",
                                                     extra={
                                                         "user_id": user_id,
-                                                        "session_id": request.session_id,
+                                                        "session_id": data.session_id,
                                                         "user_message_length": len(last_user_message),
                                                         "assistant_message_length": len(assistant_content)
                                                     }
@@ -758,13 +762,13 @@ async def create_chat_completion(
                                             personality_manager = PersonalityManager()
                                             personality = personality_manager.get_personality(personality_id)
                                             
-                                            if personality and personality.memory.enabled and request.use_memory:
+                                            if personality and personality.memory.enabled and data.use_memory:
                                                 memory_manager = MemoryManager()
                                                 
                                                 # 使用 async_save=True 异步保存，不阻塞
                                                 await memory_manager.add_conversation_turn(
                                                     user_id=user_id,
-                                                    session_id=request.session_id,
+                                                    session_id=data.session_id,
                                                     user_message=last_user_message,
                                                     assistant_message=assistant_content,
                                                     importance=0.5,
@@ -775,7 +779,7 @@ async def create_chat_completion(
                                                     f"Saved conversation to memory (stream)",
                                                     extra={
                                                         "user_id": user_id,
-                                                        "session_id": request.session_id,
+                                                        "session_id": data.session_id,
                                                         "user_message_length": len(last_user_message),
                                                         "assistant_message_length": len(assistant_content)
                                                     }
@@ -785,7 +789,7 @@ async def create_chat_completion(
                                             try:
                                                 title_generator = SessionTitleGenerator(async_db)
                                                 await title_generator.update_session_title_if_needed(
-                                                    session_id=request.session_id,
+                                                    session_id=data.session_id,
                                                     personality_id=personality_id
                                                 )
                                             except Exception as title_error:
@@ -834,16 +838,16 @@ async def create_chat_completion(
         else:
             response = await engine.chat(
                 messages=messages,
-                temperature=request.temperature,
+                temperature=data.temperature,
                 max_tokens=actual_max_tokens,
                 tools=tools
             )
             
             # 保存记忆（如果启用了记忆系统）- 完全异步执行，不阻塞响应
-            if personality_id and user_id and request.session_id:
+            if personality_id and user_id and data.session_id:
                 # 获取最后一条用户消息和AI回复（在异步任务外获取，避免闭包问题）
                 last_user_message = None
-                for msg in reversed(request.messages):
+                for msg in reversed(data.messages):
                     if msg.role == "user" and msg.content:
                         last_user_message = msg.content
                         break
@@ -870,7 +874,7 @@ async def create_chat_completion(
                             
                             async_db = next(get_sync_db())
                             try:
-                                session_uuid = uuid.UUID(request.session_id)
+                                session_uuid = uuid.UUID(data.session_id)
                                 user_uuid = uuid.UUID(user_id)
                                 
                                 # 保存用户消息到数据库
@@ -908,7 +912,7 @@ async def create_chat_completion(
                                         f"Saved messages to database (non-stream)",
                                         extra={
                                             "user_id": user_id,
-                                            "session_id": request.session_id,
+                                            "session_id": data.session_id,
                                             "user_message_length": len(last_user_message),
                                             "assistant_message_length": len(assistant_content)
                                         }
@@ -924,13 +928,13 @@ async def create_chat_completion(
                                 personality_manager = PersonalityManager()
                                 personality = personality_manager.get_personality(personality_id)
                                 
-                                if personality and personality.memory.enabled and request.use_memory:
+                                if personality and personality.memory.enabled and data.use_memory:
                                     memory_manager = MemoryManager()
                                     
                                     # 使用 async_save=True 异步保存，不阻塞
                                     await memory_manager.add_conversation_turn(
                                         user_id=user_id,
-                                        session_id=request.session_id,
+                                        session_id=data.session_id,
                                         user_message=last_user_message,
                                         assistant_message=assistant_content,
                                         importance=0.5,
@@ -941,7 +945,7 @@ async def create_chat_completion(
                                         f"Saved conversation to memory (non-stream)",
                                         extra={
                                             "user_id": user_id,
-                                            "session_id": request.session_id,
+                                            "session_id": data.session_id,
                                             "user_message_length": len(last_user_message),
                                             "assistant_message_length": len(assistant_content)
                                         }
@@ -951,7 +955,7 @@ async def create_chat_completion(
                                 try:
                                     title_generator = SessionTitleGenerator(async_db)
                                     await title_generator.update_session_title_if_needed(
-                                        session_id=request.session_id,
+                                        session_id=data.session_id,
                                         personality_id=personality_id
                                     )
                                 except Exception as title_error:

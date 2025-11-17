@@ -175,3 +175,31 @@ def require_admin(
     return current_user
 
 
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_sync_session)
+) -> Optional[User]:
+    """获取当前用户（可选，不抛出异常）
+    
+    用于限流等场景，如果未认证则返回None
+    
+    Args:
+        credentials: HTTP Bearer认证凭证
+        db: 数据库会话
+        
+    Returns:
+        Optional[User]: 当前用户对象，如果未认证返回None
+    """
+    if not credentials:
+        return None
+    
+    try:
+        auth_service = AuthService()
+        token = credentials.credentials
+        user = auth_service.get_current_user_from_token(db, token)
+        return user
+    except Exception:
+        # 认证失败时返回None，不抛出异常
+        return None
+
+
