@@ -21,6 +21,9 @@ from .base import MemoryEngineBase
 from .chromadb_engine import ChromaDBMemoryEngine
 from .qdrant_engine import QdrantMemoryEngine
 from .models import Memory, MemorySearchResult, MemoryType
+from .importance_scorer import ImportanceScorer
+from .deduplicator import MemoryDeduplicator
+from .eviction_policy import EvictionPolicy
 
 
 class MemoryManager:
@@ -107,6 +110,33 @@ class MemoryManager:
         self.search_timeout = search_timeout
         self.pending_saves: List[Memory] = []
         
+        # 初始化智能覆盖组件
+        try:
+            importance_config = memory_config.get("importance", {})
+            scoring_config = importance_config.get("scoring", {})
+            self.importance_scorer = ImportanceScorer(
+                config=scoring_config.get("default", {})
+            )
+            self.deduplicator = MemoryDeduplicator(
+                engine=engine,
+                similarity_threshold=0.95
+            )
+            self.eviction_policy = EvictionPolicy(
+                engine=engine,
+                config=importance_config.get("eviction", {})
+            )
+            self.smart_coverage_enabled = importance_config.get("scoring", {}).get("enabled", True)
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize smart coverage components: {e}",
+                exc_info=True
+            )
+            # 使用默认配置
+            self.importance_scorer = ImportanceScorer()
+            self.deduplicator = MemoryDeduplicator(engine=engine)
+            self.eviction_policy = EvictionPolicy(engine=engine)
+            self.smart_coverage_enabled = False
+        
         logger.info(
             "Memory manager initialized",
             extra={
@@ -114,6 +144,7 @@ class MemoryManager:
                 "cache_ttl": cache_ttl,
                 "cache_maxsize": cache_maxsize,
                 "cross_session_enabled": self.cross_session_enabled,
+                "smart_coverage_enabled": self.smart_coverage_enabled,
                 "config_source": "yaml"
             }
         )
@@ -148,9 +179,11 @@ class MemoryManager:
         session_id: str,
         content: str,
         memory_type: MemoryType,
-        importance: float = 0.5,
+        importance: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        async_save: bool = True
+        async_save: bool = True,
+        auto_calculate_importance: bool = True,
+        enable_deduplication: bool = True
     ) -> str:
         """添加记忆
         
@@ -159,13 +192,40 @@ class MemoryManager:
             session_id: 会话ID
             content: 记忆内容
             memory_type: 记忆类型
-            importance: 重要性分数
+            importance: 重要性分数（如果为None且auto_calculate_importance=True，则自动计算）
             metadata: 额外元数据
             async_save: 是否异步保存
+            auto_calculate_importance: 是否自动计算重要性
+            enable_deduplication: 是否启用去重
             
         Returns:
             str: 记忆ID
         """
+        metadata = metadata or {}
+        created_at = datetime.utcnow()
+        
+        # 自动计算重要性（如果启用且未提供）
+        if importance is None and auto_calculate_importance and self.smart_coverage_enabled:
+            try:
+                importance = self.importance_scorer.calculate_importance(
+                    content=content,
+                    metadata=metadata,
+                    user_id=user_id,
+                    session_id=session_id,
+                    created_at=created_at
+                )
+                logger.debug(
+                    f"Auto-calculated importance: {importance}",
+                    extra={"user_id": user_id, "content_length": len(content)}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to calculate importance: {e}", exc_info=True)
+                importance = 0.5  # 默认值
+        
+        # 如果仍未设置，使用默认值
+        if importance is None:
+            importance = 0.5
+        
         # 创建Memory对象
         memory = Memory(
             id=f"mem-{uuid.uuid4().hex}",
@@ -174,8 +234,29 @@ class MemoryManager:
             memory_type=memory_type,
             content=content,
             importance=importance,
-            metadata=metadata or {}
+            metadata=metadata,
+            created_at=created_at
         )
+        
+        # 智能去重（如果启用）- 检查是否有重复，但不直接保存
+        if enable_deduplication and self.smart_coverage_enabled:
+            try:
+                duplicates = await self.deduplicator.find_duplicates(memory)
+                if duplicates:
+                    # 有重复，合并记忆
+                    all_memories = [memory] + duplicates
+                    memory = await self.deduplicator.merge_memories(all_memories)
+                    # 删除重复的记忆
+                    for dup in duplicates:
+                        try:
+                            await self.engine.delete_memory(dup.id, dup.user_id)
+                            logger.debug(f"Deleted duplicate memory: {dup.id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete duplicate memory {dup.id}: {e}")
+                    logger.debug(f"Memory deduplication completed: {memory.id}")
+            except Exception as e:
+                logger.warning(f"Deduplication failed, saving directly: {e}", exc_info=True)
+                # 去重失败，继续正常保存流程
         
         if async_save:
             # 异步保存：添加到待保存队列
@@ -393,6 +474,29 @@ class MemoryManager:
             bool: 管理器是否健康
         """
         return await self.engine.health_check()
+    
+    async def evict_low_importance_memories(
+        self,
+        user_id: str,
+        memory_type: Optional[MemoryType] = None
+    ) -> int:
+        """淘汰低重要性记忆
+        
+        Args:
+            user_id: 用户ID
+            memory_type: 记忆类型（可选）
+            
+        Returns:
+            int: 淘汰的记忆数量
+        """
+        if not self.smart_coverage_enabled:
+            return 0
+        
+        try:
+            return await self.eviction_policy.evict_memories(user_id, memory_type)
+        except Exception as e:
+            logger.error(f"Failed to evict memories: {e}", exc_info=True)
+            return 0
     
     async def retrieve_memories(
         self,
