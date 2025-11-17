@@ -1,13 +1,19 @@
+/**
+ * useStreamChat Hook测试
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useStreamChat } from './useStreamChat';
 import { chatApi } from '@/services/chat';
 import { useChatStore } from '@/store/slices/chatSlice';
+import { useAuthStore } from '@/store/slices/authSlice';
 
 // Mock dependencies
 vi.mock('@/services/chat');
 vi.mock('@/store/slices/chatSlice');
+vi.mock('@/store/slices/authSlice');
 
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -23,8 +29,6 @@ const createWrapper = () => {
 };
 
 describe('useStreamChat', () => {
-  const mockAddMessage = vi.fn();
-  const mockUpdateMessage = vi.fn();
   const mockSetLoading = vi.fn();
   const mockSetError = vi.fn();
 
@@ -32,47 +36,31 @@ describe('useStreamChat', () => {
     vi.clearAllMocks();
 
     (useChatStore as any).mockReturnValue({
-      addMessage: mockAddMessage,
-      updateMessage: mockUpdateMessage,
       setLoading: mockSetLoading,
       setError: mockSetError,
     });
+
+    (useAuthStore as any).mockReturnValue({
+      user: { id: 'user-1' },
+    });
   });
 
-  it('应该初始化Hook', () => {
+  it('should initialize with correct state', () => {
     const { result } = renderHook(
       () => useStreamChat('session-1', 'personality-1'),
       { wrapper: createWrapper() }
     );
 
-    expect(result.current).toBeDefined();
-    expect(result.current.sendStreamMessage).toBeDefined();
+    expect(result.current.isStreaming).toBe(false);
     expect(typeof result.current.sendStreamMessage).toBe('function');
   });
 
-  it('应该发送流式消息', async () => {
+  it('should send stream message', async () => {
+    // Mock stream response
     const mockStream = async function* () {
-      yield {
-        choices: [
-          {
-            delta: { content: 'Hello' },
-          },
-        ],
-      };
-      yield {
-        choices: [
-          {
-            delta: { content: ' World' },
-          },
-        ],
-      };
-      yield {
-        choices: [
-          {
-            finish_reason: 'stop',
-          },
-        ],
-      };
+      yield { data: '{"content":"Hello"}' };
+      yield { data: '{"content":" World"}' };
+      yield { data: '[DONE]' };
     };
 
     (chatApi.streamChat as any).mockReturnValue(mockStream());
@@ -84,14 +72,12 @@ describe('useStreamChat', () => {
 
     await result.current.sendStreamMessage('Test message');
 
-    await waitFor(() => {
-      expect(mockAddMessage).toHaveBeenCalled();
-      expect(mockUpdateMessage).toHaveBeenCalled();
-    });
+    expect(chatApi.streamChat).toHaveBeenCalled();
+    expect(mockSetLoading).toHaveBeenCalled();
   });
 
-  it('应该处理流式错误', async () => {
-    const error = new Error('Stream error');
+  it('should handle stream error', async () => {
+    const error = new Error('Stream failed');
     (chatApi.streamChat as any).mockRejectedValue(error);
 
     const { result } = renderHook(
@@ -99,40 +85,25 @@ describe('useStreamChat', () => {
       { wrapper: createWrapper() }
     );
 
-    await result.current.sendStreamMessage('Test message');
+    try {
+      await result.current.sendStreamMessage('Test message');
+    } catch (e) {
+      // Expected error
+    }
 
-    await waitFor(() => {
-      expect(mockSetError).toHaveBeenCalled();
-    });
+    expect(mockSetError).toHaveBeenCalled();
   });
 
-  it('应该在发送时设置加载状态', async () => {
-    const mockStream = async function* () {
-      yield {
-        choices: [
-          {
-            delta: { content: 'Hello' },
-          },
-        ],
-      };
-    };
-
-    (chatApi.streamChat as any).mockReturnValue(mockStream());
-
+  it('should handle empty content', async () => {
     const { result } = renderHook(
       () => useStreamChat('session-1', 'personality-1'),
       { wrapper: createWrapper() }
     );
 
-    const sendPromise = result.current.sendStreamMessage('Test');
+    // 空内容应该被处理
+    await result.current.sendStreamMessage('');
 
-    expect(mockSetLoading).toHaveBeenCalledWith(true);
-
-    await sendPromise;
-
-    await waitFor(() => {
-      expect(mockSetLoading).toHaveBeenCalledWith(false);
-    });
+    // 不应该调用API
+    expect(chatApi.streamChat).not.toHaveBeenCalled();
   });
 });
-

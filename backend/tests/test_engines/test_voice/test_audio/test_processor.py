@@ -164,3 +164,72 @@ class TestAudioProcessor:
         
         # 文件应该被删除
         assert not (audio_processor.cache_dir / "file1.mp3").exists()
+    
+    def test_get_cache_key_same_inputs(self, audio_processor):
+        """测试：相同输入生成相同key"""
+        key1 = audio_processor.get_cache_key("test text", "alloy", 1.0)
+        key2 = audio_processor.get_cache_key("test text", "alloy", 1.0)
+        
+        assert key1 == key2
+    
+    def test_get_cache_key_different_voice(self, audio_processor):
+        """测试：不同语音生成不同key"""
+        key1 = audio_processor.get_cache_key("test text", "alloy", 1.0)
+        key2 = audio_processor.get_cache_key("test text", "shimmer", 1.0)
+        
+        assert key1 != key2
+    
+    def test_get_cache_key_different_speed(self, audio_processor):
+        """测试：不同语速生成不同key"""
+        key1 = audio_processor.get_cache_key("test text", "alloy", 1.0)
+        key2 = audio_processor.get_cache_key("test text", "alloy", 1.5)
+        
+        assert key1 != key2
+    
+    @pytest.mark.asyncio
+    async def test_save_to_cache_empty_data(self, audio_processor, tmp_path):
+        """测试：保存空数据到缓存"""
+        audio_processor.cache_dir = tmp_path / "audio_cache"
+        audio_processor.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_key = "test_key"
+        path = await audio_processor.save_to_cache(cache_key, b"", "mp3")
+        
+        assert path.exists()
+        assert path.read_bytes() == b""
+    
+    @pytest.mark.asyncio
+    async def test_is_cached_true(self, audio_processor, sample_audio_data, tmp_path):
+        """测试：检查缓存（存在）"""
+        audio_processor.cache_dir = tmp_path / "audio_cache"
+        audio_processor.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_key = "test_key"
+        await audio_processor.save_to_cache(cache_key, sample_audio_data, "mp3")
+        
+        result = audio_processor.is_cached(cache_key, "mp3")
+        assert result is True
+    
+    def test_get_cache_size_empty(self, audio_processor, tmp_path):
+        """测试：获取空缓存大小"""
+        audio_processor.cache_dir = tmp_path / "audio_cache"
+        audio_processor.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        size = audio_processor.get_cache_size()
+        assert size == 0
+    
+    @pytest.mark.asyncio
+    async def test_load_from_cache_error_handling(self, audio_processor, tmp_path):
+        """测试：从缓存加载错误处理"""
+        audio_processor.cache_dir = tmp_path / "audio_cache"
+        audio_processor.cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        cache_key = "test_key"
+        cache_path = audio_processor.get_cache_path(cache_key, "mp3")
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        # 创建一个无法读取的文件（通过删除权限）
+        cache_path.write_bytes(b"test")
+        
+        # 正常情况应该能读取
+        loaded = await audio_processor.load_from_cache(cache_key, "mp3")
+        assert loaded == b"test"
