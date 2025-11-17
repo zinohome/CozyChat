@@ -10,6 +10,9 @@
 import { RealtimeAgent, RealtimeSession, OpenAIRealtimeWebRTC } from '@openai/agents/realtime';
 import type { ITransportStrategy, TransportStrategyConfig } from './ITransportStrategy';
 import { AudioVisualizer } from '../visualization/AudioVisualizer';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('WebRTCStrategy');
 
 /**
  * WebRTC 传输层策略类
@@ -35,7 +38,7 @@ export class WebRTCStrategy implements ITransportStrategy {
     agent: RealtimeAgent,
     config: TransportStrategyConfig
   ): Promise<RealtimeSession> {
-    console.log('[WebRTCStrategy] 创建 WebRTC Session...');
+    log.debug('创建 WebRTC Session...');
 
     // 1. 创建用户音频流
     if (!this.mediaStream) {
@@ -76,13 +79,24 @@ export class WebRTCStrategy implements ITransportStrategy {
     });
 
     // 5. 创建 RealtimeSession
-    const session = new RealtimeSession(agent, {
+    log.debug('创建 RealtimeSession，voice:', config.voice);
+    // ✅ 尝试两种方式：顶层参数和 config 对象中都传递 voice
+    const sessionConfig: any = {
       apiKey: config.apiKey,
       transport: this.transport,
       model: config.model,
-    });
+      voice: config.voice, // 顶层传递
+      config: {
+        voice: config.voice, // config 对象中也传递
+        ...(config.inputAudioTranscription && {
+          inputAudioTranscription: config.inputAudioTranscription,
+        }),
+      },
+    };
+    log.debug('RealtimeSession 配置:', JSON.stringify(sessionConfig, null, 2));
+    const session = new RealtimeSession(agent, sessionConfig);
 
-    console.log('[WebRTCStrategy] WebRTC Session 已创建');
+    log.debug('WebRTC Session 已创建，voice:', config.voice);
     return session;
   }
 
@@ -113,7 +127,7 @@ export class WebRTCStrategy implements ITransportStrategy {
       onAssistantFrequencyData
     );
 
-    console.log('[WebRTCStrategy] 音频可视化已初始化');
+    log.debug('音频可视化已初始化');
   }
 
   /**
@@ -123,7 +137,7 @@ export class WebRTCStrategy implements ITransportStrategy {
     this.audioVisualizer.setCallingState(true);
     this.audioVisualizer.startUserFrequencyExtraction();
     this.audioVisualizer.startAssistantFrequencyExtraction();
-    console.log('[WebRTCStrategy] 音频可视化已启动');
+    log.debug('音频可视化已启动');
   }
 
   /**
@@ -132,7 +146,7 @@ export class WebRTCStrategy implements ITransportStrategy {
   stopAudioVisualization(): void {
     this.audioVisualizer.setCallingState(false);
     this.audioVisualizer.stopFrequencyExtraction();
-    console.log('[WebRTCStrategy] 音频可视化已停止');
+    log.debug('音频可视化已停止');
   }
 
   /**
@@ -141,7 +155,7 @@ export class WebRTCStrategy implements ITransportStrategy {
    * 关闭 WebRTC transport 以立即停止音频播放
    */
   stopCall(): void {
-    console.log('[WebRTCStrategy] 立即停止通话...');
+    log.debug('立即停止通话...');
 
     // ✅ 关键修复：先停止用户音频流的所有轨道（停止输入）
     // 这样可以立即停止向服务器发送音频数据
@@ -149,11 +163,11 @@ export class WebRTCStrategy implements ITransportStrategy {
       try {
         this.mediaStream.getTracks().forEach((track) => {
           track.stop();
-          console.log('[WebRTCStrategy] 已停止音频轨道:', track.kind);
+          log.debug('已停止音频轨道:', track.kind);
         });
         // 注意：不设置为 null，因为 cleanup() 中会处理
       } catch (error) {
-        console.error('[WebRTCStrategy] 停止音频轨道失败:', error);
+        log.error('停止音频轨道失败:', error);
       }
     }
 
@@ -163,23 +177,23 @@ export class WebRTCStrategy implements ITransportStrategy {
         // OpenAIRealtimeWebRTC 可能有 close() 方法
         if (typeof (this.transport as any).close === 'function') {
           (this.transport as any).close();
-          console.log('[WebRTCStrategy] WebRTC transport 已关闭');
+          log.debug('WebRTC transport 已关闭');
         }
         // 或者尝试断开连接
         if (typeof (this.transport as any).disconnect === 'function') {
           (this.transport as any).disconnect();
-          console.log('[WebRTCStrategy] WebRTC transport 已断开');
+          log.debug('WebRTC transport 已断开');
         }
         // 尝试访问内部的 RTCPeerConnection 并关闭
         if ((this.transport as any).peerConnection) {
           const pc = (this.transport as any).peerConnection;
           if (pc && typeof pc.close === 'function') {
             pc.close();
-            console.log('[WebRTCStrategy] RTCPeerConnection 已关闭');
+            log.debug('RTCPeerConnection 已关闭');
           }
         }
       } catch (error) {
-        console.error('[WebRTCStrategy] 关闭 transport 失败:', error);
+        log.error('关闭 transport 失败:', error);
       }
     }
 
@@ -193,20 +207,20 @@ export class WebRTCStrategy implements ITransportStrategy {
         this.audioElement.pause();
         this.audioElement.src = '';
         this.audioElement.srcObject = null; // 移除媒体流引用
-        console.log('[WebRTCStrategy] 音频元素已暂停并清理');
+        log.debug('音频元素已暂停并清理');
       } catch (error) {
-        console.error('[WebRTCStrategy] 暂停音频元素失败:', error);
+        log.error('暂停音频元素失败:', error);
       }
     }
 
-    console.log('[WebRTCStrategy] 通话已立即停止');
+    log.debug('通话已立即停止');
   }
 
   /**
    * 清理资源
    */
   cleanup(): void {
-    console.log('[WebRTCStrategy] 清理资源...');
+    log.debug('清理资源...');
 
     // 停止音频可视化
     this.stopAudioVisualization();
@@ -231,7 +245,7 @@ export class WebRTCStrategy implements ITransportStrategy {
     this.onUserFrequencyData = null;
     this.onAssistantFrequencyData = null;
 
-    console.log('[WebRTCStrategy] 资源已清理');
+    log.debug('资源已清理');
   }
 
   /**

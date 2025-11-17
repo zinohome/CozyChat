@@ -6,6 +6,9 @@
 
 import { OpenAIRealtimeWebRTC } from '@openai/agents/realtime';
 import type { ITransport, TransportStatus } from './TransportInterface';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('WebRTCTransport');
 
 /**
  * WebRTC 传输层配置
@@ -90,10 +93,10 @@ export class WebRTCTransport implements ITransport {
       // 注意：WebRTC连接是异步的，SDK内部会处理连接状态
       // 不需要等待连接完成，直接标记为已连接即可
       this.status = 'connected';
-      console.log('[WebRTCTransport] WebRTC传输层已创建（连接异步建立中）');
+      log.debug('WebRTC传输层已创建（连接异步建立中）');
     } catch (error) {
       this.status = 'error';
-      console.error('[WebRTCTransport] 连接失败:', error);
+      log.error('连接失败:', error);
       throw error;
     }
   }
@@ -125,7 +128,7 @@ export class WebRTCTransport implements ITransport {
     }
 
     this.status = 'disconnected';
-    console.log('[WebRTCTransport] 已断开连接');
+    log.debug('已断开连接');
   }
 
   /**

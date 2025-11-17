@@ -11,6 +11,9 @@
 import { configApi } from '@/services/config';
 import { personalityApi } from '@/services/personality';
 import type { OpenAIConfig } from '@/services/config';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('ConfigManager');
 
 /**
  * Voice Agent 配置
@@ -66,35 +69,51 @@ export class ConfigManager {
   async loadConfig(): Promise<VoiceAgentConfig> {
     // 如果有缓存，直接返回
     if (this.cachedConfig) {
-      console.log('[ConfigManager] 使用缓存的配置');
+      log.debug('使用缓存的配置');
       return this.cachedConfig;
     }
 
     try {
-      console.log('[ConfigManager] 开始加载配置...');
+      log.debug('开始加载配置...');
 
       // 1. 获取 OpenAI 配置
       const openaiConfig = await configApi.getOpenAIConfig();
-      console.log('[ConfigManager] OpenAI 配置已加载');
+      log.debug('OpenAI 配置已加载');
 
       // 2. 获取 ephemeral client key (临时密钥)
-      const realtimeToken = await configApi.getRealtimeToken();
-      console.log('[ConfigManager] Ephemeral key 已获取');
+      // ✅ 统一逻辑：始终传递 personalityId 给后端（即使是 'default'），让后端决定如何处理
+      // 后端会检查 personality_id 是否存在，如果不存在或为 'default'，则使用全局配置
+      const realtimeToken = await configApi.getRealtimeToken(this.personalityId);
+      log.debug('Ephemeral key 已获取', {
+        personalityId: this.personalityId,
+      });
 
       // 3. 获取全局默认配置（来自 realtime.yaml）
       const globalConfig = await configApi.getRealtimeConfig();
-      console.log('[ConfigManager] 全局配置已加载');
+      log.debug('全局配置已加载');
 
       // 4. 获取 personality 配置（如果有）
+      // ✅ 统一逻辑：尝试加载 personality 配置，如果失败或不存在，则使用全局配置
+      // 后端会处理 'default' 的情况，如果不存在则返回 404，前端捕获后使用全局配置
       let personalityConfig: any = {};
       if (this.personalityId) {
         try {
           const personality = await personalityApi.getPersonality(this.personalityId);
-          // Personality 类型没有 config 属性，直接使用 personality 对象本身
-          personalityConfig = personality || {};
-          console.log('[ConfigManager] Personality 配置已加载');
-        } catch (error) {
-          console.warn('[ConfigManager] 加载 personality 配置失败:', error);
+          // ✅ 修复：后端返回的是 {config: {...}} 结构，需要访问 config 字段
+          personalityConfig = (personality as any)?.config || personality || {};
+          log.debug('Personality 配置已加载:', {
+            personalityId: this.personalityId,
+            hasConfig: !!(personality as any)?.config,
+            hasVoice: !!(personalityConfig?.voice),
+            voiceRealtime: personalityConfig?.voice?.realtime,
+          });
+        } catch (error: any) {
+          // 如果 personality 不存在（如 'default'），使用全局配置
+          if (error?.response?.status === 404 || error?.status === 404) {
+            log.debug(`Personality '${this.personalityId}' 不存在，使用全局配置`);
+          } else {
+            log.warn('加载 personality 配置失败:', error);
+          }
         }
       }
 
@@ -126,7 +145,7 @@ export class ConfigManager {
         globalConfig.websocket || 
         undefined;
 
-      console.log('[ConfigManager] 配置合并完成:', {
+      log.debug('配置合并完成:', {
         global: globalConfig.voice,
         personality: personalityRealtimeConfig.voice,
         final: voice,
@@ -153,14 +172,14 @@ export class ConfigManager {
       // 缓存配置
       this.cachedConfig = config;
 
-      console.log('[ConfigManager] 配置加载完成:', {
+      log.debug('配置加载完成:', {
         voice,
         model: config.model,
         inputAudioTranscription,
       });
       return config;
     } catch (error) {
-      console.error('[ConfigManager] 加载配置失败:', error);
+      log.error('加载配置失败:', error);
       throw error;
     }
   }
@@ -170,7 +189,7 @@ export class ConfigManager {
    */
   clearCache(): void {
     this.cachedConfig = null;
-    console.log('[ConfigManager] 缓存已清除');
+    log.debug('缓存已清除');
   }
 }
 

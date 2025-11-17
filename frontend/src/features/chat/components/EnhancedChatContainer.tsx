@@ -17,6 +17,9 @@ import { playTTS } from '@/utils/tts';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import { useVoiceAgent } from '@/hooks/useVoiceAgent';
 import type { Message } from '@/types/chat';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('EnhancedChatContainer');
 
 const { TextArea } = Input;
 
@@ -150,14 +153,14 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         return [];
       }
       try {
-        console.log('Loading messages for session:', currentSessionId);
+        log.debug('Loading messages for session:', currentSessionId);
         const response = await chatApi.getHistory(currentSessionId);
         // 确保 response 是数组
         const responseArray = Array.isArray(response) ? response : [];
-        console.log('Loaded messages:', responseArray.length, 'for session:', currentSessionId);
+        log.debug('Loaded messages:', responseArray.length, 'for session:', currentSessionId);
         return responseArray;
       } catch (error) {
-        console.error('Failed to load messages for session:', currentSessionId, error);
+        log.error('Failed to load messages for session:', currentSessionId, error);
         showError(error, '加载历史消息失败');
         return [];
       }
@@ -174,7 +177,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const lastSessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentSessionId && currentSessionId !== 'default' && currentSessionId !== lastSessionIdRef.current) {
-      console.log('Session ID changed, refetching messages:', currentSessionId);
+      log.debug('Session ID changed, refetching messages:', currentSessionId);
       lastSessionIdRef.current = currentSessionId;
       refetchMessages();
     }
@@ -323,7 +326,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         // 静默失败，不显示错误提示（因为是自动播放）
         // 浏览器可能阻止自动播放，这是正常的
         if (error.name !== 'NotAllowedError') {
-          console.warn('自动播放语音失败:', error);
+          log.warn('自动播放语音失败:', error);
         }
       });
       
@@ -715,7 +718,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         personality_id: personalityId,
                         language: 'zh-CN',
                       });
-                      console.log('STT识别结果:', text);
+                      log.debug('STT识别结果:', text);
                       if (text && text.trim()) {
                         // 直接发送识别后的文本，不切换回文本输入模式
                         // 标记用户已经交互过（发送了消息）
@@ -725,12 +728,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         // 保持语音输入模式，方便继续语音输入
                         // setIsVoiceInputMode(false); // 不切换回文本输入模式
                       } else {
-                        console.warn('STT返回空文本或无效文本:', text);
+                        log.warn('STT返回空文本或无效文本:', text);
                         // 如果识别结果为空，保持语音输入模式，显示提示
                         showError(new Error('未识别到有效语音，请重试'), '识别失败');
                       }
                     } catch (error) {
-                      console.error('STT转录错误:', error);
+                      log.error('STT转录错误:', error);
                       showError(error, '语音识别失败');
                     }
                   }, 100);
@@ -832,7 +835,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               // 添加防抖：如果距离上次点击太近（< 500ms），忽略
               const lastClickTime = (window as any).__lastVoiceCallClick || 0;
               if (buttonClickedAt - lastClickTime < 500) {
-                console.log('[EnhancedChatContainer] 点击过快，忽略');
+                log.debug('点击过快，忽略');
                 return;
               }
               (window as any).__lastVoiceCallClick = buttonClickedAt;
@@ -858,7 +861,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                               : new Date(msg.timestamp).toISOString(),
                         }))
                       );
-                      console.log('语音通话消息已保存到数据库');
+                      log.debug('语音通话消息已保存到数据库');
                       
                       // 将消息添加到 React Query 缓存，保留在会话历史中
                       queryClient.setQueryData(
@@ -879,7 +882,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         }
                       );
                     } catch (error) {
-                      console.error('保存语音通话消息失败:', error);
+                      log.error('保存语音通话消息失败:', error);
                       showError(error, '保存语音通话消息失败');
                     }
                   }
@@ -888,7 +891,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   clearVoiceCallMessages();
                   endVoiceCall();
                 } catch (error) {
-                  console.error('结束通话失败:', error);
+                  log.error('结束通话失败:', error);
                   showError(error, '结束通话失败');
                 }
               } else {
@@ -905,7 +908,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   // 此时 isCalling = true，UI会显示为通话状态
                   startVoiceCall();
                 } catch (error) {
-                  console.error('开始语音通话失败:', error);
+                  log.error('开始语音通话失败:', error);
                   showError(error, '开始语音通话失败');
                   // 失败时清除UI状态
                   endVoiceCall();

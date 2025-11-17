@@ -3,6 +3,9 @@ import { sessionApi } from '@/services/session';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { useAuthStore } from '@/store/slices/authSlice';
 import type { Session, CreateSessionRequest, UpdateSessionRequest } from '@/types/session';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('useSessions');
 
 /**
  * 会话Hook
@@ -22,11 +25,11 @@ export const useSessions = () => {
         const response = await sessionApi.getSessions();
         // 确保返回数组，避免返回 undefined
         const items = response?.items || [];
-        console.log('Sessions loaded:', items.length, 'items');
+        log.debug('Sessions loaded:', items.length, 'items');
         return items;
       } catch (error) {
         // 查询失败时返回空数组
-        console.error('Failed to fetch sessions:', error);
+        log.error('Failed to fetch sessions:', error);
         return [];
       }
     },

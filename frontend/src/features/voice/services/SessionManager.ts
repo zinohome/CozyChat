@@ -9,6 +9,9 @@
 
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime';
 import type { ITransport } from '../transports/TransportInterface';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('SessionManager');
 
 /**
  * 会话配置
@@ -44,7 +47,7 @@ export class SessionManager {
     config: SessionConfig
   ): Promise<RealtimeSession> {
     try {
-      console.log('[SessionManager] 创建 RealtimeSession...', {
+      log.debug('创建 RealtimeSession...', {
         model: config.model,
         inputAudioTranscription: config.inputAudioTranscription,
         transportType: typeof transport === 'string' ? transport : transport?.type || 'unknown',
@@ -63,10 +66,10 @@ export class SessionManager {
 
       this.session = session;
 
-      console.log('[SessionManager] RealtimeSession 已创建（转录配置由后端提供）');
+      log.debug('RealtimeSession 已创建（转录配置由后端提供）');
       return session;
     } catch (error) {
-      console.error('[SessionManager] 创建 session 失败:', error);
+      log.error('创建 session 失败:', error);
       throw error;
     }
   }
@@ -85,9 +88,9 @@ export class SessionManager {
     if (this.session) {
       try {
         this.session.close();
-        console.log('[SessionManager] Session 已关闭');
+        log.debug('Session 已关闭');
       } catch (error) {
-        console.error('[SessionManager] 关闭 session 失败:', error);
+        log.error('关闭 session 失败:', error);
       }
       this.session = null;
     }

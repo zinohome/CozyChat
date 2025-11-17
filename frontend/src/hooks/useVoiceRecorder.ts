@@ -2,6 +2,9 @@ import { useState, useRef, useCallback } from 'react';
 import { voiceApi } from '@/services/voice';
 import { showError } from '@/utils/errorHandler';
 import type { TranscriptionRequest } from '@/types/voice';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('useVoiceRecorder');
 
 /**
  * 语音录制Hook
@@ -42,7 +45,7 @@ export function useVoiceRecorder() {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error: any) {
-      console.error('开始录音失败:', error);
+      log.error('开始录音失败:', error);
       showError(error, '无法访问麦克风，请检查权限设置');
       setIsRecording(false);
     }
@@ -156,9 +159,9 @@ export function useVoiceRecorder() {
         });
 
         // 将 WebM 转换为 WAV（New API 需要 WAV 格式）
-        console.log('开始转换 WebM 到 WAV，原始大小:', webmBlob.size, 'bytes');
+        log.debug('开始转换 WebM 到 WAV，原始大小:', webmBlob.size, 'bytes');
         const wavBlob = await convertWebMToWAV(webmBlob);
-        console.log('转换完成，WAV 大小:', wavBlob.size, 'bytes');
+        log.debug('转换完成，WAV 大小:', wavBlob.size, 'bytes');
 
         // 转换为 File 对象
         const audioFile = new File([wavBlob], 'recording.wav', {
@@ -166,18 +169,18 @@ export function useVoiceRecorder() {
         });
 
         // 调用 STT API
-        console.log('开始调用STT API，音频文件大小:', audioFile.size, 'bytes');
+        log.debug('开始调用STT API，音频文件大小:', audioFile.size, 'bytes');
         const response = await voiceApi.transcribe(audioFile, options);
-        console.log('STT API响应:', response);
+        log.debug('STT API响应:', response);
 
         // 清空音频块
         audioChunksRef.current = [];
 
         const text = response.text || null;
-        console.log('STT识别文本:', text, '长度:', text?.length);
+        log.debug('STT识别文本:', text, '长度:', text?.length);
         return text;
       } catch (error) {
-        console.error('转录失败:', error);
+        log.error('转录失败:', error);
         showError(error, '语音识别失败');
         return null;
       } finally {

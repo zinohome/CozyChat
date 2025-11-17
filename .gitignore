@@ -115,4 +115,7 @@ playwright-report/
 # Redis dump
 dump.rdb
 
+# Example directories
+example/
+
 

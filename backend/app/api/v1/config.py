@@ -8,8 +8,8 @@
 from typing import Dict, Optional, Any
 
 # 第三方库
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status, Body
+from pydantic import BaseModel, Field
 import httpx
 
 # 本地库
@@ -105,8 +105,14 @@ async def get_openai_config(
         )
 
 
+class RealtimeTokenRequest(BaseModel):
+    """Realtime Token 请求"""
+    personality_id: Optional[str] = Field(default=None, description="人格ID（可选，用于获取personality特定的voice配置）")
+
+
 @router.post("/realtime-token", response_model=RealtimeTokenResponse)
 async def get_realtime_token(
+    request: Optional[RealtimeTokenRequest] = Body(None),
     user: User = Depends(get_current_active_user)
 ) -> RealtimeTokenResponse:
     """
@@ -116,6 +122,7 @@ async def get_realtime_token(
     用于前端连接 OpenAI Realtime API。
     
     Args:
+        request: 请求体（可选，包含 personality_id）
         user: 当前用户（需要认证）
         
     Returns:
@@ -155,10 +162,87 @@ async def get_realtime_token(
             client_secret = None
             
             try:
+                # ✅ 加载 voice 配置：优先使用 personality 配置，否则使用全局配置
+                config_loader = get_config_loader()
+                voice = 'shimmer'  # 默认值
+                
+                # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
+                # ✅ 统一逻辑：尝试加载 personality 配置，如果不存在或为 'default'，则使用全局配置
+                if request and request.personality_id:
+                    try:
+                        from app.core.personality import PersonalityManager
+                        personality_manager = PersonalityManager()
+                        personality = personality_manager.get_personality(request.personality_id)
+                        logger.debug(
+                            f"Loading personality voice config for {request.personality_id}",
+                            extra={
+                                "personality_id": request.personality_id,
+                                "has_personality": personality is not None,
+                                "has_voice": personality and personality.voice is not None,
+                                "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
+                            }
+                        )
+                        if personality and personality.voice and personality.voice.realtime:
+                            # personality.voice.realtime 是一个字典
+                            personality_voice = personality.voice.realtime.get('voice')
+                            if personality_voice:
+                                voice = personality_voice
+                                logger.info(
+                                    f"✅ Using personality voice '{voice}' for ephemeral token",
+                                    extra={
+                                        "user_id": str(user.id),
+                                        "personality_id": request.personality_id,
+                                        "voice": voice
+                                    }
+                                )
+                            else:
+                                logger.warning(
+                                    f"⚠️ Personality {request.personality_id} realtime config exists but voice is missing",
+                                    extra={
+                                        "personality_id": request.personality_id,
+                                        "realtime_config": personality.voice.realtime
+                                    }
+                                )
+                        else:
+                            logger.debug(
+                                f"Personality {request.personality_id} has no realtime voice config",
+                                extra={
+                                    "personality_id": request.personality_id,
+                                    "has_voice": personality and personality.voice is not None,
+                                    "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
+                                }
+                            )
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Failed to load personality voice config: {e}",
+                            extra={
+                                "personality_id": request.personality_id if request else None,
+                                "error": str(e),
+                                "error_type": type(e).__name__
+                            },
+                            exc_info=True
+                        )
+                
+                # 如果没有找到 personality voice 配置，使用全局配置
+                # ✅ 统一逻辑：如果 voice 还是默认值 'shimmer'，说明没有找到 personality 配置，使用全局配置
+                if voice == 'shimmer':  # 如果还是默认值，说明没有找到 personality 配置
+                    realtime_config = config_loader.load_voice_config('realtime')
+                    openai_config = realtime_config.get('openai', {})
+                    global_voice = openai_config.get('voice', 'shimmer')
+                    voice = global_voice
+                    logger.info(
+                        f"Using global voice '{voice}' for ephemeral token",
+                        extra={
+                            "user_id": str(user.id),
+                            "personality_id": request.personality_id if request else None,
+                            "voice": voice
+                        }
+                    )
+                
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     # New API 请求格式：使用 session 对象（与 OpenAI 官方格式相同）
-                    # 关键：必须在创建 ephemeral token 时配置转录功能
-                    # 参考 curl 成功的响应格式，正确的结构是：session.audio.input.transcription
+                    # 关键：必须在创建 ephemeral token 时配置转录功能和 voice
+                    # 参考 curl 成功的响应格式，正确的结构是：session.audio.input.transcription 和 session.audio.output.voice
                     response = await client.post(
                         client_secrets_url,
                         headers={
@@ -169,12 +253,16 @@ async def get_realtime_token(
                             'session': {
                                 'type': 'realtime',
                                 'model': settings.openai_realtime_model,  # 使用配置文件中的模型名称
-                                # ✅ 关键：使用正确的嵌套结构配置转录功能
+                                # ✅ 关键：使用正确的嵌套结构配置转录功能和 voice
                                 'audio': {
                                     'input': {
                                         'transcription': {
                                             'model': 'whisper-1'
                                         }
+                                    },
+                                    # ✅ 修复：添加 voice 配置到 audio.output
+                                    'output': {
+                                        'voice': voice
                                     }
                                 }
                             }
@@ -183,6 +271,18 @@ async def get_realtime_token(
                     
                     if response.status_code == 200:
                         data = response.json()
+                        
+                        # ✅ 调试：记录响应数据（不包含敏感信息）
+                        logger.debug(
+                            "Ephemeral token response received",
+                            extra={
+                                "user_id": str(user.id),
+                                "has_value": 'value' in data,
+                                "has_token": 'token' in data,
+                                "has_session": 'session' in data,
+                                "voice_used": voice,  # 记录使用的 voice
+                            }
+                        )
                         
                         # New API 响应格式：可能包含 value（顶层）、token、ephemeral_token 或 client_secret.value
                         # 根据日志，响应格式是：{'value': 'ek_...', 'expires_at': ..., 'session': {...}}
@@ -196,8 +296,12 @@ async def get_realtime_token(
                         
                         if client_secret:
                             logger.info(
-                                "Successfully generated ephemeral client key (New API)",
-                                extra={"user_id": str(user.id)}
+                                f"✅ Successfully generated ephemeral client key (New API) with voice '{voice}'",
+                                extra={
+                                    "user_id": str(user.id),
+                                    "personality_id": request.personality_id if request else None,
+                                    "voice": voice
+                                }
                             )
                         else:
                             logger.warning(
@@ -234,6 +338,53 @@ async def get_realtime_token(
                 extra={"user_id": str(user.id)}
             )
             
+            # ✅ 加载 voice 配置：优先使用 personality 配置，否则使用全局配置
+            config_loader = get_config_loader()
+            voice = 'shimmer'  # 默认值
+            
+            # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
+            if request and request.personality_id:
+                try:
+                    from app.core.personality import PersonalityManager
+                    personality_manager = PersonalityManager()
+                    personality = personality_manager.get_personality(request.personality_id)
+                    if personality and personality.voice and personality.voice.realtime:
+                        # personality.voice.realtime 是一个字典
+                        personality_voice = personality.voice.realtime.get('voice')
+                        if personality_voice:
+                            voice = personality_voice
+                            logger.info(
+                                f"Using personality voice '{voice}' for ephemeral token (OpenAI)",
+                                extra={
+                                    "user_id": str(user.id),
+                                    "personality_id": request.personality_id,
+                                    "voice": voice
+                                }
+                            )
+                        else:
+                            logger.debug(
+                                f"Personality {request.personality_id} has no voice config, using default",
+                                extra={"personality_id": request.personality_id}
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load personality voice config: {e}",
+                        extra={"personality_id": request.personality_id if request else None}
+                    )
+            
+            # 如果没有 personality 配置，使用全局配置
+            if not request or not request.personality_id or voice == 'shimmer':
+                realtime_config = config_loader.load_voice_config('realtime')
+                openai_config = realtime_config.get('openai', {})
+                global_voice = openai_config.get('voice', 'shimmer')
+                # 只有在没有 personality 配置时才使用全局配置
+                if not request or not request.personality_id or voice == 'shimmer':
+                    voice = global_voice
+                    logger.info(
+                        f"Using global voice '{voice}' for ephemeral token (OpenAI)",
+                        extra={"user_id": str(user.id), "voice": voice}
+                    )
+            
             client_secrets_url = "https://api.openai.com/v1/realtime/client_secrets"
             
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -246,7 +397,18 @@ async def get_realtime_token(
                     json={
                         'session': {
                             'type': 'realtime',
-                            'model': settings.openai_realtime_model
+                            'model': settings.openai_realtime_model,
+                            # ✅ 添加 voice 配置
+                            'audio': {
+                                'input': {
+                                    'transcription': {
+                                        'model': 'whisper-1'
+                                    }
+                                },
+                                'output': {
+                                    'voice': voice
+                                }
+                            }
                         }
                     }
                 )

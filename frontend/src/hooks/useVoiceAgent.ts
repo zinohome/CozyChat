@@ -8,6 +8,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { VoiceAgentService } from '@/features/voice/services/VoiceAgentService';
 import type { EventHandlerCallbacks } from '@/features/voice/services/EventHandler';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('useVoiceAgent');
 
 /**
  * Voice Agent Hook 返回值
@@ -70,7 +73,7 @@ export const useVoiceAgent = (
         personalityId,
         callbacks,
       });
-      console.log('[useVoiceAgent] VoiceAgentService 已初始化');
+      log.debug('VoiceAgentService 已初始化');
     }
     return serviceRef.current;
   }, [sessionId, personalityId, callbacks]);
@@ -80,7 +83,7 @@ export const useVoiceAgent = (
    */
   const connect = useCallback(async () => {
     if (isConnected) {
-      console.warn('[useVoiceAgent] 已连接，无需重复连接');
+      log.warn('已连接，无需重复连接');
       return;
     }
 
@@ -100,9 +103,9 @@ export const useVoiceAgent = (
       setIsConnected(true);
       setIsConnecting(false);
       
-      console.log('[useVoiceAgent] 连接成功');
+      log.debug('连接成功');
     } catch (err: any) {
-      console.error('[useVoiceAgent] 连接失败:', err);
+      log.error('连接失败:', err);
       setError(err.message || '连接失败');
       setIsConnecting(false);
       setIsConnected(false);
@@ -130,7 +133,7 @@ export const useVoiceAgent = (
              setUserFrequencyData(null);
              setAssistantFrequencyData(null);
       
-    console.log('[useVoiceAgent] 已断开连接');
+    log.debug('已断开连接');
   }, []);
 
   /**
@@ -139,24 +142,24 @@ export const useVoiceAgent = (
   const startCall = useCallback(async () => {
     // 检查是否已连接，如果未连接或 service 不存在则先连接
     if (!isConnected || !serviceRef.current) {
-      console.log('[useVoiceAgent] 未连接，先建立连接');
+      log.debug('未连接，先建立连接');
       try {
       await connect();
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : '连接失败';
-        console.error('[useVoiceAgent] 连接失败:', errorMsg);
+        log.error('连接失败:', errorMsg);
         setError(errorMsg);
         throw err;
       }
     }
 
     if (isCalling) {
-      console.warn('[useVoiceAgent] 已在通话中');
+      log.warn('已在通话中');
       return;
     }
     
     try {
-      console.log('[useVoiceAgent] 开始通话');
+      log.debug('开始通话');
       
       // ✅ 关键修复：更新回调函数（确保使用最新的回调引用）
       if (serviceRef.current && callbacks) {
@@ -191,9 +194,9 @@ export const useVoiceAgent = (
       }
       }, 50); // 20fps更新频率
       
-      console.log('[useVoiceAgent] 通话已开始');
+      log.debug('通话已开始');
     } catch (err: any) {
-      console.error('[useVoiceAgent] 开始通话失败:', err);
+      log.error('开始通话失败:', err);
       setError(err.message || '开始通话失败');
       setIsCalling(false); // ← 关键修复：失败时重置状态
       setIsConnecting(false); // ← 失败时取消连接中状态
@@ -205,16 +208,15 @@ export const useVoiceAgent = (
    * 结束通话
    */
   const endCall = useCallback(async () => {
-    console.log('[useVoiceAgent] 🔍 endCall 被调用');
-    console.log('[useVoiceAgent] 🔍 当前 isCalling:', isCalling);
-    console.trace('[useVoiceAgent] 🔍 endCall 调用堆栈');
+    log.debug('🔍 endCall 被调用');
+    log.debug('🔍 当前 isCalling:', isCalling);
     
     if (!isCalling || !serviceRef.current) {
-      console.warn('[useVoiceAgent] 未在通话中，isCalling:', isCalling);
+      log.warn('未在通话中，isCalling:', isCalling);
       return;
     }
 
-    console.log('[useVoiceAgent] 结束通话');
+    log.debug('结束通话');
     
     serviceRef.current.endCall();
 
@@ -228,7 +230,7 @@ export const useVoiceAgent = (
     setUserFrequencyData(null);
     setAssistantFrequencyData(null);
     
-    console.log('[useVoiceAgent] 通话已结束');
+    log.debug('通话已结束');
   }, [isCalling]);
 
   // 注意：isCalling 状态现在完全由 Hook 层控制

@@ -10,6 +10,9 @@
 
 import { toolsApi } from '@/services/tools';
 import type { ToolInfo, RealtimeTool } from '@/types/tools';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('ToolManager');
 
 /**
  * 工具缓存项
@@ -45,12 +48,12 @@ export class ToolManager {
     // 检查缓存
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      console.log(`[ToolManager] 使用缓存的工具列表: ${cacheKey}`);
+      log.debug(`使用缓存的工具列表: ${cacheKey}`);
       return cached.tools;
     }
 
     // 从后端获取
-    console.log(`[ToolManager] 从后端获取工具列表: ${cacheKey}`);
+    log.debug(`从后端获取工具列表: ${cacheKey}`);
     try {
       const response = await toolsApi.listTools(type);
       const tools = response.tools;
@@ -63,7 +66,7 @@ export class ToolManager {
 
       return tools;
     } catch (error) {
-      console.error('[ToolManager] 获取工具列表失败:', error);
+      log.error('获取工具列表失败:', error);
       throw error;
     }
   }
@@ -132,7 +135,7 @@ export class ToolManager {
     toolName: string,
     parameters: Record<string, any>
   ): Promise<any> {
-    console.log(`[ToolManager] 执行工具: ${toolName}`, parameters);
+    log.debug(`执行工具: ${toolName}`, parameters);
 
     try {
       const response = await toolsApi.executeTool({
@@ -144,14 +147,14 @@ export class ToolManager {
         throw new Error(`工具执行失败: ${response.tool_name}`);
       }
 
-      console.log(
-        `[ToolManager] 工具执行成功: ${toolName}`,
+      log.debug(
+        `工具执行成功: ${toolName}`,
         response.result
       );
 
       return response.result;
     } catch (error) {
-      console.error(`[ToolManager] 工具执行失败: ${toolName}`, error);
+      log.error(`工具执行失败: ${toolName}`, error);
       throw error;
     }
   }
@@ -171,11 +174,11 @@ export class ToolManager {
         }
       });
       keysToDelete.forEach((key) => this.cache.delete(key));
-      console.log(`[ToolManager] 清除缓存: ${personalityId}`);
+      log.debug(`清除缓存: ${personalityId}`);
     } else {
       // 清除所有缓存
       this.cache.clear();
-      console.log('[ToolManager] 清除所有缓存');
+      log.debug('清除所有缓存');
     }
   }
 }

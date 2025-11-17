@@ -10,6 +10,9 @@
 
 import type { RealtimeSession } from '@openai/agents';
 import { toolManager } from './ToolManager';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('EventHandler');
 
 /**
  * 事件处理器回调接口
@@ -58,13 +61,13 @@ export class EventHandler {
    */
   setupToolCallListeners(): void {
     if (!this.session) {
-      console.error('[EventHandler] Session 未设置，无法设置工具调用监听');
+      log.error('Session 未设置，无法设置工具调用监听');
       return;
     }
 
     // 监听 conversation.item.created 事件
     const handleItemCreated = (event: any) => {
-      console.log('[EventHandler] conversation.item.created:', event);
+      log.debug('conversation.item.created:', event);
 
       const item = event.item;
       if (!item) return;
@@ -91,7 +94,7 @@ export class EventHandler {
       (this.session as any).off('conversation.item.created', handleItemCreated);
     });
 
-    console.log('[EventHandler] 工具调用事件监听已设置');
+    log.debug('工具调用事件监听已设置');
   }
 
   /**
@@ -120,16 +123,16 @@ export class EventHandler {
         try {
           parameters = JSON.parse(parameters);
         } catch (e) {
-          console.error('[EventHandler] 参数解析失败:', e);
+          log.error('参数解析失败:', e);
         }
       }
 
       if (!toolName) {
-        console.error('[EventHandler] 无法提取工具名称:', item);
+        log.error('无法提取工具名称:', item);
         return;
       }
 
-      console.log(`[EventHandler] 处理工具调用: ${toolName}`, parameters);
+      log.debug(`处理工具调用: ${toolName}`, parameters);
 
       // 触发回调
       if (this.callbacks.onToolCall) {
@@ -139,7 +142,7 @@ export class EventHandler {
       // 执行工具
       const result = await toolManager.executeTool(toolName, parameters);
 
-      console.log(`[EventHandler] 工具执行结果: ${toolName}`, result);
+      log.debug(`工具执行结果: ${toolName}`, result);
 
       // 触发回调
       if (this.callbacks.onToolResult) {
@@ -149,7 +152,7 @@ export class EventHandler {
       // 返回结果给 RealtimeSession
       await this.submitToolResult(item.id || item.call_id, toolName, result);
     } catch (error) {
-      console.error('[EventHandler] 工具调用处理失败:', error);
+      log.error('工具调用处理失败:', error);
       
       // 即使失败，也应该返回错误信息给 RealtimeSession
       const errorResult = {
@@ -177,7 +180,7 @@ export class EventHandler {
     result: any
   ): Promise<void> {
     if (!this.session) {
-      console.error('[EventHandler] Session 未设置，无法提交工具结果');
+      log.error('Session 未设置，无法提交工具结果');
       return;
     }
 
@@ -190,7 +193,7 @@ export class EventHandler {
       // 尝试方法1
       if (typeof (this.session as any).submitToolResult === 'function') {
         await (this.session as any).submitToolResult(callId, result);
-        console.log(`[EventHandler] 工具结果已提交 (submitToolResult): ${toolName}`);
+        log.debug(`工具结果已提交 (submitToolResult): ${toolName}`);
         return;
       }
 
@@ -204,7 +207,7 @@ export class EventHandler {
             output: JSON.stringify(result),
           },
         });
-        console.log(`[EventHandler] 工具结果已提交 (send): ${toolName}`);
+        log.debug(`工具结果已提交 (send): ${toolName}`);
         return;
       }
 
@@ -215,13 +218,13 @@ export class EventHandler {
           tool_call_id: callId,
           content: JSON.stringify(result),
         });
-        console.log(`[EventHandler] 工具结果已提交 (addMessage): ${toolName}`);
+        log.debug(`工具结果已提交 (addMessage): ${toolName}`);
         return;
       }
 
-      console.error('[EventHandler] 无法找到提交工具结果的方法');
+      log.error('无法找到提交工具结果的方法');
     } catch (error) {
-      console.error('[EventHandler] 提交工具结果失败:', error);
+      log.error('提交工具结果失败:', error);
     }
   }
 
@@ -230,11 +233,11 @@ export class EventHandler {
    */
   setupUserTranscriptListener(): void {
     if (!this.session) {
-      console.error('[EventHandler] Session 未设置，无法设置用户转录监听');
+      log.error('Session 未设置，无法设置用户转录监听');
       return;
     }
     
-    console.log('[EventHandler] 🔍 设置用户转录监听，session:', this.session);
+    log.debug('🔍 设置用户转录监听，session:', this.session);
 
     // 用于去重
     const processedMessageIds = new Set<string>();
@@ -242,72 +245,72 @@ export class EventHandler {
 
     // 提取用户转录文本的辅助函数
     const extractUserTranscript = (item: any): string | null => {
-      console.log('[EventHandler] 🔍 尝试提取用户转录，item:', JSON.stringify(item, null, 2));
+      log.debug('🔍 尝试提取用户转录，item:', JSON.stringify(item, null, 2));
       
       // 1. 首先检查 item 的直接字段
       if (item.transcript && typeof item.transcript === 'string' && item.transcript.trim()) {
-        console.log('[EventHandler] ✅ 从 item.transcript 提取:', item.transcript.trim());
+        log.debug('✅ 从 item.transcript 提取:', item.transcript.trim());
         return item.transcript.trim();
       }
       if (item.input_audio_transcript && typeof item.input_audio_transcript === 'string' && item.input_audio_transcript.trim()) {
-        console.log('[EventHandler] ✅ 从 item.input_audio_transcript 提取:', item.input_audio_transcript.trim());
+        log.debug('✅ 从 item.input_audio_transcript 提取:', item.input_audio_transcript.trim());
         return item.input_audio_transcript.trim();
       }
 
       // 2. 检查 content 数组（转录文本通常在这里）
       if (Array.isArray(item.content)) {
-        console.log('[EventHandler] 🔍 content 是数组，长度:', item.content.length);
+        log.debug('🔍 content 是数组，长度:', item.content.length);
         for (const c of item.content) {
-          console.log('[EventHandler] 🔍 检查 content 项:', c.type, c);
+          log.debug('🔍 检查 content 项:', c.type, c);
           // 优先检查 input_audio 类型（这是用户语音输入）
           if (c.type === 'input_audio') {
             if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
-              console.log('[EventHandler] ✅ 从 content[].input_audio.transcript 提取:', c.transcript.trim());
+              log.debug('✅ 从 content[].input_audio.transcript 提取:', c.transcript.trim());
               return c.transcript.trim();
             }
             if (c.input_audio_transcript && typeof c.input_audio_transcript === 'string' && c.input_audio_transcript.trim()) {
-              console.log('[EventHandler] ✅ 从 content[].input_audio.input_audio_transcript 提取:', c.input_audio_transcript.trim());
+              log.debug('✅ 从 content[].input_audio.input_audio_transcript 提取:', c.input_audio_transcript.trim());
               return c.input_audio_transcript.trim();
             }
             if (c.text && typeof c.text === 'string' && c.text.trim()) {
-              console.log('[EventHandler] ✅ 从 content[].input_audio.text 提取:', c.text.trim());
+              log.debug('✅ 从 content[].input_audio.text 提取:', c.text.trim());
               return c.text.trim();
             }
           }
           // 检查任何包含 transcript 的项（备用）
           if (c.transcript && typeof c.transcript === 'string' && c.transcript.trim()) {
-            console.log('[EventHandler] ✅ 从 content[].transcript 提取:', c.transcript.trim());
+            log.debug('✅ 从 content[].transcript 提取:', c.transcript.trim());
             return c.transcript.trim();
           }
           // 检查 text 类型（某些情况下转录可能以 text 形式存在）
           if (c.type === 'text' && c.text && typeof c.text === 'string' && c.text.trim()) {
-            console.log('[EventHandler] ✅ 从 content[].text 提取:', c.text.trim());
+            log.debug('✅ 从 content[].text 提取:', c.text.trim());
             return c.text.trim();
           }
         }
       } else if (item.content) {
-        console.log('[EventHandler] 🔍 content 不是数组:', typeof item.content, item.content);
+        log.debug('🔍 content 不是数组:', typeof item.content, item.content);
       }
 
       // 3. 如果 content 是字符串，直接返回（备用）
       if (typeof item.content === 'string' && item.content.trim()) {
-        console.log('[EventHandler] ✅ 从 item.content (字符串) 提取:', item.content.trim());
+        log.debug('✅ 从 item.content (字符串) 提取:', item.content.trim());
         return item.content.trim();
       }
 
-      console.log('[EventHandler] ❌ 未能提取到转录文本');
+      log.debug('❌ 未能提取到转录文本');
       return null;
     };
 
     // 1. conversation.item.input_audio_transcription.completed 事件
     const handleUserTranscript = (event: any) => {
-      console.log('[EventHandler] 🔍 用户转录事件触发 (completed):', event);
+      log.debug('🔍 用户转录事件触发 (completed):', event);
       const transcript = event?.transcript;
       if (transcript && typeof transcript === 'string' && transcript.trim() && this.callbacks.onUserTranscript) {
-        console.log('[EventHandler] ✅ 触发用户转录回调:', transcript);
+        log.debug('✅ 触发用户转录回调:', transcript);
         this.callbacks.onUserTranscript(transcript.trim());
       } else {
-        console.log('[EventHandler] ❌ 用户转录回调未触发:', {
+        log.debug('❌ 用户转录回调未触发:', {
           hasTranscript: !!transcript,
           hasCallback: !!this.callbacks.onUserTranscript,
         });
@@ -322,39 +325,35 @@ export class EventHandler {
     // 2. history_added 事件（从历史记录中提取转录）
     // 注意：参数本身就是 item 对象，不是 event.item！
     const handleHistoryAdded = (item: any) => {
-      console.log('[EventHandler] 🔍 history_added 事件触发:', item);
+      log.debug('🔍 history_added 事件触发:', item);
       
       if (!item || item.type !== 'message') {
-        // console.log('[EventHandler] 跳过非消息项');
         return;
       }
 
       const messageId = item.itemId || item.id;
       if (!messageId) {
-        // console.log('[EventHandler] 消息无 ID');
         return;
       }
 
       // 去重检查
       if (processedMessageIds.has(messageId)) {
-        // console.log('[EventHandler] 消息已处理:', messageId);
         return;
       }
 
       if (item.role === 'user') {
-        // console.log('[EventHandler] 处理用户消息');
         const transcript = extractUserTranscript(item);
         if (transcript) {
           const key = `${messageId}:${transcript}`;
           if (!processedTexts.has(key)) {
             processedMessageIds.add(messageId);
             processedTexts.add(key);
-            console.log('[EventHandler] ✅ 从 history_added 提取用户转录:', transcript);
+            log.debug('✅ 从 history_added 提取用户转录:', transcript);
             if (this.callbacks.onUserTranscript) {
-              console.log('[EventHandler] ✅ 调用用户转录回调');
+              log.debug('✅ 调用用户转录回调');
               this.callbacks.onUserTranscript(transcript);
             } else {
-              console.log('[EventHandler] ❌ 用户转录回调不存在！');
+              log.debug('❌ 用户转录回调不存在！');
             }
           }
         }
@@ -403,54 +402,54 @@ export class EventHandler {
     // 3. history_updated 事件（从更新的历史中提取转录）
     // 注意：参数是历史数组，不是单个 item！同时处理用户和助手消息
     const handleHistoryUpdated = (items: any[]) => {
-      console.log('[EventHandler] 🔍 history_updated 事件触发，项数:', items?.length);
+      log.debug('🔍 history_updated 事件触发，项数:', items?.length);
       if (items?.length > 0) {
-        console.log('[EventHandler] 🔍 history_updated items:', JSON.stringify(items, null, 2));
+        log.debug('🔍 history_updated items:', JSON.stringify(items, null, 2));
       }
       
       if (!Array.isArray(items)) {
-        console.log('[EventHandler] ❌ history_updated 参数不是数组:', typeof items, items);
+        log.warn('❌ history_updated 参数不是数组:', typeof items, items);
         return;
       }
 
       if (items.length === 0) {
-        console.log('[EventHandler] ⚠️ history_updated 数组为空，跳过处理');
+        log.debug('⚠️ history_updated 数组为空，跳过处理');
         return;
       }
 
       for (const item of items) {
         if (!item || item.type !== 'message') {
-          console.log('[EventHandler] ⚠️ 跳过非消息项:', item?.type, item);
+          log.debug('⚠️ 跳过非消息项:', item?.type, item);
           continue;
         }
 
         const messageId = item.itemId || item.id;
         if (!messageId) {
-          console.log('[EventHandler] ⚠️ 消息无 ID，跳过');
+          log.debug('⚠️ 消息无 ID，跳过');
           continue;
         }
 
         // 处理用户消息
         if (item.role === 'user') {
-          console.log('[EventHandler] 🔍 处理用户消息:', messageId);
+          log.debug('🔍 处理用户消息:', messageId);
           const transcript = extractUserTranscript(item);
           if (transcript) {
             const key = `${messageId}:${transcript}`;
             if (!processedTexts.has(key)) {
               processedMessageIds.add(messageId);
               processedTexts.add(key);
-              console.log('[EventHandler] ✅ 从 history_updated 提取用户转录:', transcript);
+              log.debug('✅ 从 history_updated 提取用户转录:', transcript);
               if (this.callbacks.onUserTranscript) {
-                console.log('[EventHandler] ✅ 调用用户转录回调');
+                log.debug('✅ 调用用户转录回调');
                 this.callbacks.onUserTranscript(transcript);
               } else {
-                console.log('[EventHandler] ❌ 用户转录回调不存在！');
+                log.debug('❌ 用户转录回调不存在！');
               }
             } else {
-              console.log('[EventHandler] ⚠️ 转录已处理过，跳过:', key);
+              log.debug('⚠️ 转录已处理过，跳过:', key);
             }
           } else {
-            console.log('[EventHandler] ❌ 未能提取用户转录，item:', JSON.stringify(item, null, 2));
+            log.debug('❌ 未能提取用户转录，item:', JSON.stringify(item, null, 2));
           }
         }
         // 处理助手消息
@@ -476,7 +475,7 @@ export class EventHandler {
       (this.session as any).off('history_updated', handleHistoryUpdated);
     });
 
-    console.log('[EventHandler] 用户转录事件监听已设置 (3个事件)');
+    log.debug('用户转录事件监听已设置 (3个事件)');
   }
 
   /**
@@ -484,7 +483,7 @@ export class EventHandler {
    */
   setupAssistantTranscriptListener(): void {
     if (!this.session) {
-      console.error('[EventHandler] Session 未设置，无法设置助手转录监听');
+      log.error('Session 未设置，无法设置助手转录监听');
       return;
     }
 
@@ -585,7 +584,7 @@ export class EventHandler {
           if (!processedAssistantTexts.has(key)) {
             processedAssistantIds.add(messageId);
             processedAssistantTexts.add(key);
-            console.log('[EventHandler] ✅ 从 history_updated 提取助手文本:', text);
+            log.debug('✅ 从 history_updated 提取助手文本:', text);
             if (this.callbacks.onAssistantTranscript) {
               this.callbacks.onAssistantTranscript(text);
             }
@@ -597,14 +596,14 @@ export class EventHandler {
     // 注意：复用用户的 history_updated 监听器，修改 setupUserTranscriptListener
     // 暂时先不在这里添加监听，避免重复监听
 
-    console.log('[EventHandler] 助手转录事件监听已设置 (2个事件)');
+    log.debug('助手转录事件监听已设置 (2个事件)');
   }
 
   /**
    * 清理事件监听
    */
   cleanup(): void {
-    console.log('[EventHandler] 清理事件监听');
+    log.debug('清理事件监听');
     this.cleanupFunctions.forEach((cleanup) => cleanup());
     this.cleanupFunctions = [];
     this.session = null;

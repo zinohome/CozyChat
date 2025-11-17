@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import './VoiceCallIndicator.css';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('VoiceCallIndicator');
 
 /**
  * 语音通话指示器组件属性
@@ -233,7 +236,7 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
       }
       return totalIntensity / frequencyData.length / 255; // 0-1
     } catch (err) {
-      console.error('计算音频强度失败:', err);
+      log.error('计算音频强度失败:', err);
       return 0;
     }
   }, []);
@@ -260,7 +263,7 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
       if (now - lastLogTimeRef.current >= LOG_THROTTLE_MS) {
         lastLogTimeRef.current = now;
         if (hasUser || hasAssistant) {
-          console.log(`🎤 音频: 用户 ${userInt.toFixed(2)} | 助手 ${assistantInt.toFixed(2)}`);
+          log.debug(`🎤 音频: 用户 ${userInt.toFixed(2)} | 助手 ${assistantInt.toFixed(2)}`);
         }
       }
     }

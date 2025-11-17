@@ -8,6 +8,9 @@
  */
 
 import type { ITransport, TransportStatus } from './TransportInterface';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('WebSocketTransport');
 
 /**
  * WebSocket 传输层配置
@@ -110,7 +113,7 @@ export class WebSocketTransport implements ITransport {
       // 参考：https://platform.openai.com/docs/api-reference/realtime
       const finalWsUrl = wsUrl; // 使用后端返回的完整 URL（已包含 model 参数）
 
-      console.log('[WebSocketTransport] 准备连接 WebSocket:', {
+      log.debug('准备连接 WebSocket:', {
         url: finalWsUrl,
         hasApiKey: !!apiKey,
         apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
@@ -129,9 +132,9 @@ export class WebSocketTransport implements ITransport {
           'openai-beta.realtime-v1',
         ];
         this.websocket = new WebSocket(finalWsUrl, protocols);
-        console.log('[WebSocketTransport] 使用子协议创建 WebSocket:', protocols.map(p => p.substring(0, 30) + '...'));
+        log.debug('使用子协议创建 WebSocket:', protocols.map(p => p.substring(0, 30) + '...'));
       } catch (error) {
-        console.error('[WebSocketTransport] 创建 WebSocket 失败:', error);
+        log.error('创建 WebSocket 失败:', error);
         throw new Error(`创建 WebSocket 失败: ${error}`);
       }
 
@@ -143,7 +146,7 @@ export class WebSocketTransport implements ITransport {
         }
 
         const timeout = setTimeout(() => {
-          console.error('[WebSocketTransport] WebSocket 连接超时');
+          log.error('WebSocket 连接超时');
           if (this.websocket) {
             this.websocket.close();
           }
@@ -151,13 +154,13 @@ export class WebSocketTransport implements ITransport {
         }, 10000);
 
         this.websocket.onopen = () => {
-          console.log('[WebSocketTransport] WebSocket 连接已建立');
+          log.debug('WebSocket 连接已建立');
           clearTimeout(timeout);
           resolve();
         };
 
         this.websocket.onerror = (error) => {
-          console.error('[WebSocketTransport] WebSocket 连接错误:', {
+          log.error('WebSocket 连接错误:', {
             error,
             readyState: this.websocket?.readyState,
             url: finalWsUrl,
@@ -171,7 +174,7 @@ export class WebSocketTransport implements ITransport {
         };
 
         this.websocket.onclose = (event) => {
-          console.error('[WebSocketTransport] WebSocket 连接已关闭:', {
+          log.error('WebSocket 连接已关闭:', {
             code: event.code,
             reason: event.reason,
             wasClean: event.wasClean,
@@ -188,10 +191,10 @@ export class WebSocketTransport implements ITransport {
       this.setupEventListeners();
 
       this.status = 'connected';
-      console.log('[WebSocketTransport] WebSocket传输层已连接');
+      log.debug('WebSocket传输层已连接');
     } catch (error) {
       this.status = 'error';
-      console.error('[WebSocketTransport] 连接失败:', error);
+      log.error('连接失败:', error);
       throw error;
     }
   }
@@ -207,7 +210,7 @@ export class WebSocketTransport implements ITransport {
     this.websocket.onmessage = (event) => {
       // 处理接收到的消息
       // 注意：需要根据 OpenAI Realtime API 的消息格式解析
-      console.log('[WebSocketTransport] 收到 WebSocket 消息:', {
+      log.debug('收到 WebSocket 消息:', {
         type: typeof event.data,
         isString: typeof event.data === 'string',
         isArrayBuffer: event.data instanceof ArrayBuffer,
@@ -221,12 +224,12 @@ export class WebSocketTransport implements ITransport {
         const data = typeof event.data === 'string' 
           ? JSON.parse(event.data)
           : JSON.parse(new TextDecoder().decode(event.data));
-        console.log('[WebSocketTransport] 解析为 JSON:', data);
+        log.debug('解析为 JSON:', data);
         // 触发相应的事件
         this.emit('message', data);
       } catch (error) {
         // 可能是二进制数据（音频数据）
-        console.log('[WebSocketTransport] 解析为二进制数据（音频）');
+        log.debug('解析为二进制数据（音频）');
         this.emit('audio', event.data);
         
         // 如果是音频数据，需要播放
@@ -236,19 +239,19 @@ export class WebSocketTransport implements ITransport {
           const url = URL.createObjectURL(blob);
           this.audioElement.src = url;
           this.audioElement.play().catch((err) => {
-            console.error('[WebSocketTransport] 播放音频失败:', err);
+            log.error('播放音频失败:', err);
           });
         }
       }
     };
 
     this.websocket.onerror = (error) => {
-      console.error('[WebSocketTransport] WebSocket 错误:', error);
+      log.error('WebSocket 错误:', error);
       this.emit('error', error);
     };
 
     this.websocket.onclose = () => {
-      console.log('[WebSocketTransport] WebSocket 连接已关闭');
+      log.debug('WebSocket 连接已关闭');
       this.status = 'disconnected';
       this.emit('close');
     };
@@ -264,7 +267,7 @@ export class WebSocketTransport implements ITransport {
         try {
           listener(...args);
         } catch (error) {
-          console.error(`[WebSocketTransport] 事件监听器错误 (${event}):`, error);
+          log.error(`事件监听器错误 (${event}):`, error);
         }
       });
     }
@@ -297,7 +300,7 @@ export class WebSocketTransport implements ITransport {
     this.eventListeners.clear();
 
     this.status = 'disconnected';
-    console.log('[WebSocketTransport] 已断开连接');
+    log.debug('已断开连接');
   }
 
   /**
@@ -354,16 +357,16 @@ export class WebSocketTransport implements ITransport {
       // ✅ 关键：必须实现 connect() 方法
       // RealtimeSession.connect() 会调用这个方法
       connect: async (_config?: any) => {
-        console.log('[WebSocketTransport] getUnderlyingTransport().connect() 被调用');
+        log.debug('getUnderlyingTransport().connect() 被调用');
         // 如果 WebSocket 已经连接，直接返回
         if (self.websocket && self.websocket.readyState === WebSocket.OPEN) {
-          console.log('[WebSocketTransport] WebSocket 已连接，跳过连接');
+          log.debug('WebSocket 已连接，跳过连接');
           return;
         }
         
         // 如果 WebSocket 未连接或正在连接，等待连接完成
         if (self.websocket && self.websocket.readyState === WebSocket.CONNECTING) {
-          console.log('[WebSocketTransport] WebSocket 正在连接，等待完成...');
+          log.debug('WebSocket 正在连接，等待完成...');
           await new Promise<void>((resolve, reject) => {
             if (!self.websocket) {
               reject(new Error('WebSocket 未创建'));
@@ -399,12 +402,12 @@ export class WebSocketTransport implements ITransport {
         
         // 如果 WebSocket 已关闭，需要重新连接
         if (!self.websocket || self.websocket.readyState === WebSocket.CLOSED) {
-          console.log('[WebSocketTransport] WebSocket 已关闭，重新连接...');
+          log.debug('WebSocket 已关闭，重新连接...');
           await self.connect({ apiKey: self.config.apiKey });
         }
       },
       send: (data: any) => {
-        console.log('[WebSocketTransport] transport.send() 被调用:', {
+        log.debug('transport.send() 被调用:', {
           type: typeof data,
           isString: typeof data === 'string',
           isArrayBuffer: data instanceof ArrayBuffer,
@@ -422,7 +425,7 @@ export class WebSocketTransport implements ITransport {
             self.websocket.send(JSON.stringify(data));
           }
         } else {
-          console.warn('[WebSocketTransport] WebSocket 未连接，无法发送数据');
+          log.warn('WebSocket 未连接，无法发送数据');
         }
       },
       on: (event: string, callback: (...args: any[]) => void) => {
@@ -452,7 +455,7 @@ export class WebSocketTransport implements ITransport {
           }
           return value;
         }
-        console.warn(`[WebSocketTransport] 访问了不存在的属性: ${String(prop)}`);
+        log.warn(`访问了不存在的属性: ${String(prop)}`);
         return undefined;
       },
     });

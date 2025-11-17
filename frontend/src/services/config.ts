@@ -77,10 +77,13 @@ export const configApi = {
    *
    * 这个端点会调用后端生成 ephemeral client key，用于前端连接 OpenAI Realtime API。
    *
+   * @param personalityId - 人格ID（可选，用于获取personality特定的voice配置）
    * @returns Realtime token 信息
    */
-  async getRealtimeToken(): Promise<RealtimeToken> {
-    return apiClient.post<RealtimeToken>('/v1/config/realtime-token');
+  async getRealtimeToken(personalityId?: string): Promise<RealtimeToken> {
+    return apiClient.post<RealtimeToken>('/v1/config/realtime-token', {
+      personality_id: personalityId,
+    });
   },
 
   /**

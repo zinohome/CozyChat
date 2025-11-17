@@ -8,6 +8,10 @@
  * - 清理资源
  */
 
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('AudioVisualizer');
+
 /**
  * 音频可视化器类
  */
@@ -68,7 +72,7 @@ export class AudioVisualizer {
           await audioContext.resume();
         }
       } catch (e) {
-        console.error('[AudioVisualizer] 创建用户 AudioContext 失败:', e);
+        log.error('创建用户 AudioContext 失败:', e);
         return;
       }
 
@@ -84,9 +88,9 @@ export class AudioVisualizer {
       // 保存回调
       this.onUserFrequencyData = callback;
 
-      console.log('[AudioVisualizer] 用户音频可视化已初始化');
+      log.debug('用户音频可视化已初始化');
     } catch (err) {
-      console.error('[AudioVisualizer] 初始化用户音频可视化失败:', err);
+      log.error('初始化用户音频可视化失败:', err);
       this.isUpdatingUser = false;
     }
   }
@@ -139,7 +143,7 @@ export class AudioVisualizer {
           audioContext.resume();
         }
       } catch (e) {
-        console.error('[AudioVisualizer] 创建助手 AudioContext 失败:', e);
+        log.error('创建助手 AudioContext 失败:', e);
         return;
       }
 
@@ -153,7 +157,7 @@ export class AudioVisualizer {
           this.assistantSource = streamSource;
           source = streamSource;
         } catch (e: any) {
-          console.error('[AudioVisualizer] 从 MediaStream 创建音频源失败:', e);
+          log.error('从 MediaStream 创建音频源失败:', e);
           throw e;
         }
       } else {
@@ -164,7 +168,7 @@ export class AudioVisualizer {
         } catch (e: any) {
           if (e.name === 'InvalidStateError' && e.message.includes('already connected')) {
             // 音频元素已被连接，跳过可视化（避免重复播放）
-            console.warn('[AudioVisualizer] 音频元素已被连接，跳过可视化');
+            log.warn('音频元素已被连接，跳过可视化');
             return;
           } else {
             throw e;
@@ -186,9 +190,9 @@ export class AudioVisualizer {
       // 保存回调
       this.onAssistantFrequencyData = callback;
 
-      console.log('[AudioVisualizer] 助手音频可视化已初始化');
+      log.debug('助手音频可视化已初始化');
     } catch (err) {
-      console.error('[AudioVisualizer] 初始化助手音频可视化失败:', err);
+      log.error('初始化助手音频可视化失败:', err);
       this.isUpdatingAssistant = false;
     }
   }
@@ -198,12 +202,12 @@ export class AudioVisualizer {
    */
   startUserFrequencyExtraction(): void {
     if (!this.userAnalyser || !this.onUserFrequencyData) {
-      console.warn('[AudioVisualizer] 无法启动用户频率提取：未初始化');
+      log.warn('无法启动用户频率提取：未初始化');
       return;
     }
 
     if (this.isUpdatingUser) {
-      console.warn('[AudioVisualizer] 用户频率提取已在运行');
+      log.warn('用户频率提取已在运行');
       return;
     }
 
@@ -230,7 +234,7 @@ export class AudioVisualizer {
         // 继续下一帧
         this.userAnimationFrame = requestAnimationFrame(updateUserAudioVisualization);
       } catch (err) {
-        console.error('[AudioVisualizer] 更新用户音频可视化失败:', err);
+        log.error('更新用户音频可视化失败:', err);
         this.isUpdatingUser = false;
         this.userAnimationFrame = null;
       }
@@ -243,7 +247,7 @@ export class AudioVisualizer {
       }
     }, 200);
 
-    console.log('[AudioVisualizer] 用户频率提取已启动');
+    log.debug('用户频率提取已启动');
   }
 
   /**
@@ -277,7 +281,7 @@ export class AudioVisualizer {
    */
   startAssistantFrequencyExtraction(): void {
     if (!this.assistantAnalyser || !this.onAssistantFrequencyData) {
-      console.warn('[AudioVisualizer] 无法启动助手频率提取：未初始化');
+      log.warn('无法启动助手频率提取：未初始化');
       return;
     }
 
@@ -304,7 +308,7 @@ export class AudioVisualizer {
         // 继续下一帧
         this.assistantAnimationFrame = requestAnimationFrame(updateAssistantAudioVisualization);
       } catch (err) {
-        console.error('[AudioVisualizer] 更新助手音频可视化失败:', err);
+        log.error('更新助手音频可视化失败:', err);
         this.isUpdatingAssistant = false;
         this.assistantAnimationFrame = null;
       }
@@ -321,7 +325,7 @@ export class AudioVisualizer {
       }, 200);
     }
 
-    console.log('[AudioVisualizer] 助手频率提取已启动');
+    log.debug('助手频率提取已启动');
   }
 
   /**
@@ -338,7 +342,7 @@ export class AudioVisualizer {
     }
     this.isUpdatingUser = false;
     this.isUpdatingAssistant = false;
-    console.log('[AudioVisualizer] 频率提取已停止');
+    log.debug('频率提取已停止');
   }
 
   /**
@@ -380,7 +384,7 @@ export class AudioVisualizer {
     this.onUserFrequencyData = null;
     this.onAssistantFrequencyData = null;
 
-    console.log('[AudioVisualizer] 资源已清理');
+    log.debug('资源已清理');
   }
 }
 

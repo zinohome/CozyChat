@@ -19,6 +19,8 @@ export interface TransportStrategyConfig {
   baseUrl: string;
   /** WebSocket URL（仅用于 WebSocket） */
   wsUrl?: string;
+  /** 语音（voice） */
+  voice?: string;
   /** 音频转录配置 */
   inputAudioTranscription?: {
     model: string;

@@ -10,6 +10,9 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime';
 import type { ITransportStrategy, TransportStrategyConfig } from './ITransportStrategy';
 import { AudioVisualizer } from '../visualization/AudioVisualizer';
+import { logger } from '@/utils/logger';
+
+const log = logger.withTag('WebSocketStrategy');
 
 /**
  * WebSocket 传输层策略类
@@ -60,7 +63,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     agent: RealtimeAgent,
     config: TransportStrategyConfig
   ): Promise<RealtimeSession> {
-    console.log('[WebSocketStrategy] 创建 WebSocket Session...');
+    log.debug('创建 WebSocket Session...');
 
     // ✅ 从配置读取音频缓冲区大小（如果提供）
     const sampleRate = 24000; // 采样率：24kHz
@@ -69,10 +72,10 @@ export class WebSocketStrategy implements ITransportStrategy {
       const maxSize = config.websocket.audio_buffer.max_size ?? 5.0;
       this.minBufferSize = sampleRate * minSize;
       this.maxBufferSize = sampleRate * maxSize;
-      console.log(`[WebSocketStrategy] 音频缓冲区配置: min=${minSize}s (${this.minBufferSize}采样点), max=${maxSize}s (${this.maxBufferSize}采样点)`);
+      log.debug(`音频缓冲区配置: min=${minSize}s (${this.minBufferSize}采样点), max=${maxSize}s (${this.maxBufferSize}采样点)`);
     } else {
       // 使用默认值（保持向后兼容）
-      console.log(`[WebSocketStrategy] 使用默认音频缓冲区: min=${this.minBufferSize / sampleRate}s, max=${this.maxBufferSize / sampleRate}s`);
+      log.debug(`使用默认音频缓冲区: min=${this.minBufferSize / sampleRate}s, max=${this.maxBufferSize / sampleRate}s`);
     }
 
     // 1. 创建用户音频流（用于捕获和发送）
@@ -80,7 +83,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     if (!this.mediaStream || this.mediaStream.getTracks().every(track => track.readyState === 'ended')) {
       // 如果流已停止，重新创建
       if (this.mediaStream) {
-        console.log('[WebSocketStrategy] 检测到音频流已停止，重新创建...');
+        log.debug('检测到音频流已停止，重新创建...');
       }
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -101,18 +104,29 @@ export class WebSocketStrategy implements ITransportStrategy {
     }
 
     // 3. 创建 RealtimeSession（使用 SDK 原生的 'websocket' transport）
-    const session = new RealtimeSession(agent, {
+    log.debug('创建 RealtimeSession，voice:', config.voice);
+    // ✅ 尝试两种方式：顶层参数和 config 对象中都传递 voice
+    const sessionConfig: any = {
       apiKey: config.apiKey,
       transport: 'websocket', // ✅ 使用 SDK 原生支持
       model: config.model,
-    });
+      voice: config.voice, // 顶层传递
+      config: {
+        voice: config.voice, // config 对象中也传递
+        ...(config.inputAudioTranscription && {
+          inputAudioTranscription: config.inputAudioTranscription,
+        }),
+      },
+    };
+    log.debug('RealtimeSession 配置:', JSON.stringify(sessionConfig, null, 2));
+    const session = new RealtimeSession(agent, sessionConfig);
 
     this.session = session;
 
     // 4. 设置音频捕获和播放逻辑
     this.setupAudioHandling(session);
 
-    console.log('[WebSocketStrategy] WebSocket Session 已创建');
+    log.debug('WebSocket Session 已创建，voice:', config.voice);
     return session;
   }
 
@@ -124,7 +138,7 @@ export class WebSocketStrategy implements ITransportStrategy {
    * - 调用 session.sendAudio(audioBuffer) 发送音频数据（PCM16 格式）
    */
   private setupAudioHandling(session: RealtimeSession): void {
-    console.log('[WebSocketStrategy] 设置音频处理...');
+    log.debug('设置音频处理...');
 
     if (!this.mediaStream) {
       throw new Error('音频流未初始化');
@@ -134,7 +148,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     // 如果 AudioContext 已关闭，重新创建
     if (!this.audioContext || this.audioContext.state === 'closed') {
       if (this.audioContext) {
-        console.log('[WebSocketStrategy] 检测到 AudioContext 已关闭，重新创建...');
+        log.debug('检测到 AudioContext 已关闭，重新创建...');
       }
       this.audioContext = new AudioContext({ sampleRate: 24000 });
     }
@@ -184,7 +198,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       if (rms > threshold && timeSinceLastAudio > 500) {
         // 检查是否有正在播放的音频（AI在说话）
         if (this.isPlayingAudio || this.activeSources.length > 0) {
-          console.log('[WebSocketStrategy] 检测到用户开始说话，触发打断...');
+          log.debug('检测到用户开始说话，触发打断...');
           this.interruptAssistant();
         }
         this.lastUserAudioTime = currentTime;
@@ -201,7 +215,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       try {
         session.sendAudio(pcm16.buffer);
       } catch (error) {
-        console.error('[WebSocketStrategy] 发送音频失败:', error);
+        log.error('发送音频失败:', error);
       }
     };
 
@@ -232,7 +246,7 @@ export class WebSocketStrategy implements ITransportStrategy {
         if (!this.isPlayingAudio) {
           // 当前没有播放，立即开始
           this.flushAudioBuffer().catch((error) => {
-            console.error('[WebSocketStrategy] 刷新音频缓冲区失败:', error);
+            log.error('刷新音频缓冲区失败:', error);
           });
         } else if (this.audioBuffer.length >= this.maxBufferSize) {
           // 缓冲区过大，强制刷新（但需要等待当前播放完成）
@@ -241,7 +255,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       }
     });
 
-    console.log('[WebSocketStrategy] 音频处理已设置');
+    log.debug('音频处理已设置');
   }
 
   /**
@@ -320,7 +334,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       // 使用与 WebRTC 相同的配置，确保音质一致
       if (!this.playbackAudioContext || this.playbackAudioContext.state === 'closed') {
         if (this.playbackAudioContext) {
-          console.log('[WebSocketStrategy] 检测到播放 AudioContext 已关闭，重新创建...');
+          log.debug('检测到播放 AudioContext 已关闭，重新创建...');
         }
         // 使用与 WebRTC 相同的采样率，确保音质一致
         this.playbackAudioContext = new AudioContext({ 
@@ -439,7 +453,7 @@ export class WebSocketStrategy implements ITransportStrategy {
         try {
           source.start(playTime);
         } catch (error) {
-          console.error('[WebSocketStrategy] 启动音频播放失败:', error);
+          log.error('启动音频播放失败:', error);
           // 从活动源列表中移除
           const index = this.activeSources.indexOf(source);
           if (index > -1) {
@@ -450,7 +464,7 @@ export class WebSocketStrategy implements ITransportStrategy {
         }
       });
     } catch (error) {
-      console.error('[WebSocketStrategy] 播放音频缓冲区失败:', error);
+      log.error('播放音频缓冲区失败:', error);
     } finally {
       this.isPlayingAudio = false;
       
@@ -460,7 +474,7 @@ export class WebSocketStrategy implements ITransportStrategy {
         // 使用 requestAnimationFrame 确保在下一个渲染帧执行，与音频线程同步
         requestAnimationFrame(() => {
           this.flushAudioBuffer().catch((error) => {
-            console.error('[WebSocketStrategy] 继续播放缓冲区失败:', error);
+            log.error('继续播放缓冲区失败:', error);
           });
         });
       } else if (this.isCalling && this.audioBuffer && this.audioBuffer.length > 0) {
@@ -470,7 +484,7 @@ export class WebSocketStrategy implements ITransportStrategy {
           this.flushInterval = window.setTimeout(() => {
             if (this.audioBuffer && this.audioBuffer.length > 0 && !this.isPlayingAudio) {
               this.flushAudioBuffer().catch((error) => {
-                console.error('[WebSocketStrategy] 延迟播放缓冲区失败:', error);
+                log.error('延迟播放缓冲区失败:', error);
               });
             }
             this.flushInterval = null;
@@ -498,7 +512,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     // 创建播放用的 AudioContext（如果不存在或已关闭）
     if (!this.playbackAudioContext || this.playbackAudioContext.state === 'closed') {
       if (this.playbackAudioContext) {
-        console.log('[WebSocketStrategy] 检测到播放 AudioContext 已关闭，重新创建...');
+        log.debug('检测到播放 AudioContext 已关闭，重新创建...');
       }
       this.playbackAudioContext = new AudioContext({ sampleRate: 24000 });
     }
@@ -548,7 +562,7 @@ export class WebSocketStrategy implements ITransportStrategy {
           try {
             source.start(0);
           } catch (error) {
-            console.error('[WebSocketStrategy] 启动音频播放失败:', error);
+            log.error('启动音频播放失败:', error);
             resolve(); // 即使失败也 resolve，避免阻塞
           }
         });
@@ -556,7 +570,7 @@ export class WebSocketStrategy implements ITransportStrategy {
         // 短暂延迟，确保音频片段之间有平滑过渡
         await new Promise(resolve => setTimeout(resolve, 10));
       } catch (error) {
-        console.error('[WebSocketStrategy] 播放音频队列失败:', error);
+        log.error('播放音频队列失败:', error);
         // 继续播放下一个
       }
     }
@@ -635,7 +649,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       onAssistantFrequencyData
     );
 
-    console.log('[WebSocketStrategy] 音频可视化已初始化');
+    log.debug('音频可视化已初始化');
   }
 
   /**
@@ -646,7 +660,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     this.audioVisualizer.setCallingState(true);
     this.audioVisualizer.startUserFrequencyExtraction();
     this.audioVisualizer.startAssistantFrequencyExtraction();
-    console.log('[WebSocketStrategy] 音频可视化已启动');
+    log.debug('音频可视化已启动');
   }
 
   /**
@@ -656,7 +670,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     this.isCalling = false;
     this.audioVisualizer.setCallingState(false);
     this.audioVisualizer.stopFrequencyExtraction();
-    console.log('[WebSocketStrategy] 音频可视化已停止');
+    log.debug('音频可视化已停止');
   }
 
   /**
@@ -667,7 +681,7 @@ export class WebSocketStrategy implements ITransportStrategy {
       return;
     }
 
-    console.log('[WebSocketStrategy] 发送打断信号...');
+    log.debug('发送打断信号...');
 
     // 1. 立即停止所有正在播放的音频源
     this.activeSources.forEach((source) => {
@@ -694,12 +708,12 @@ export class WebSocketStrategy implements ITransportStrategy {
         (this.session as any).send({
           type: 'response.audio.stop',
         });
-        console.log('[WebSocketStrategy] 已发送打断信号到服务器');
+        log.debug('已发送打断信号到服务器');
       } else {
-        console.warn('[WebSocketStrategy] Session 不支持 send 方法，无法发送打断信号');
+        log.warn('Session 不支持 send 方法，无法发送打断信号');
       }
     } catch (error) {
-      console.error('[WebSocketStrategy] 发送打断信号失败:', error);
+      log.error('发送打断信号失败:', error);
     }
   }
 
@@ -709,7 +723,7 @@ export class WebSocketStrategy implements ITransportStrategy {
    * 停止音频捕获和播放，但不释放资源（以便下次通话可以重用）
    */
   stopCall(): void {
-    console.log('[WebSocketStrategy] 立即停止通话...');
+    log.debug('立即停止通话...');
 
     // ✅ 关键修复：立即设置 isCalling = false，阻止新的音频处理
     this.isCalling = false;
@@ -737,7 +751,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     
     // 停止播放 AudioContext
     if (this.playbackAudioContext) {
-      this.playbackAudioContext.close().catch(console.error);
+      this.playbackAudioContext.close().catch((e) => log.error('关闭 playbackAudioContext 失败:', e));
       this.playbackAudioContext = null;
     }
 
@@ -745,18 +759,18 @@ export class WebSocketStrategy implements ITransportStrategy {
     if (this.processor) {
       try {
         this.processor.disconnect();
-        console.log('[WebSocketStrategy] 音频处理器已断开');
+        log.debug('音频处理器已断开');
       } catch (e) {
-        console.error('[WebSocketStrategy] 断开处理器失败:', e);
+        log.error('断开处理器失败:', e);
       }
     }
 
     if (this.source) {
       try {
         this.source.disconnect();
-        console.log('[WebSocketStrategy] 音频源已断开');
+        log.debug('音频源已断开');
       } catch (e) {
-        console.error('[WebSocketStrategy] 断开音频源失败:', e);
+        log.error('断开音频源失败:', e);
       }
     }
 
@@ -765,11 +779,11 @@ export class WebSocketStrategy implements ITransportStrategy {
       try {
         this.mediaStream.getTracks().forEach((track) => {
           track.stop();
-          console.log('[WebSocketStrategy] 已停止音频轨道:', track.kind);
+          log.debug('已停止音频轨道:', track.kind);
         });
         // 注意：不设置为 null，因为 cleanup() 中会处理
       } catch (error) {
-        console.error('[WebSocketStrategy] 停止音频轨道失败:', error);
+        log.error('停止音频轨道失败:', error);
       }
     }
 
@@ -781,23 +795,23 @@ export class WebSocketStrategy implements ITransportStrategy {
         this.audioElement.pause();
         this.audioElement.src = '';
         this.audioElement.srcObject = null;
-        console.log('[WebSocketStrategy] 音频元素已暂停');
+        log.debug('音频元素已暂停');
       } catch (error) {
-        console.error('[WebSocketStrategy] 暂停音频元素失败:', error);
+        log.error('暂停音频元素失败:', error);
       }
     }
 
     // ✅ 关键修复：停止音频可视化
     this.stopAudioVisualization();
 
-    console.log('[WebSocketStrategy] 通话已立即停止');
+    log.debug('通话已立即停止');
   }
 
   /**
    * 清理资源
    */
   cleanup(): void {
-    console.log('[WebSocketStrategy] 清理资源...');
+    log.debug('清理资源...');
 
     // 停止音频可视化
     this.stopAudioVisualization();
@@ -823,13 +837,13 @@ export class WebSocketStrategy implements ITransportStrategy {
     }
 
     if (this.audioContext) {
-      this.audioContext.close().catch(console.error);
+      this.audioContext.close().catch((e) => log.error('关闭 audioContext 失败:', e));
       this.audioContext = null;
     }
 
     // 清理播放 AudioContext
     if (this.playbackAudioContext) {
-      this.playbackAudioContext.close().catch(console.error);
+      this.playbackAudioContext.close().catch((e) => log.error('关闭 playbackAudioContext 失败:', e));
       this.playbackAudioContext = null;
     }
 
@@ -868,7 +882,7 @@ export class WebSocketStrategy implements ITransportStrategy {
     this.onUserFrequencyData = null;
     this.onAssistantFrequencyData = null;
 
-    console.log('[WebSocketStrategy] 资源已清理');
+    log.debug('资源已清理');
   }
 
   /**
