@@ -17,8 +17,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.api.deps import get_current_active_user
-from app.core.personality import PersonalityManager
+from app.api.deps import get_current_active_user, get_personality_registry
+from app.core.personality import PersonalityRegistry
 from app.engines.voice.stt.factory import STTEngineFactory
 from app.engines.voice.tts.factory import TTSEngineFactory
 from app.models.user import User
@@ -85,8 +85,8 @@ async def create_transcription(
         # 获取STT配置
         stt_config = {}
         if personality_id:
-            personality_manager = PersonalityManager()
-            personality = personality_manager.get_personality(personality_id)
+            personality_registry = get_personality_registry()
+            personality = personality_registry.get_personality(personality_id)
             if personality and personality.voice and personality.voice.stt:
                 # VoiceConfig 是 dataclass，使用属性访问
                 stt_config = personality.voice.stt.copy()  # 复制字典避免修改原配置
@@ -163,8 +163,8 @@ async def create_speech(
         # 获取TTS配置
         tts_config = {}
         if request.personality_id:
-            personality_manager = PersonalityManager()
-            personality = personality_manager.get_personality(request.personality_id)
+            personality_registry = get_personality_registry()
+            personality = personality_registry.get_personality(request.personality_id)
             if personality and personality.voice and personality.voice.tts:
                 # VoiceConfig.tts 是 Dict[str, Any]，直接使用
                 tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置
@@ -278,8 +278,8 @@ async def create_speech_stream(
         # 获取TTS配置
         tts_config = {}
         if request.personality_id:
-            personality_manager = PersonalityManager()
-            personality = personality_manager.get_personality(request.personality_id)
+            personality_registry = get_personality_registry()
+            personality = personality_registry.get_personality(request.personality_id)
             if personality and personality.voice and personality.voice.tts:
                 # VoiceConfig.tts 是 Dict[str, Any]，直接使用
                 tts_config = personality.voice.tts.copy()  # 复制字典避免修改原配置

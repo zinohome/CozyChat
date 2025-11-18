@@ -8,6 +8,7 @@ from .models import Personality, PersonalityTraits, AIConfig, MemoryConfig, Tool
 from .loader import PersonalityLoader
 from .manager import PersonalityManager
 from .orchestrator import Orchestrator
+from .registry import PersonalityRegistry, get_personality_registry, init_personality_registry
 
 __all__ = [
     "Personality",
@@ -19,5 +20,8 @@ __all__ = [
     "PersonalityLoader",
     "PersonalityManager",
     "Orchestrator",
+    "PersonalityRegistry",
+    "get_personality_registry",
+    "init_personality_registry",
 ]
 

@@ -628,6 +628,38 @@ Authorization: Bearer <token>
 }
 ```
 
+#### 4.3.6 生成会话标题
+
+根据会话消息内容自动生成标题。当消息数达到一定阈值时，前端会自动调用此接口。
+
+```http
+POST /v1/sessions/{session_id}/title
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "force": false,        # 可选：是否强制重新生成标题
+  "max_messages": 20     # 可选：用于生成标题的最大消息数
+}
+
+# 响应
+{
+  "session_id": "session_789",
+  "title": "讨论健康饮食建议",
+  "generated_at": "2025-11-18T10:32:47Z",
+  "used_message_count": 10
+}
+```
+
+**说明**：
+- `force`: 为 `false` 时，如果会话已有生成的标题，将直接返回现有标题；为 `true` 时，强制重新生成
+- `max_messages`: 限制用于生成标题的消息数量，默认使用配置的值（通常为20条）
+- 标题生成需要消息数达到配置的阈值（默认10条）
+- 触发策略：
+  - 文本对话：当消息列表长度达到阈值时，前端自动调用
+  - 语音对话：语音转写完成后，检查消息数并调用
+- 标题生成不阻塞主对话流程，由前端在适当时机异步调用
+
 ### 4.4 记忆管理
 
 #### 4.4.1 搜索记忆

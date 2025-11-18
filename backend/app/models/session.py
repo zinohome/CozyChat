@@ -45,6 +45,7 @@ class Session(SessionBase):
     
     # 会话信息
     title = Column(String(255), nullable=False, default="新会话")
+    title_generated_at = Column(DateTime, nullable=True, comment="标题生成时间")
     
     # 元数据（JSONB）
     session_metadata = Column("metadata", JSONB, nullable=False, default={})

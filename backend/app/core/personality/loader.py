@@ -40,11 +40,11 @@ class PersonalityLoader:
             extra={"config_dir": str(self.config_dir)}
         )
     
-    def load_from_file(self, file_path: Path) -> Personality:
+    def load_from_file(self, file_path: Path | str) -> Personality:
         """从YAML文件加载人格配置
         
         Args:
-            file_path: YAML文件路径
+            file_path: YAML文件路径（Path对象或字符串）
             
         Returns:
             Personality: Personality对象
@@ -53,6 +53,10 @@ class PersonalityLoader:
             FileNotFoundError: 文件不存在
             ValueError: 配置格式错误
         """
+        # 确保file_path是Path对象
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+        
         if not file_path.exists():
             raise FileNotFoundError(f"Personality config file not found: {file_path}")
         

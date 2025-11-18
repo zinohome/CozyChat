@@ -15,8 +15,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_, func
 
 # 本地库
-from app.api.deps import get_current_active_user, get_sync_session
-from app.core.personality import PersonalityManager
+from app.api.deps import (
+    get_current_active_user,
+    get_sync_session,
+    get_personality_registry,
+    get_llm_engine_pool,
+)
+from app.core.personality import PersonalityRegistry
+from app.engines.ai.engine_pool import LLMEnginePool
 from app.models.user import User
 from app.models.session import Session as SessionModel
 from app.models.message import Message as MessageModel
@@ -97,13 +103,28 @@ class DeleteSessionResponse(BaseModel):
     session_id: str
 
 
+class GenerateTitleRequest(BaseModel):
+    """生成标题请求"""
+    force: bool = Field(default=False, description="是否强制重新生成标题")
+    max_messages: Optional[int] = Field(None, description="用于生成标题的最大消息数")
+
+
+class GenerateTitleResponse(BaseModel):
+    """生成标题响应"""
+    session_id: str
+    title: str
+    generated_at: str
+    used_message_count: int
+
+
 # ===== API路由 =====
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateSessionResponse)
 async def create_session(
     request: CreateSessionRequest,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    db: Session = Depends(get_sync_session),
+    personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> CreateSessionResponse:
     """创建会话
     
@@ -120,8 +141,7 @@ async def create_session(
     """
     try:
         # 验证人格是否存在
-        personality_manager = PersonalityManager()
-        personality = personality_manager.get_personality(request.personality_id)
+        personality = personality_registry.get_personality(request.personality_id)
         if not personality:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -199,7 +219,8 @@ async def list_sessions(
     sort: str = Query("created_at", description="排序字段"),
     order: str = Query("desc", description="排序方向：asc/desc"),
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    db: Session = Depends(get_sync_session),
+    personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> SessionsListResponse:
     """列出用户会话
     
@@ -253,13 +274,10 @@ async def list_sessions(
         offset = (page - 1) * page_size
         sessions = query.offset(offset).limit(page_size).all()
         
-        # 获取人格管理器以获取人格名称
-        personality_manager = PersonalityManager()
-        
         # 构建响应
         items = []
         for session in sessions:
-            personality = personality_manager.get_personality(session.personality_id)
+            personality = personality_registry.get_personality(session.personality_id)
             items.append(SessionListItem(
                 session_id=str(session.id),
                 personality_id=session.personality_id,
@@ -466,6 +484,193 @@ async def update_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update session"
+        )
+
+
+@router.post("/{session_id}/title", response_model=GenerateTitleResponse)
+async def generate_session_title(
+    session_id: str,
+    request: GenerateTitleRequest,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_sync_session),
+    engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
+) -> GenerateTitleResponse:
+    """生成或更新会话标题
+    
+    根据会话消息内容生成简洁的标题。
+    
+    Args:
+        session_id: 会话ID
+        request: 生成标题请求
+        user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        GenerateTitleResponse: 生成的标题信息
+        
+    Raises:
+        HTTPException: 如果会话不存在、不属于当前用户或生成失败
+    """
+    try:
+        import uuid
+        from app.config.config import settings
+        from app.core.session import SessionTitleGenerator
+        
+        session_uuid = uuid.UUID(session_id)
+        
+        # 查询会话并验证权限
+        session = db.query(SessionModel).filter(
+            and_(
+                SessionModel.id == session_uuid,
+                SessionModel.user_id == user.id,
+                SessionModel.deleted_at.is_(None)
+            )
+        ).first()
+        
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
+        
+        # 检查是否应该生成标题
+        trigger_length = settings.session_title_trigger_length
+        
+        # 优先使用session.message_count字段（性能更好，避免时序问题）
+        # 如果字段为None或0，再查询实际消息数
+        if session.message_count and session.message_count > 0:
+            message_count = session.message_count
+        else:
+            # Fallback: 查询实际消息数
+            messages = db.query(MessageModel).filter(
+                and_(
+                    MessageModel.session_id == session_uuid,
+                    MessageModel.role.in_(["user", "assistant"])
+                )
+            ).order_by(MessageModel.created_at.asc()).all()
+            message_count = len(messages)
+        
+        if not request.force:
+            # 非强制模式下的检查
+            if message_count < trigger_length:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Message count ({message_count}) is below trigger threshold ({trigger_length})"
+                )
+            
+            # 如果已经有生成的标题，不再重复生成
+            if session.title_generated_at is not None:
+                return GenerateTitleResponse(
+                    session_id=session_id,
+                    title=session.title,
+                    generated_at=session.title_generated_at.replace(tzinfo=timezone.utc).isoformat(),
+                    used_message_count=message_count
+                )
+        
+        # 生成标题
+        title_generator = SessionTitleGenerator(db)
+        
+        # 查询消息内容（用于生成标题）
+        # 构建消息内容（限制消息数量）
+        max_messages = request.max_messages or settings.session_title_max_messages
+        messages = db.query(MessageModel).filter(
+            and_(
+                MessageModel.session_id == session_uuid,
+                MessageModel.role.in_(["user", "assistant"])
+            )
+        ).order_by(MessageModel.created_at.asc()).limit(max_messages).all()
+        messages_for_title = messages
+        
+        # 构建消息文本
+        message_texts = []
+        for msg in messages_for_title:
+            role_name = "用户" if msg.role == "user" else "助手"
+            content = msg.content[:200] if len(msg.content) > 200 else msg.content
+            message_texts.append(f"{role_name}: {content}")
+        
+        messages_text = "\n".join(message_texts)
+        
+        # 构建提示词
+        prompt_template = (
+            "请根据以下对话内容，生成一个简洁的会话标题（不超过50个字）。"
+            "标题应该概括对话的主要话题或核心内容。\n\n对话内容：\n{messages}\n\n"
+            "请只返回标题，不要包含其他内容。"
+        )
+        prompt = prompt_template.format(messages=messages_text)
+        
+        # 创建AI引擎生成标题
+        from app.engines.ai import ChatMessage as EngineChatMessage
+        
+        engine = engine_pool.get_engine(
+            provider="openai",
+            model=settings.session_title_model
+        )
+        
+        response = await engine.chat(
+            messages=[EngineChatMessage(role="user", content=prompt)],
+            temperature=settings.session_title_temperature,
+            max_tokens=settings.session_title_max_tokens
+        )
+        
+        # 提取标题
+        if response.message:
+            if hasattr(response.message, 'content'):
+                title = response.message.content.strip()
+            elif isinstance(response.message, dict):
+                title = response.message.get("content", "").strip()
+            else:
+                title = str(response.message).strip()
+            
+            # 清理标题
+            title = title.replace('"', '').replace("'", '').replace('\n', ' ').strip()
+            
+            # 限制长度
+            if len(title) > 50:
+                title = title[:50]
+            
+            # 更新会话标题
+            session.title = title
+            session.title_generated_at = datetime.utcnow()
+            session.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(session)
+            
+            logger.info(
+                "Generated session title via API",
+                extra={
+                    "user_id": str(user.id),
+                    "session_id": session_id,
+                    "title": title,
+                    "message_count": message_count,
+                    "used_message_count": len(messages_for_title)
+                }
+            )
+            
+            return GenerateTitleResponse(
+                session_id=session_id,
+                title=title,
+                generated_at=session.title_generated_at.replace(tzinfo=timezone.utc).isoformat(),
+                used_message_count=len(messages_for_title)
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate title: AI response has no content"
+            )
+            
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session ID format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to generate session title: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate session title"
         )
 
 

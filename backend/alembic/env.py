@@ -6,7 +6,14 @@ Alembic环境配置
 
 # 标准库
 import asyncio
+import sys
+from pathlib import Path
 from logging.config import fileConfig
+
+# 添加项目根目录到Python路径
+# 获取当前文件的目录（alembic/），然后获取父目录（backend/）
+backend_dir = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(backend_dir))
 
 # 第三方库
 from sqlalchemy import pool

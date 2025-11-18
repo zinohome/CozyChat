@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.api.deps import get_current_active_user
-from app.core.personality import PersonalityManager
+from app.api.deps import get_current_active_user, get_personality_registry
+from app.core.personality import PersonalityRegistry
 from app.core.personality.models import Personality
 from app.models.user import User
 from app.utils.logger import logger
@@ -82,7 +82,8 @@ class UpdatePersonalityResponse(BaseModel):
 
 @router.get("", response_model=PersonalityListResponse)
 async def list_personalities(
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> PersonalityListResponse:
     """列出所有人格
     
@@ -93,21 +94,36 @@ async def list_personalities(
         PersonalityListResponse: 人格列表
     """
     try:
-        manager = PersonalityManager()
-        personalities = manager.list_personalities()
+        personalities = personality_registry.list_personalities()
         
-        items = [
-            PersonalityListItem(
-                id=p["id"],
-                name=p["name"],
-                description=p.get("description", ""),
-                icon=p.get("icon", ""),
-                tags=p.get("tags", []),
-                is_default=p.get("id") == "default",
+        # 定义优先级顺序
+        priority_order = ["health_assistant", "default"]
+        
+        # 分离优先级人格和其他人格
+        priority_personalities = []
+        other_personalities = []
+        
+        for p in personalities:
+            item = PersonalityListItem(
+                id=p.id,
+                name=p.name,
+                description=p.description or "",
+                icon=p.metadata.get("icon", "") if p.metadata else "",
+                tags=p.metadata.get("tags", []) if p.metadata else [],
+                is_default=p.id == "default",
                 created_at=None  # 可以从metadata中获取
             )
-            for p in personalities
-        ]
+            
+            if p.id in priority_order:
+                priority_personalities.append((priority_order.index(p.id), item))
+            else:
+                other_personalities.append((p.id, item))
+        
+        # 排序：优先级人格按优先级顺序，其他人格按ID排序
+        priority_personalities.sort(key=lambda x: x[0])
+        other_personalities.sort(key=lambda x: x[1])
+        
+        items = [item for _, item in priority_personalities] + [item for _, item in other_personalities]
         
         logger.info(
             "Listed personalities",
@@ -130,7 +146,8 @@ async def list_personalities(
 @router.get("/{personality_id}", response_model=PersonalityDetailResponse)
 async def get_personality(
     personality_id: str,
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> PersonalityDetailResponse:
     """获取人格详情
     
@@ -145,8 +162,7 @@ async def get_personality(
         HTTPException: 如果人格不存在
     """
     try:
-        manager = PersonalityManager()
-        personality = manager.get_personality(personality_id)
+        personality = personality_registry.get_personality(personality_id)
         
         if not personality:
             raise HTTPException(
@@ -195,6 +211,9 @@ async def create_personality(
         HTTPException: 如果配置无效或人格ID已存在
     """
     try:
+        # 注意：创建人格需要写入文件，使用PersonalityManager
+        # TODO: 考虑将create_personality方法添加到PersonalityRegistry
+        from app.core.personality import PersonalityManager
         manager = PersonalityManager()
         
         # 构建人格配置

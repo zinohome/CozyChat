@@ -14,11 +14,18 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import StreamingResponse
 
 # 本地库
-from app.api.deps import get_sync_session, get_current_active_user
-from app.core.personality import PersonalityManager
-from app.engines.ai import AIEngineFactory, ChatMessage as EngineChatMessage
+from app.api.deps import (
+    get_sync_session,
+    get_current_active_user,
+    get_personality_registry,
+    get_tool_manager_factory,
+    get_llm_engine_pool,
+)
+from app.core.personality import PersonalityRegistry
+from app.engines.ai import ChatMessage as EngineChatMessage
+from app.engines.ai.engine_pool import LLMEnginePool
 from app.engines.tools import builtin  # 导入以注册工具
-from app.engines.tools.manager import ToolManager
+from app.engines.tools.factory import ToolManagerFactory
 from app.middleware.rate_limit import rate_limit
 from app.models.session import Session as SessionModel
 from app.models.message import Message as MessageModel
@@ -45,7 +52,10 @@ async def create_chat_completion(
     request: Request,
     data: ChatCompletionRequest,
     response: Response,
-    db: Session = Depends(get_sync_session)
+    db: Session = Depends(get_sync_session),
+    personality_registry: PersonalityRegistry = Depends(get_personality_registry),
+    tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
+    engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
 ):
     """创建聊天补全（OpenAI兼容接口）
     
@@ -108,8 +118,7 @@ async def create_chat_completion(
         # 如果确定了personality_id，从人格配置加载工具和模型
         if personality_id:
             try:
-                personality_manager = PersonalityManager()
-                personality = personality_manager.get_personality(personality_id)
+                personality = personality_registry.get_personality(personality_id)
                 
                 if personality:
                     # 使用personality配置的模型和引擎类型
@@ -139,7 +148,7 @@ async def create_chat_completion(
                     
                     # 加载工具
                     if personality.tools.enabled and (tools is None or len(tools) == 0):
-                        tool_manager = ToolManager()
+                        tool_manager = tool_factory.get_tool_manager(allowed_tools=personality.tools.allowed_tools)
                         allowed_tools = personality.tools.allowed_tools
                         tools = tool_manager.get_tools_for_openai(tool_names=allowed_tools)
                         
@@ -210,8 +219,8 @@ async def create_chat_completion(
             )
         
         # 创建AI引擎（使用personality配置的模型或默认模型）
-        engine = AIEngineFactory.create_engine(
-            engine_type=actual_engine_type,
+        engine = engine_pool.get_engine(
+            provider=actual_engine_type,
             model=actual_model
         )
         
@@ -221,8 +230,7 @@ async def create_chat_completion(
         # 如果确定了personality_id，添加系统提示词
         if personality_id:
             try:
-                personality_manager = PersonalityManager()
-                personality = personality_manager.get_personality(personality_id)
+                personality = personality_registry.get_personality(personality_id)
                 
                 if personality and personality.ai.system_prompt:
                     # 添加系统提示词
@@ -262,8 +270,7 @@ async def create_chat_completion(
         # 同时检索相关记忆，避免丢失上下文
         if personality_id:
             try:
-                personality_manager = PersonalityManager()
-                personality = personality_manager.get_personality(personality_id)
+                personality = personality_registry.get_personality(personality_id)
                 
                 if personality:
                     # 1. 如果启用了记忆系统，先检索相关记忆
@@ -498,7 +505,7 @@ async def create_chat_completion(
                         
                         if should_continue_tool_calls:
                             # 执行工具
-                            tool_manager = ToolManager()
+                            tool_manager = tool_factory.get_tool_manager()
                             tool_results = []
                             
                             for tc in tool_call_chunks:
@@ -617,8 +624,7 @@ async def create_chat_completion(
                                 # 在继续循环前，检查消息总长度，如果超过限制，截断历史消息
                                 if personality_id:
                                     try:
-                                        personality_manager = PersonalityManager()
-                                        personality = personality_manager.get_personality(personality_id)
+                                        personality = personality_registry.get_personality(personality_id)
                                         
                                         if personality and personality.ai.token_budget:
                                             max_history_tokens = personality.ai.token_budget.max_history_tokens
@@ -759,8 +765,7 @@ async def create_chat_completion(
                                                 async_db.rollback()
                                             
                                             # 保存记忆（如果启用了记忆系统）
-                                            personality_manager = PersonalityManager()
-                                            personality = personality_manager.get_personality(personality_id)
+                                            personality = personality_registry.get_personality(personality_id)
                                             
                                             if personality and personality.memory.enabled and data.use_memory:
                                                 memory_manager = MemoryManager()
@@ -785,18 +790,9 @@ async def create_chat_completion(
                                                     }
                                                 )
                                             
-                                            # 更新会话标题（如果需要）
-                                            try:
-                                                title_generator = SessionTitleGenerator(async_db)
-                                                await title_generator.update_session_title_if_needed(
-                                                    session_id=data.session_id,
-                                                    personality_id=personality_id
-                                                )
-                                            except Exception as title_error:
-                                                logger.warning(
-                                                    f"Failed to update session title (stream): {title_error}",
-                                                    exc_info=False
-                                                )
+                                            # 标题生成已移至独立API（/v1/sessions/{id}/title）
+                                            # 由前端在消息数达到阈值时主动调用
+                                            # 不再在对话流中同步生成标题，避免阻塞响应
                                         finally:
                                             async_db.close()
                                     except Exception as e:
@@ -925,8 +921,7 @@ async def create_chat_completion(
                                     async_db.rollback()
                                 
                                 # 保存记忆（如果启用了记忆系统）
-                                personality_manager = PersonalityManager()
-                                personality = personality_manager.get_personality(personality_id)
+                                personality = personality_registry.get_personality(personality_id)
                                 
                                 if personality and personality.memory.enabled and data.use_memory:
                                     memory_manager = MemoryManager()
@@ -951,18 +946,9 @@ async def create_chat_completion(
                                         }
                                     )
                                 
-                                # 更新会话标题（如果需要）
-                                try:
-                                    title_generator = SessionTitleGenerator(async_db)
-                                    await title_generator.update_session_title_if_needed(
-                                        session_id=data.session_id,
-                                        personality_id=personality_id
-                                    )
-                                except Exception as title_error:
-                                    logger.warning(
-                                        f"Failed to update session title (non-stream): {title_error}",
-                                        exc_info=False
-                                    )
+                                # 标题生成已移至独立API（/v1/sessions/{id}/title）
+                                # 由前端在消息数达到阈值时主动调用
+                                # 不再在对话流中同步生成标题，避免阻塞响应
                             finally:
                                 async_db.close()
                         except Exception as e:

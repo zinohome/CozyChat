@@ -31,7 +31,7 @@ from slowapi.errors import RateLimitExceeded
 async def lifespan(app: FastAPI):
     """应用生命周期管理
     
-    启动时初始化数据库，关闭时清理资源
+    启动时初始化数据库和全局组件，关闭时清理资源
     """
     # 启动时执行
     logger.info(f"Starting {settings.app_name} v{__version__}")
@@ -46,6 +46,43 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             # 数据库初始化失败不影响应用启动（表可能已存在）
             logger.warning(f"Database initialization skipped: {e}", exc_info=False)
+    
+    # 初始化全局组件（Phase 2: Lifecycle Optimization）
+    logger.info("Initializing global components...")
+    
+    # 1. 初始化人格注册表
+    try:
+        from app.core.personality import init_personality_registry
+        personality_registry = init_personality_registry()
+        logger.info(f"PersonalityRegistry initialized with {len(personality_registry.list_personality_ids())} personalities")
+    except Exception as e:
+        logger.error(f"Failed to initialize PersonalityRegistry: {e}", exc_info=True)
+    
+    # 2. 初始化工具管理器工厂
+    try:
+        from app.engines.tools.factory import init_tool_manager_factory
+        tool_factory = init_tool_manager_factory()
+        logger.info("ToolManagerFactory initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize ToolManagerFactory: {e}", exc_info=True)
+    
+    # 3. 初始化LLM引擎池
+    try:
+        from app.engines.ai.engine_pool import init_llm_engine_pool
+        engine_pool = init_llm_engine_pool()
+        logger.info("LLMEnginePool initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize LLMEnginePool: {e}", exc_info=True)
+    
+    # 4. 初始化Qdrant客户端
+    try:
+        from app.engines.memory.qdrant_client_manager import init_qdrant_client
+        qdrant_client = init_qdrant_client()
+        logger.info("Qdrant client initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Qdrant client: {e}", exc_info=False)
+    
+    logger.info("All global components initialized successfully")
     
     yield
     

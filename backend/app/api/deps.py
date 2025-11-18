@@ -203,3 +203,43 @@ async def get_current_user_optional(
         return None
 
 
+# ===== 全局组件依赖注入（Phase 2: Lifecycle Optimization） =====
+
+def get_personality_registry():
+    """获取人格注册表依赖
+    
+    Returns:
+        PersonalityRegistry: 人格注册表实例
+    """
+    from app.core.personality import get_personality_registry
+    return get_personality_registry()
+
+
+def get_tool_manager_factory():
+    """获取工具管理器工厂依赖
+    
+    Returns:
+        ToolManagerFactory: 工具管理器工厂实例
+    """
+    from app.engines.tools.factory import get_tool_manager_factory
+    return get_tool_manager_factory()
+
+
+def get_llm_engine_pool():
+    """获取LLM引擎池依赖
+    
+    Returns:
+        LLMEnginePool: LLM引擎池实例
+    """
+    from app.engines.ai.engine_pool import get_llm_engine_pool
+    return get_llm_engine_pool()
+
+
+def get_qdrant_client():
+    """获取Qdrant客户端依赖
+    
+    Returns:
+        QdrantClient: Qdrant客户端实例
+    """
+    from app.engines.memory.qdrant_client_manager import get_qdrant_client
+    return get_qdrant_client()

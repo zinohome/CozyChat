@@ -9,7 +9,9 @@ import { useSessions } from '../hooks/useSessions';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { chatApi } from '@/services/chat';
+import { sessionApi } from '@/services/session';
 import { MessageBubble } from './MessageBubble';
+import { VirtualizedMessageList } from './VirtualizedMessageList';
 import { VoiceCallIndicator, VoiceWaveform } from './VoiceCallIndicator';
 import { ChatSessionHeader } from './ChatSessionHeader';
 import { showError } from '@/utils/errorHandler';
@@ -21,6 +23,9 @@ import type { Message } from '@/types/chat';
 import { logger } from '@/utils/logger';
 
 const log = logger.withTag('EnhancedChatContainer');
+
+// 标题生成触发阈值（从环境变量读取，默认为10）
+const TITLE_TRIGGER_LENGTH = parseInt(import.meta.env.VITE_SESSION_TITLE_TRIGGER_LENGTH || '10', 10);
 
 const { TextArea } = Input;
 
@@ -61,8 +66,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const userId = user?.id || null;
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<any>(null);
   const isMobile = useIsMobile();
+  const [messagesContainerHeight, setMessagesContainerHeight] = React.useState(600);
   // 使用 sessionId prop 作为当前会话ID（确保切换时立即更新）
   const currentSessionId = sessionId === 'default' ? null : sessionId;
   const { chatBackgroundStyle } = useUIStore();
@@ -183,6 +190,57 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       refetchMessages();
     }
   }, [currentSessionId, refetchMessages]);
+
+  // 标题生成触发逻辑
+  const titleGeneratedRef = useRef<Set<string>>(new Set()); // 记录已生成标题的会话ID
+  useEffect(() => {
+    // 检查是否需要触发标题生成
+    const shouldGenerateTitle = async () => {
+      // 必须有有效的会话ID
+      if (!currentSessionId || currentSessionId === 'default') {
+        return;
+      }
+      
+      // 如果已经为这个会话生成过标题，不再重复触发
+      if (titleGeneratedRef.current.has(currentSessionId)) {
+        return;
+      }
+      
+      // 检查消息数量是否达到阈值
+      const messageCount = messages.length;
+      if (messageCount >= TITLE_TRIGGER_LENGTH) {
+        try {
+          log.debug('Triggering title generation for session:', currentSessionId, 'with', messageCount, 'messages');
+          
+          // 调用标题生成API
+          await sessionApi.generateTitle(currentSessionId);
+          
+          // 标记为已生成
+          titleGeneratedRef.current.add(currentSessionId);
+          
+          // 刷新会话列表以显示新标题（使用正确的queryKey，包含userId）
+          // 使用 refetchQueries 立即刷新，而不是 invalidateQueries（可能因为 staleTime 不会立即刷新）
+          if (userId) {
+            await queryClient.refetchQueries({ queryKey: ['sessions', userId] });
+          } else {
+            // 如果没有userId，使用通配符匹配所有sessions查询
+            await queryClient.refetchQueries({ queryKey: ['sessions'] });
+          }
+          
+          log.info('Session title generated successfully:', currentSessionId);
+        } catch (error: any) {
+          // 如果是400错误（消息数不足或已有标题），静默处理
+          if (error?.response?.status === 400) {
+            log.debug('Title generation skipped:', error?.response?.data?.detail || error.message);
+          } else {
+            log.error('Failed to generate session title:', error);
+          }
+        }
+      }
+    };
+    
+    shouldGenerateTitle();
+  }, [currentSessionId, messages.length, queryClient, userId]);
   
   // 合并加载状态
   const isLoading = isLoadingStore || isLoadingHistory;
@@ -212,10 +270,29 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     }
   }, [error, setError]);
 
-  // 自动滚动到底部
+  // 计算消息容器高度（用于虚拟滚动）
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [allMessages]);
+    const updateHeight = () => {
+      if (messagesContainerRef.current) {
+        const rect = messagesContainerRef.current.getBoundingClientRect();
+        setMessagesContainerHeight(rect.height);
+      }
+    };
+    
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+  
+  // 停止自动播放回调（使用 useCallback 优化）
+  const handleStopAutoPlay = useCallback(() => {
+    if (autoPlayingAudioRef.current) {
+      autoPlayingAudioRef.current.pause();
+      autoPlayingAudioRef.current = null;
+    }
+    isAutoPlayingRef.current = false;
+    setAutoPlayingMessageId(null);
+  }, []);
 
   // 自动播放语音（当收到新的助手消息时）
   // 注意：只在用户发送消息后才自动播放，避免页面加载时触发
@@ -516,15 +593,14 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       
       {/* 消息列表 */}
       <div
+        ref={messagesContainerRef}
         style={{
           flex: 1,
           minHeight: 0, // 关键：允许 flex 子元素缩小
-          overflowY: 'auto',
-          overflowX: 'hidden',
+          overflow: 'hidden', // 虚拟滚动组件内部处理滚动
           padding: isMobile ? '12px' : '16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px',
           background: 'transparent', // 继承父容器的渐变背景
           width: '100%',
           maxWidth: '100%',
@@ -547,44 +623,35 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             开始对话吧！
           </div>
         ) : (
-          <>
-            {allMessages.map((msg) => {
-              // 判断是否为语音通话消息
-              // 1. 当前正在通话中，且在 voiceCallMessages 中
-              // 2. 或者消息的 metadata 中有 is_voice_call 标记
-              const isVoiceCallMsg = 
-                (isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id)) ||
-                (msg.metadata?.is_voice_call === true);
-              return (
-                <MessageBubble
-                  key={msg.id}
-                  id={msg.id}
-                  role={msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'user'}
-                  content={
-                    typeof msg.content === 'string'
-                      ? msg.content
-                      : (msg.content as any)?.text || ''
-                  }
-                  timestamp={msg.timestamp}
-                  onDelete={handleDeleteMessage}
-                  personalityId={personalityId}
-                  isAutoPlaying={autoPlayingMessageId === msg.id}
-                  onStopAutoPlay={() => {
-                    // 停止自动播放
-                    if (autoPlayingAudioRef.current) {
-                      autoPlayingAudioRef.current.pause();
-                      autoPlayingAudioRef.current = null;
-                    }
-                    isAutoPlayingRef.current = false;
-                    setAutoPlayingMessageId(null);
-                  }}
-                  isVoiceCall={isVoiceCallMsg}
-                  preferences={preferences}
-                />
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </>
+          <VirtualizedMessageList
+            messages={allMessages}
+            isVoiceCallActive={isVoiceCallActive}
+            voiceCallMessages={voiceCallMessages}
+            onDeleteMessage={handleDeleteMessage}
+            personalityId={personalityId}
+            autoPlayingMessageId={autoPlayingMessageId}
+            onStopAutoPlay={handleStopAutoPlay}
+            preferences={preferences}
+            height={Math.max(messagesContainerHeight, 400)} // 确保最小高度400px
+            estimateItemSize={(index) => {
+              // 根据消息内容估算高度
+              if (!allMessages || index >= allMessages.length || index < 0) {
+                return 100; // 默认高度
+              }
+              const msg = allMessages[index];
+              if (!msg) {
+                return 100; // 默认高度
+              }
+              const content = typeof msg.content === 'string'
+                ? msg.content
+                : (msg.content as any)?.text || '';
+              // 基础高度 + 内容行数 * 行高
+              const baseHeight = 80;
+              const lineHeight = 24;
+              const lines = Math.ceil(content.length / 50); // 假设每行50个字符
+              return Math.max(baseHeight + lines * lineHeight, 60); // 最小高度60px
+            }}
+          />
         )}
       </div>
 
@@ -889,6 +956,29 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                           });
                         }
                       );
+                      
+                      // 语音通话结束后触发标题生成（如果消息数达到阈值）
+                      try {
+                        const totalMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', currentSessionId]) || [];
+                        if (totalMessages.length >= TITLE_TRIGGER_LENGTH && !titleGeneratedRef.current.has(currentSessionId)) {
+                          log.debug('Triggering title generation after voice call for session:', currentSessionId);
+                          await sessionApi.generateTitle(currentSessionId);
+                          titleGeneratedRef.current.add(currentSessionId);
+                          // 刷新会话列表以显示新标题（使用正确的queryKey，包含userId）
+                          // 使用 refetchQueries 立即刷新，而不是 invalidateQueries
+                          if (userId) {
+                            await queryClient.refetchQueries({ queryKey: ['sessions', userId] });
+                          } else {
+                            await queryClient.refetchQueries({ queryKey: ['sessions'] });
+                          }
+                          log.info('Session title generated after voice call:', currentSessionId);
+                        }
+                      } catch (titleError: any) {
+                        // 标题生成失败不影响主流程，仅记录日志
+                        if (titleError?.response?.status !== 400) {
+                          log.error('Failed to generate title after voice call:', titleError);
+                        }
+                      }
                     } catch (error) {
                       log.error('保存语音通话消息失败:', error);
                       showError(error, '保存语音通话消息失败');

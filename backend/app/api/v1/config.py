@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 import httpx
 
 # 本地库
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, get_personality_registry
+from app.core.personality import PersonalityRegistry
 from app.config.config import settings
 from app.middleware.rate_limit import rate_limit
 from app.models.user import User
@@ -174,9 +175,8 @@ async def get_realtime_token(
                 # ✅ 统一逻辑：尝试加载 personality 配置，如果不存在或为 'default'，则使用全局配置
                 if data and data.personality_id:
                     try:
-                        from app.core.personality import PersonalityManager
-                        personality_manager = PersonalityManager()
-                        personality = personality_manager.get_personality(data.personality_id)
+                        personality_registry = get_personality_registry()
+                        personality = personality_registry.get_personality(data.personality_id)
                         logger.debug(
                             f"Loading personality voice config for {data.personality_id}",
                             extra={
@@ -349,9 +349,8 @@ async def get_realtime_token(
             # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
             if request and data.personality_id:
                 try:
-                    from app.core.personality import PersonalityManager
-                    personality_manager = PersonalityManager()
-                    personality = personality_manager.get_personality(data.personality_id)
+                    personality_registry = get_personality_registry()
+                    personality = personality_registry.get_personality(data.personality_id)
                     if personality and personality.voice and personality.voice.realtime:
                         # personality.voice.realtime 是一个字典
                         personality_voice = personality.voice.realtime.get('voice')

@@ -228,5 +228,28 @@ export const sessionApi = {
       has_prev: false,
     };
   },
+
+  /**
+   * 生成会话标题
+   * 
+   * 根据会话消息内容生成标题
+   */
+  async generateTitle(
+    sessionId: string,
+    options?: {
+      force?: boolean;
+      maxMessages?: number;
+    }
+  ): Promise<{
+    session_id: string;
+    title: string;
+    generated_at: string;
+    used_message_count: number;
+  }> {
+    return apiClient.post(`/v1/sessions/${sessionId}/title`, {
+      force: options?.force || false,
+      max_messages: options?.maxMessages,
+    });
+  },
 };
 

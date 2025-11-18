@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.api.deps import get_current_active_user
-from app.engines.tools.manager import ToolManager
+from app.api.deps import get_current_active_user, get_tool_manager_factory
+from app.engines.tools.factory import ToolManagerFactory
 from app.engines.tools.base import ToolType
 from app.models.user import User
 from app.utils.logger import logger
@@ -58,7 +58,8 @@ class ExecuteToolResponse(BaseModel):
 @router.get("", response_model=ToolsListResponse)
 async def list_tools(
     type: Optional[str] = Query(None, description="工具类型过滤：builtin/mcp/all"),
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
 ) -> ToolsListResponse:
     """列出所有可用工具
     
@@ -70,7 +71,7 @@ async def list_tools(
         ToolsListResponse: 工具列表
     """
     try:
-        manager = ToolManager()
+        manager = tool_factory.get_tool_manager()
         registry = manager.registry
         
         # 获取所有工具
@@ -135,7 +136,8 @@ async def list_tools(
 @router.post("/execute", response_model=ExecuteToolResponse)
 async def execute_tool(
     request: ExecuteToolRequest,
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
 ) -> ExecuteToolResponse:
     """执行单个工具
     
@@ -153,7 +155,7 @@ async def execute_tool(
         import time
         start_time = time.time()
         
-        manager = ToolManager()
+        manager = tool_factory.get_tool_manager()
         
         # 执行工具
         result = await manager.execute_tool(

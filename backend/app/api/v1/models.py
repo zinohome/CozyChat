@@ -12,8 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.api.deps import get_current_active_user
-from app.engines.ai import AIEngineFactory, AIEngineRegistry
+from app.api.deps import get_current_active_user, get_llm_engine_pool
+from app.engines.ai import AIEngineRegistry
+from app.engines.ai.engine_pool import LLMEnginePool
 from app.models.user import User
 from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
@@ -48,7 +49,8 @@ class ModelsListResponse(BaseModel):
 
 @router.get("", response_model=ModelsListResponse)
 async def list_models(
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
 ) -> ModelsListResponse:
     """列出所有可用模型
     
@@ -73,8 +75,13 @@ async def list_models(
         # 为每个引擎生成模型信息
         for engine_name in engines:
             try:
-                # 创建引擎实例以获取模型信息
-                engine = AIEngineFactory.create_engine(engine_name)
+                # 从配置获取默认模型
+                config_loader = get_config_loader()
+                engine_config = config_loader.load_engine_config(engine_name)
+                default_model = engine_config.get("default", {}).get("model", "gpt-3.5-turbo" if engine_name == "openai" else "llama2")
+                
+                # 使用引擎池获取引擎实例（会缓存）
+                engine = engine_pool.get_engine(provider=engine_name, model=default_model)
                 
                 # 获取引擎支持的模型列表
                 if hasattr(engine, 'list_models'):
@@ -125,7 +132,8 @@ async def list_models(
 @router.get("/{model_id}", response_model=ModelDetail)
 async def get_model(
     model_id: str,
-    user: User = Depends(get_current_active_user)
+    user: User = Depends(get_current_active_user),
+    engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
 ) -> ModelDetail:
     """获取单个模型详情
     
@@ -146,7 +154,13 @@ async def get_model(
         
         for engine_name in engines:
             try:
-                engine = AIEngineFactory.create_engine(engine_name)
+                # 从配置获取默认模型
+                config_loader = get_config_loader()
+                engine_config = config_loader.load_engine_config(engine_name)
+                default_model = engine_config.get("default", {}).get("model", "gpt-3.5-turbo" if engine_name == "openai" else "llama2")
+                
+                # 使用引擎池获取引擎实例（会缓存）
+                engine = engine_pool.get_engine(provider=engine_name, model=default_model)
                 
                 # 检查模型是否属于此引擎
                 if hasattr(engine, 'list_models'):

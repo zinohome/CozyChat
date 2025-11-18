@@ -491,3 +491,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 };
 
+// 使用 React.memo 优化组件，避免不必要的重渲染
+const MemoizedMessageBubble = React.memo(MessageBubble, (prevProps, nextProps) => {
+  // 自定义比较函数，只在关键属性变化时重新渲染
+  return (
+    prevProps.id === nextProps.id &&
+    prevProps.role === nextProps.role &&
+    prevProps.content === nextProps.content &&
+    prevProps.timestamp === nextProps.timestamp &&
+    prevProps.isAutoPlaying === nextProps.isAutoPlaying &&
+    prevProps.isVoiceCall === nextProps.isVoiceCall &&
+    prevProps.personalityId === nextProps.personalityId &&
+    prevProps.showActions === nextProps.showActions &&
+    // 深度比较 preferences（如果变化频繁，可以考虑只比较关键字段）
+    JSON.stringify(prevProps.preferences) === JSON.stringify(nextProps.preferences)
+  );
+});
+
+// 同时提供命名导出和默认导出（保持向后兼容）
+export { MemoizedMessageBubble as default };
+
