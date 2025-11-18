@@ -385,9 +385,11 @@ class MemoryManager:
         memory_type: Optional[MemoryType] = None,
         limit: int = 5,
         similarity_threshold: float = 0.7,
-        use_cache: bool = True
+        use_cache: bool = True,
+        use_hybrid_search: bool = False,
+        keyword_extraction: Optional[callable] = None
     ) -> List[MemorySearchResult]:
-        """搜索相关记忆
+        """搜索相关记忆（支持混合检索）
         
         Args:
             query: 查询文本
@@ -397,12 +399,15 @@ class MemoryManager:
             limit: 返回结果数量限制
             similarity_threshold: 相似度阈值
             use_cache: 是否使用缓存
+            use_hybrid_search: 是否使用混合检索（关键词搜索 + 向量搜索）
+            keyword_extraction: 关键词提取函数（可选）
             
         Returns:
             List[MemorySearchResult]: 搜索结果列表
         """
-        # 检查缓存
-        if use_cache:
+        # 检查缓存（混合检索不使用缓存，因为关键词可能不同）
+        cache_key = None
+        if use_cache and not use_hybrid_search:
             cache_key = self._build_cache_key(query, user_id, session_id, memory_type)
             if cache_key in self.cache:
                 logger.debug(f"Memory search cache hit: {cache_key}")
@@ -417,13 +422,15 @@ class MemoryManager:
                     session_id=session_id,
                     memory_type=memory_type,
                     limit=limit,
-                    similarity_threshold=similarity_threshold
+                    similarity_threshold=similarity_threshold,
+                    use_hybrid_search=use_hybrid_search,
+                    keyword_extraction=keyword_extraction
                 ),
                 timeout=self.search_timeout
             )
             
-            # 更新缓存
-            if use_cache:
+            # 更新缓存（仅非混合检索）
+            if use_cache and cache_key:
                 self.cache[cache_key] = results
             
             logger.info(
@@ -583,7 +590,9 @@ class MemoryManager:
         include_user_memory: bool = True,
         include_ai_memory: bool = True,
         timeout: float = 0.5,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
+        use_hybrid_search: bool = False,
+        keyword_extraction: Optional[callable] = None
     ) -> Dict[str, List[MemorySearchResult]]:
         """检索相关记忆（用于orchestrator）
         
@@ -596,6 +605,8 @@ class MemoryManager:
             include_ai_memory: 是否包含AI记忆
             timeout: 搜索超时时间（秒）
             similarity_threshold: 相似度阈值
+            use_hybrid_search: 是否使用混合检索（关键词搜索 + 向量搜索）
+            keyword_extraction: 关键词提取函数（可选）
             
         Returns:
             Dict[str, List[MemorySearchResult]]: 包含user_memories和ai_memories的字典
@@ -639,7 +650,9 @@ class MemoryManager:
                         memory_type=None,  # 不指定类型，将使用mixed collection
                         limit=max_results * 2,  # 获取更多结果以便分类
                         similarity_threshold=similarity_threshold,
-                        use_cache=True
+                        use_cache=True,
+                        use_hybrid_search=use_hybrid_search,  # 传递混合检索参数
+                        keyword_extraction=keyword_extraction
                     ),
                     timeout=timeout
                 )
@@ -682,7 +695,9 @@ class MemoryManager:
                             memory_type=MemoryType.USER,
                             limit=max_results,
                             similarity_threshold=similarity_threshold,
-                            use_cache=True
+                            use_cache=True,
+                            use_hybrid_search=use_hybrid_search,  # 传递混合检索参数
+                            keyword_extraction=keyword_extraction
                         ),
                         timeout=timeout
                     )
@@ -733,7 +748,9 @@ class MemoryManager:
                             memory_type=MemoryType.ASSISTANT,
                             limit=max_results,
                             similarity_threshold=similarity_threshold,
-                            use_cache=True
+                            use_cache=True,
+                            use_hybrid_search=use_hybrid_search,  # 传递混合检索参数
+                            keyword_extraction=keyword_extraction
                         ),
                         timeout=timeout
                     )

@@ -536,9 +536,11 @@ class QdrantMemoryEngine(MemoryEngineBase):
         session_id: Optional[str] = None,
         memory_type: Optional[MemoryType] = None,
         limit: int = 5,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
+        use_hybrid_search: bool = False,
+        keyword_extraction: Optional[callable] = None
     ) -> List[MemorySearchResult]:
-        """搜索相关记忆
+        """搜索相关记忆（支持混合检索：向量搜索 + 关键词搜索）
         
         Args:
             query: 查询文本
@@ -547,6 +549,8 @@ class QdrantMemoryEngine(MemoryEngineBase):
             memory_type: 记忆类型（可选）
             limit: 返回结果数量限制
             similarity_threshold: 相似度阈值
+            use_hybrid_search: 是否使用混合检索（关键词搜索 + 向量搜索）
+            keyword_extraction: 关键词提取函数（可选），接收query返回关键词列表
             
         Returns:
             List[MemorySearchResult]: 搜索结果列表
@@ -617,10 +621,29 @@ class QdrantMemoryEngine(MemoryEngineBase):
                     )
                 )
             
+            # 混合检索：提取关键词（在应用层进行过滤）
+            # 注意：Qdrant 的 MatchAny 用于精确值匹配，不适合文本内容的模糊匹配
+            # 因此采用两步策略：1) 向量搜索获取更多候选 2) 应用层关键词过滤
+            keywords = []
+            if use_hybrid_search:
+                keywords = self._extract_keywords(query, keyword_extraction)
+                if keywords:
+                    logger.debug(
+                        f"Hybrid search: extracted keywords (will filter in application layer)",
+                        extra={
+                            "query": query[:50],
+                            "keywords": keywords,
+                            "keyword_count": len(keywords)
+                        }
+                    )
+            
+            # 合并所有过滤条件（不包含关键词过滤，在应用层处理）
+            all_filter_conditions = filter_conditions.copy()
+            
             # 类型转换：将 list[FieldCondition] 转换为 List[Condition]
             from qdrant_client.models import Condition
             query_filter: Optional[Filter] = (
-                Filter(must=list(filter_conditions)) if filter_conditions else None  # type: ignore
+                Filter(must=list(all_filter_conditions)) if all_filter_conditions else None  # type: ignore
             )
             
             # 搜索每个集合
@@ -670,6 +693,21 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         if similarity < similarity_threshold:
                             continue
                         
+                        # 混合检索：在应用层进行关键词过滤
+                        content = str(payload.get("content", ""))
+                        if use_hybrid_search and keywords:
+                            # 检查内容是否包含任一关键词
+                            content_lower = content.lower()
+                            has_keyword = any(
+                                keyword.lower() in content_lower 
+                                for keyword in keywords
+                            )
+                            if not has_keyword:
+                                # 不包含关键词，但相似度足够高时仍保留（降低阈值）
+                                # 这样可以平衡关键词匹配和语义相似度
+                                if similarity < similarity_threshold * 0.8:  # 降低20%阈值
+                                    continue
+                        
                         # 将Qdrant返回的UUID格式ID转换回mem-{hex}格式
                         original_id = self._convert_from_qdrant_id(str(scored_point.id))
                         
@@ -679,7 +717,7 @@ class QdrantMemoryEngine(MemoryEngineBase):
                             user_id=str(payload.get("user_id", "")),
                             session_id=str(payload.get("session_id", "")),
                             memory_type=actual_mem_type,
-                            content=str(payload.get("content", "")),
+                            content=content,
                             importance=float(payload.get("importance", 0.5)),
                             metadata={k: v for k, v in payload.items() 
                                      if k not in ["user_id", "session_id", "content", 
@@ -751,6 +789,46 @@ class QdrantMemoryEngine(MemoryEngineBase):
         except Exception as e:
             logger.error(f"Failed to search memories: {e}", exc_info=True)
             return []
+    
+    def _extract_keywords(
+        self,
+        query: str,
+        keyword_extraction: Optional[callable] = None
+    ) -> List[str]:
+        """从查询中提取关键词
+        
+        Args:
+            query: 查询文本
+            keyword_extraction: 自定义关键词提取函数（可选）
+            
+        Returns:
+            List[str]: 关键词列表
+        """
+        if keyword_extraction:
+            # 使用自定义提取函数
+            try:
+                keywords = keyword_extraction(query)
+                if isinstance(keywords, list):
+                    return keywords
+            except Exception as e:
+                logger.warning(f"Keyword extraction function failed: {e}")
+        
+        # 默认：简单提取关键词（中文和英文）
+        import re
+        
+        # 提取中文关键词（2-4个字）
+        chinese_keywords = re.findall(r'[\u4e00-\u9fa5]{2,4}', query)
+        
+        # 提取英文关键词（3个字符以上，排除常见停用词）
+        stop_words = {'the', 'is', 'are', 'was', 'were', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        words = re.findall(r'\b[a-zA-Z]{3,}\b', query.lower())
+        english_keywords = [w for w in words if w not in stop_words]
+        
+        # 合并并去重
+        all_keywords = list(set(chinese_keywords + english_keywords))
+        
+        # 限制关键词数量（避免过滤条件过于复杂）
+        return all_keywords[:5]  # 最多5个关键词
     
     async def delete_memory(self, memory_id: str, user_id: str) -> bool:
         """删除记忆

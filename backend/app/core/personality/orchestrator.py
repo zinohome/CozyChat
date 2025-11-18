@@ -8,12 +8,16 @@
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+# 第三方库
+from sqlalchemy.ext.asyncio import AsyncSession
+
 # 本地库
 from app.engines.ai.base import AIEngineBase, ChatMessage, MessageRole
 from app.engines.ai.factory import AIEngineFactory
 from app.engines.memory.manager import MemoryManager
 from app.engines.memory.models import MemoryType
 from app.engines.tools.manager import ToolManager
+from app.core.context.builder import ContextBuilder
 from app.utils.logger import logger
 from .manager import PersonalityManager
 from .models import Personality
@@ -24,7 +28,7 @@ class Orchestrator:
     
     负责协调所有模块，处理完整的对话流程：
     1. 人格加载
-    2. 记忆检索
+    2. 智能上下文构建（使用ContextBuilder）
     3. 工具准备
     4. AI生成
     5. 记忆保存
@@ -34,7 +38,9 @@ class Orchestrator:
         self,
         personality_manager: PersonalityManager,
         memory_manager: MemoryManager,
-        tool_manager: ToolManager
+        tool_manager: ToolManager,
+        context_builder: Optional[ContextBuilder] = None,
+        db: Optional[AsyncSession] = None
     ):
         """初始化编排器
         
@@ -42,13 +48,20 @@ class Orchestrator:
             personality_manager: 人格管理器
             memory_manager: 记忆管理器
             tool_manager: 工具管理器
+            context_builder: 上下文构建器（可选，如果提供则使用智能上下文）
+            db: 数据库会话（可选，用于ContextBuilder）
         """
         self.personality_manager = personality_manager
         self.memory_manager = memory_manager
         self.tool_manager = tool_manager
+        self.context_builder = context_builder
+        self.db = db
         self.ai_engines: Dict[str, AIEngineBase] = {}  # personality_id -> ai_engine
         
-        logger.info("Orchestrator initialized")
+        logger.info(
+            "Orchestrator initialized",
+            extra={"use_context_builder": context_builder is not None}
+        )
     
     async def process_chat_request(
         self,
@@ -87,31 +100,37 @@ class Orchestrator:
                 "personality_name": personality.name,
                 "user_id": user_id,
                 "session_id": session_id,
-                "stream": stream
+                "stream": stream,
+                "use_context_builder": self.context_builder is not None
             }
         )
         
         # 2. 获取或创建AI引擎
         ai_engine = await self._get_or_create_ai_engine(personality)
         
-        # 3. 检索相关记忆
-        memories = await self._retrieve_memories(
-            personality,
-            messages,
-            user_id,
-            session_id
-        )
+        # 3. 构建智能上下文（使用ContextBuilder）或降级到传统方式
+        if self.context_builder and self.db:
+            # 使用ContextBuilder构建智能上下文
+            full_messages = await self._build_context_with_builder(
+                personality,
+                messages,
+                user_id,
+                session_id
+            )
+        else:
+            # 降级：使用传统方式构建上下文
+            logger.warning("ContextBuilder not available, using fallback context building")
+            full_messages = await self._build_context_fallback(
+                personality,
+                messages,
+                user_id,
+                session_id
+            )
         
-        # 4. 构建系统提示（包含记忆）
-        system_prompt = self._build_system_prompt(personality, memories)
-        
-        # 5. 准备工具列表
+        # 4. 准备工具列表
         tools = await self._prepare_tools(personality)
         
-        # 6. 构建完整消息列表
-        full_messages = self._build_full_messages(system_prompt, messages)
-        
-        # 7. 调用AI引擎生成回复
+        # 5. 调用AI引擎生成回复
         if stream:
             return self._stream_generate(
                 ai_engine,
@@ -162,14 +181,14 @@ class Orchestrator:
         
         return self.ai_engines[personality_id]
     
-    async def _retrieve_memories(
+    async def _build_context_with_builder(
         self,
         personality: Personality,
         messages: List[Dict[str, str]],
         user_id: str,
         session_id: str
-    ) -> Dict[str, Any]:
-        """检索相关记忆
+    ) -> List[ChatMessage]:
+        """使用ContextBuilder构建智能上下文
         
         Args:
             personality: Personality对象
@@ -178,103 +197,122 @@ class Orchestrator:
             session_id: 会话ID
             
         Returns:
-            Dict[str, Any]: 记忆结果
+            List[ChatMessage]: 完整的消息列表
         """
-        if not personality.memory.enabled:
-            return {"user_memories": [], "ai_memories": []}
+        # 获取最后一条用户消息
+        last_user_message = None
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                last_user_message = msg.get("content", "")
+                break
         
-        try:
-            # 获取最后一条用户消息作为查询
-            last_user_message = None
-            for msg in reversed(messages):
-                if msg.get("role") == "user":
-                    last_user_message = msg.get("content", "")
-                    break
-            
-            if not last_user_message:
-                return {"user_memories": [], "ai_memories": []}
-            
-            # 检索记忆
-            memory_config = personality.memory
-            include_user = memory_config.save_mode in ["both", "user_only"]
-            include_ai = memory_config.save_mode in ["both", "assistant_only"]
-            
-            # 记录使用的相似度阈值（用于调试）
-            similarity_threshold = memory_config.retrieval.similarity_threshold
-            logger.warning(  # 使用warning级别确保日志一定会输出
-                f"Using similarity threshold from personality config",
-                extra={
-                    "personality_id": personality.id,
-                    "similarity_threshold": similarity_threshold,
-                    "similarity_threshold_type": type(similarity_threshold).__name__,
-                    "retrieval_config": {
-                        "max_results": memory_config.retrieval.max_results,
-                        "similarity_threshold": memory_config.retrieval.similarity_threshold,
-                        "timeout_seconds": memory_config.retrieval.timeout_seconds
-                    },
-                    "memory_config_type": type(memory_config).__name__,
-                    "retrieval_type": type(memory_config.retrieval).__name__
-                }
+        if not last_user_message:
+            last_user_message = ""
+        
+        # 使用ContextBuilder构建上下文
+        context_bundle = await self.context_builder.build_context(
+            user_id=user_id,
+            session_id=session_id,
+            current_message=last_user_message,
+            personality_config=personality,
+            include_memories=personality.memory.enabled,
+            include_summaries=True
+        )
+        
+        # 将ContextBundle转换为消息列表
+        full_messages = []
+        
+        # 1. 系统提示词
+        for prompt in context_bundle.system_prompts:
+            full_messages.append(
+                ChatMessage(role=MessageRole.SYSTEM, content=prompt)
             )
-            
-            results = await self.memory_manager.retrieve_memories(
-                user_id=user_id,
-                session_id=session_id,
-                query=last_user_message,
-                max_results=memory_config.retrieval.max_results,
-                include_user_memory=include_user,
-                include_ai_memory=include_ai,
-                timeout=memory_config.retrieval.timeout_seconds,
-                similarity_threshold=similarity_threshold
+        
+        # 2. 历史摘要（如果有）
+        if context_bundle.summarized_history:
+            summary_text = "## 对话历史摘要\n\n"
+            for i, summary in enumerate(context_bundle.summarized_history, 1):
+                summary_text += f"**摘要 {i}**:\n{summary}\n\n"
+            full_messages.append(
+                ChatMessage(role=MessageRole.SYSTEM, content=summary_text)
             )
-            
-            # 再次记录，确认传递的参数
-            logger.warning(  # 使用warning级别确保日志一定会输出
-                f"After calling retrieve_memories",
-                extra={
-                    "personality_id": personality.id,
-                    "similarity_threshold_passed": similarity_threshold,
-                    "user_memories_count": len(results.get("user_memories", [])),
-                    "ai_memories_count": len(results.get("ai_memories", []))
-                }
+        
+        # 3. 检索到的记忆（如果有）
+        if context_bundle.retrieved_memories:
+            memory_text = "## 相关记忆\n\n"
+            for mem in context_bundle.retrieved_memories:
+                memory_text += f"- {mem.content}\n"
+            full_messages.append(
+                ChatMessage(role=MessageRole.SYSTEM, content=memory_text)
             )
-            
-            # 记录检索到的记忆详情（用于调试）
-            user_mems = results.get("user_memories", [])
-            ai_mems = results.get("ai_memories", [])
-            logger.debug(
-                f"Retrieved memories",
-                extra={
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "query": last_user_message,
-                    "user_memories_count": len(user_mems),
-                    "ai_memories_count": len(ai_mems),
-                    "user_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in user_mems[:5]],
-                    "ai_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in ai_mems[:5]]
-                }
+        
+        # 4. 最近消息（从ContextBundle获取）
+        for msg in context_bundle.recent_messages:
+            role = MessageRole(msg.role)
+            full_messages.append(
+                ChatMessage(role=role, content=msg.content)
             )
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Memory retrieval failed: {e}", exc_info=True)
-            return {"user_memories": [], "ai_memories": []}
+        
+        logger.debug(
+            f"Built context with ContextBuilder",
+            extra={
+                "system_prompts_count": len(context_bundle.system_prompts),
+                "summaries_count": len(context_bundle.summarized_history),
+                "memories_count": len(context_bundle.retrieved_memories),
+                "recent_messages_count": len(context_bundle.recent_messages),
+                "total_messages": len(full_messages)
+            }
+        )
+        
+        return full_messages
     
-    def _build_system_prompt(
+    async def _build_context_fallback(
         self,
         personality: Personality,
-        memories: Dict[str, Any]
-    ) -> str:
-        """构建系统提示（包含记忆）
+        messages: List[Dict[str, str]],
+        user_id: str,
+        session_id: str
+    ) -> List[ChatMessage]:
+        """降级：使用传统方式构建上下文（当ContextBuilder不可用时）
         
         Args:
             personality: Personality对象
-            memories: 记忆结果
+            messages: 消息历史
+            user_id: 用户ID
+            session_id: 会话ID
             
         Returns:
-            str: 系统提示
+            List[ChatMessage]: 完整的消息列表
         """
+        # 获取最后一条用户消息作为查询
+        last_user_message = None
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                last_user_message = msg.get("content", "")
+                break
+        
+        # 检索记忆（如果启用）
+        memories = {"user_memories": [], "ai_memories": []}
+        if personality.memory.enabled and last_user_message:
+            try:
+                memory_config = personality.memory
+                include_user = memory_config.save_mode in ["both", "user_only"]
+                include_ai = memory_config.save_mode in ["both", "assistant_only"]
+                
+                memories = await self.memory_manager.retrieve_memories(
+                    user_id=user_id,
+                    session_id=session_id,
+                    query=last_user_message,
+                    max_results=memory_config.retrieval.max_results,
+                    include_user_memory=include_user,
+                    include_ai_memory=include_ai,
+                    timeout=memory_config.retrieval.timeout_seconds,
+                    similarity_threshold=memory_config.retrieval.similarity_threshold
+                )
+            except Exception as e:
+                logger.error(f"Memory retrieval failed in fallback: {e}", exc_info=True)
+        
+        # 构建系统提示
         system_prompt = personality.ai.system_prompt
         
         # 添加记忆信息
@@ -282,26 +320,35 @@ class Orchestrator:
         ai_memories = memories.get("ai_memories", [])
         
         if user_memories or ai_memories:
-            # 使用配置中的max_results，而不是硬编码
             max_results = personality.memory.retrieval.max_results
-            
             memory_context = "\n\n## 相关记忆\n\n"
             
             if user_memories:
                 memory_context += "### 用户记忆\n"
-                # 使用配置的max_results
                 for mem in user_memories[:max_results]:
                     memory_context += f"- {mem.memory.content}\n"
             
             if ai_memories:
                 memory_context += "\n### AI记忆\n"
-                # 使用配置的max_results
                 for mem in ai_memories[:max_results]:
                     memory_context += f"- {mem.memory.content}\n"
             
             system_prompt += memory_context
         
-        return system_prompt
+        # 构建消息列表
+        full_messages = []
+        
+        if system_prompt:
+            full_messages.append(
+                ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)
+            )
+        
+        for msg in messages:
+            role = MessageRole(msg.get("role", "user"))
+            content = msg.get("content", "")
+            full_messages.append(ChatMessage(role=role, content=content))
+        
+        return full_messages
     
     async def _prepare_tools(self, personality: Personality) -> List[Dict[str, Any]]:
         """准备工具列表
@@ -328,35 +375,6 @@ class Orchestrator:
         
         return tools
     
-    def _build_full_messages(
-        self,
-        system_prompt: str,
-        messages: List[Dict[str, str]]
-    ) -> List[ChatMessage]:
-        """构建完整消息列表
-        
-        Args:
-            system_prompt: 系统提示
-            messages: 消息历史
-            
-        Returns:
-            List[ChatMessage]: 完整消息列表
-        """
-        full_messages = []
-        
-        # 添加系统消息
-        if system_prompt:
-            full_messages.append(
-                ChatMessage(role=MessageRole.SYSTEM, content=system_prompt)
-            )
-        
-        # 添加历史消息
-        for msg in messages:
-            role = MessageRole(msg.get("role", "user"))
-            content = msg.get("content", "")
-            full_messages.append(ChatMessage(role=role, content=content))
-        
-        return full_messages
     
     async def _generate(
         self,
