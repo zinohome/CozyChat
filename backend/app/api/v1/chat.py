@@ -952,12 +952,12 @@ async def create_chat_completion(
                                                 # 使用依赖注入的MemoryManager实例
                                                 
                                                 # 使用 async_save=True 异步保存，不阻塞
+                                                # 不传入importance参数，让系统自动计算重要性分数
                                                 await memory_manager.add_conversation_turn(
                                                     user_id=user_id,
                                                     session_id=data.session_id,
                                                     user_message=last_user_message,
                                                     assistant_message=assistant_content,
-                                                    importance=0.5,
                                                     async_save=True
                                                 )
                                                 
@@ -1108,12 +1108,12 @@ async def create_chat_completion(
                                     # 使用依赖注入的MemoryManager实例
                                     
                                     # 使用 async_save=True 异步保存，不阻塞
+                                    # 不传入importance参数，让系统自动计算重要性分数
                                     await memory_manager.add_conversation_turn(
                                         user_id=user_id,
                                         session_id=data.session_id,
                                         user_message=last_user_message,
                                         assistant_message=assistant_content,
-                                        importance=0.5,
                                         async_save=True
                                     )
                                     

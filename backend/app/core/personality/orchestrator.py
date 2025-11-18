@@ -403,12 +403,12 @@ class Orchestrator:
                 if last_user_message:
                     # response是ChatResponse对象，需要通过message.content获取内容
                     assistant_content = response.message.content if response.message else ""
+                    # 不传入importance参数，让系统自动计算重要性分数
                     await self.memory_manager.add_conversation_turn(
                         user_id=user_id,
                         session_id=session_id,
                         user_message=last_user_message,
-                        assistant_message=assistant_content,
-                        importance=0.5
+                        assistant_message=assistant_content
                     )
             
             elapsed_time = time.time() - start_time
@@ -487,12 +487,12 @@ class Orchestrator:
                         break
                 
                 if last_user_message:
+                    # 不传入importance参数，让系统自动计算重要性分数
                     await self.memory_manager.add_conversation_turn(
                         user_id=user_id,
                         session_id=session_id,
                         user_message=last_user_message,
-                        assistant_message=full_content,
-                        importance=0.5
+                        assistant_message=full_content
                     )
             
             elapsed_time = time.time() - start_time

@@ -452,7 +452,7 @@ class MemoryManager:
         session_id: str,
         user_message: str,
         assistant_message: str,
-        importance: float = 0.5,
+        importance: Optional[float] = None,
         async_save: bool = True
     ) -> Dict[str, str]:
         """添加一轮对话（用户消息和AI消息）
@@ -462,18 +462,21 @@ class MemoryManager:
             session_id: 会话ID
             user_message: 用户消息
             assistant_message: AI消息
-            importance: 重要性分数
+            importance: 重要性分数（如果为None，则自动计算）
             async_save: 是否异步保存
             
         Returns:
             Dict[str, str]: 包含user_memory_id和assistant_memory_id的字典
         """
+        # 如果提供了importance，使用提供的值；否则让add_memory自动计算
+        # 注意：用户消息和AI消息的内容不同，应该分别计算重要性
         user_memory_id = await self.add_memory(
             user_id=user_id,
             session_id=session_id,
             content=user_message,
             memory_type=MemoryType.USER,
-            importance=importance,
+            importance=importance,  # 如果为None，会自动计算
+            auto_calculate_importance=(importance is None),  # 如果未提供，启用自动计算
             async_save=async_save
         )
         
@@ -482,7 +485,8 @@ class MemoryManager:
             session_id=session_id,
             content=assistant_message,
             memory_type=MemoryType.ASSISTANT,
-            importance=importance,
+            importance=importance,  # 如果为None，会自动计算
+            auto_calculate_importance=(importance is None),  # 如果未提供，启用自动计算
             async_save=async_save
         )
         
