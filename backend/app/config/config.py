@@ -222,6 +222,11 @@ class Settings(BaseSettings):
     )
     
     # ===== 智能上下文配置 =====
+    context_intelligent_enabled: bool = Field(
+        default=True,
+        alias="CONTEXT_INTELLIGENT_ENABLED",
+        description="是否启用智能上下文管理（Phase 4功能）"
+    )
     context_recent_message_count: int = Field(
         default=6,
         alias="CONTEXT_RECENT_MESSAGE_COUNT",

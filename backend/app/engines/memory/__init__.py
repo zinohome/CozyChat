@@ -6,7 +6,7 @@
 from .base import MemoryEngineBase
 from .chromadb_engine import ChromaDBMemoryEngine
 from .qdrant_engine import QdrantMemoryEngine
-from .manager import MemoryManager
+from .manager import MemoryManager, get_memory_manager
 from .models import Memory, MemoryType
 
 __all__ = [
@@ -14,6 +14,7 @@ __all__ = [
     "ChromaDBMemoryEngine",
     "QdrantMemoryEngine",
     "MemoryManager",
+    "get_memory_manager",
     "Memory",
     "MemoryType",
 ]

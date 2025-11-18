@@ -1,5 +1,23 @@
 # CozyChat API接口设计
 
+> **版本**: v2.0  
+> **最后更新**: 2025-11-18  
+> **变更**: 新增会话标题生成API
+
+---
+
+## 📋 版本变更
+
+### v2.0 (2025-11-18)
+- ✅ 新增`POST /v1/sessions/{id}/title` - 会话标题生成API
+- ✅ 优化记忆系统API说明（异步写入）
+- ✅ 更新Chat API文档（智能上下文）
+
+### v1.0 (2025-11-06)
+- 初始版本
+
+---
+
 ## 1. API设计原则
 
 ### 1.1 RESTful规范
@@ -628,9 +646,9 @@ Authorization: Bearer <token>
 }
 ```
 
-#### 4.3.6 生成会话标题
+#### 4.3.6 生成会话标题 ✨ v2.0新增
 
-根据会话消息内容自动生成标题。当消息数达到一定阈值时，前端会自动调用此接口。
+根据会话消息内容自动生成简洁的标题。当消息数达到一定阈值时，前端会自动调用此接口。
 
 ```http
 POST /v1/sessions/{session_id}/title
@@ -638,8 +656,8 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "force": false,        # 可选：是否强制重新生成标题
-  "max_messages": 20     # 可选：用于生成标题的最大消息数
+  "force": false,        # 可选：是否强制重新生成标题（默认false）
+  "max_messages": 20     # 可选：用于生成标题的最大消息数（默认20）
 }
 
 # 响应
@@ -649,18 +667,103 @@ Content-Type: application/json
   "generated_at": "2025-11-18T10:32:47Z",
   "used_message_count": 10
 }
+
+# 错误响应（消息数不足）
+{
+  "detail": "消息数不足，需要至少10条消息",
+  "current_count": 5,
+  "required_count": 10
+}
 ```
 
-**说明**：
-- `force`: 为 `false` 时，如果会话已有生成的标题，将直接返回现有标题；为 `true` 时，强制重新生成
-- `max_messages`: 限制用于生成标题的消息数量，默认使用配置的值（通常为20条）
-- 标题生成需要消息数达到配置的阈值（默认10条）
-- 触发策略：
-  - 文本对话：当消息列表长度达到阈值时，前端自动调用
-  - 语音对话：语音转写完成后，检查消息数并调用
-- 标题生成不阻塞主对话流程，由前端在适当时机异步调用
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `force` | boolean | 否 | false | 是否强制重新生成标题 |
+| `max_messages` | integer | 否 | 20 | 用于生成标题的最大消息数 |
+
+**响应字段**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `session_id` | string | 会话ID |
+| `title` | string | 生成的标题 |
+| `generated_at` | string(ISO8601) | 生成时间 |
+| `used_message_count` | integer | 实际使用的消息数 |
+
+**业务逻辑**：
+
+1. **消息数检查**：
+   - 会话消息数必须 ≥ `SESSION_TITLE_TRIGGER_LENGTH`（默认10）
+   - 消息数不足时返回400错误
+
+2. **标题去重**：
+   - 当`force=false`时，检查`title_generated_at`字段
+   - 如果已有生成的标题，直接返回，不重复生成
+   - 当`force=true`时，强制重新生成
+
+3. **消息选择**：
+   - 选取最近的N条消息（N = min(消息总数, max_messages)）
+   - 包含完整的对话上下文（user和assistant消息）
+
+4. **标题生成**：
+   - 使用配置的模型（默认`gpt-4o-mini`）
+   - 温度参数：0.3（更稳定的输出）
+   - 最大token数：100
+   - 生成简洁、准确的中文标题（10-20字）
+
+**调用时机**：
+
+| 场景 | 触发时机 | 说明 |
+|------|---------|------|
+| **文本对话** | 消息数达到阈值时 | 前端在`EnhancedChatContainer`中检测消息数，满足条件时异步调用 |
+| **语音对话** | 语音转写完成后 | 调用`/v1/chat/voice/save`后，前端检查消息数并触发 |
+| **手动触发** | 用户点击"重新生成标题"按钮 | 设置`force=true`强制重新生成 |
+
+**性能考虑**：
+
+- ⚡ 异步执行：不阻塞主对话流程
+- 💾 结果缓存：避免重复生成
+- 🎯 精简上下文：仅使用最近20条消息，节省token
+- ⏱️ 生成时间：通常<2秒
+
+**配置参数**：
+
+```python
+# backend/.env 或 config/config.py
+SESSION_TITLE_TRIGGER_LENGTH=10       # 触发阈值
+SESSION_TITLE_MAX_MESSAGES=20        # 最大消息数
+SESSION_TITLE_MODEL=gpt-4o-mini      # 使用的模型
+SESSION_TITLE_TEMPERATURE=0.3        # 温度参数
+SESSION_TITLE_MAX_TOKENS=100         # 最大token数
+```
+
+**前端集成示例**：
+
+```typescript
+// frontend/src/features/chat/components/EnhancedChatContainer.tsx
+useEffect(() => {
+  if (
+    messages.length >= TITLE_TRIGGER_LENGTH &&
+    !titleGenerated
+  ) {
+    // 异步生成标题
+    sessionApi.generateTitle(sessionId, {
+      force: false,
+      maxMessages: 20
+    }).then(() => {
+      // 重新拉取会话列表，更新标题
+      queryClient.refetchQueries(['sessions', userId]);
+      setTitleGenerated(true);
+    });
+  }
+}, [messages.length]);
+```
 
 ### 4.4 记忆管理
+
+> **v2.0优化**: 记忆系统全面升级，支持异步写入、混合存储和智能去重。
 
 #### 4.4.1 搜索记忆
 
@@ -672,7 +775,7 @@ Content-Type: application/json
 {
   "query": "用户的饮食偏好",
   "session_id": "session_789",  # 可选，限制在某个会话
-  "memory_type": "user",         # 可选: user/ai/all
+  "memory_type": "user",         # 可选: user/ai/all (v2.0: 支持混合检索)
   "limit": 10
 }
 
@@ -698,9 +801,28 @@ Content-Type: application/json
       "created_at": "2025-11-05T10:05:00Z"
     }
   ],
-  "total": 2
+  "total": 2,
+  "source_collection": "mixed_memories"  # v2.0新增：显示数据来源
 }
 ```
+
+**v2.0优化说明**：
+
+1. **混合检索**（Hybrid Three Collections）:
+   - 当`memory_type`为`all`或未指定时，优先从`mixed_memories`集合检索
+   - 单次查询获取所有相关记忆，性能提升~100ms
+   - 返回结果自动标注记忆类型（user/assistant）
+
+2. **异步写入**:
+   - 对话过程中的记忆写入操作已异步化
+   - 记忆立即推入Redis队列，不阻塞主流程
+   - 后台Worker批量写入Qdrant，提升吞吐量
+   - 主对话流程时延从400ms降低到<50ms
+
+3. **智能去重**:
+   - 后台Worker定期执行相似记忆去重
+   - 基于内容相似度和语义相似度
+   - 不影响实时对话性能
 
 #### 4.4.2 手动添加记忆
 
@@ -998,6 +1120,42 @@ X-RateLimit-Reset: 1699000000
 
 ---
 
-**文档版本**: v1.0  
-**最后更新**: 2025-11-06
+## 8. API总览表 (v2.0)
+
+### 核心功能API
+
+| 类别 | 端点 | 方法 | 说明 | v2.0变更 |
+|------|------|------|------|---------|
+| **认证** | `/v1/users/login` | POST | 用户登录 | - |
+| | `/v1/users/register` | POST | 用户注册 | - |
+| | `/v1/users/refresh` | POST | 刷新token | - |
+| **对话** | `/v1/chat/completions` | POST | OpenAI兼容API | ✅ 支持智能上下文 |
+| | `/v1/chat/stream` | POST | 流式对话 | ✅ 异步记忆写入 |
+| | `/v1/chat/voice/save` | POST | 保存语音消息 | - |
+| **会话** | `/v1/sessions` | GET | 列出会话 | - |
+| | `/v1/sessions` | POST | 创建会话 | - |
+| | `/v1/sessions/{id}` | GET | 获取会话详情 | - |
+| | `/v1/sessions/{id}` | PUT | 更新会话 | - |
+| | `/v1/sessions/{id}` | DELETE | 删除会话 | - |
+| | `/v1/sessions/{id}/title` | POST | 生成标题 | ✨ 新增 |
+| | `/v1/sessions/{id}/messages` | GET | 获取消息列表 | - |
+| **记忆** | `/v1/memories/search` | POST | 搜索记忆 | ✅ 混合检索优化 |
+| | `/v1/memories` | POST | 添加记忆 | ✅ 异步写入 |
+| | `/v1/memories/{id}` | DELETE | 删除记忆 | - |
+| **人格** | `/v1/personalities` | GET | 列出人格 | - |
+| | `/v1/personalities/{id}` | GET | 获取人格详情 | - |
+| | `/v1/personalities` | POST | 创建人格 | - |
+| **工具** | `/v1/tools` | GET | 列出工具 | - |
+| | `/v1/tools/execute` | POST | 执行工具 | - |
+| **语音** | `/v1/audio/transcriptions` | POST | STT转写 | - |
+| | `/v1/audio/speech` | POST | TTS合成 | - |
+| | `/v1/audio/speech/stream` | POST | 流式TTS | - |
+| **监控** | `/v1/health` | GET | 健康检查 | - |
+| | `/v1/monitoring/stats` | GET | 系统统计 | - |
+
+---
+
+**文档版本**: v2.0  
+**最后更新**: 2025-11-18  
+**维护者**: CozyChat Team
 

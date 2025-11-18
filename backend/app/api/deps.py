@@ -245,10 +245,23 @@ def get_qdrant_client():
     return get_qdrant_client()
 
 
+# ===== Memory Manager依赖 =====
+
+def get_memory_manager():
+    """获取MemoryManager依赖
+    
+    Returns:
+        MemoryManager: MemoryManager单例实例
+    """
+    from app.engines.memory import get_memory_manager
+    return get_memory_manager()
+
+
 # ===== 智能上下文相关依赖 =====
 
 async def get_context_builder(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    memory_manager = Depends(get_memory_manager)
 ):
     """获取上下文构建器
     
@@ -256,10 +269,8 @@ async def get_context_builder(
         ContextBuilder: 上下文构建器实例
     """
     from app.core.context.builder import ContextBuilder
-    from app.engines.memory.manager import MemoryManager
     from app.engines.ai.engine_pool import get_llm_engine_pool
     
-    memory_manager = MemoryManager()
     engine_pool = get_llm_engine_pool()
     
     return ContextBuilder(

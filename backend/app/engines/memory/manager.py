@@ -29,6 +29,23 @@ from .queue import MemoryQueue
 from .jobs import MemoryWriteJob, MemoryWriteJobStatus
 
 
+# ===== 全局单例 =====
+_global_memory_manager: Optional["MemoryManager"] = None
+
+
+def get_memory_manager() -> "MemoryManager":
+    """获取全局MemoryManager单例
+    
+    Returns:
+        MemoryManager: 全局内存管理器实例
+    """
+    global _global_memory_manager
+    if _global_memory_manager is None:
+        _global_memory_manager = MemoryManager()
+        logger.info("Global MemoryManager initialized")
+    return _global_memory_manager
+
+
 class MemoryManager:
     """记忆管理器
     

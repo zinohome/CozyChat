@@ -114,7 +114,7 @@ class SessionContext(Base):
     )
     
     # ===== 元数据 =====
-    metadata = Column(
+    extra_metadata = Column(
         JSONB,
         nullable=True,
         default={},

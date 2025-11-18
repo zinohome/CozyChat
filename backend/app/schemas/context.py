@@ -13,8 +13,24 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.schemas.message import MessageResponse
 from app.engines.memory.models import Memory
+
+
+# ===== 消息模型 =====
+
+class Message(BaseModel):
+    """消息模型（用于上下文构建）"""
+    
+    id: Optional[UUID] = Field(None, description="消息ID")
+    session_id: Optional[UUID] = Field(None, description="会话ID")
+    role: str = Field(..., description="角色: user/assistant/system")
+    content: str = Field(..., description="消息内容")
+    tokens: Optional[int] = Field(None, description="Token数量")
+    model: Optional[str] = Field(None, description="使用的模型")
+    created_at: Optional[datetime] = Field(None, description="创建时间")
+    
+    class Config:
+        from_attributes = True
 
 
 # ===== 历史摘要 =====
@@ -68,7 +84,7 @@ class ContextBundle(BaseModel):
         description="系统提示词列表"
     )
     
-    recent_messages: List[MessageResponse] = Field(
+    recent_messages: List[Message] = Field(
         default_factory=list,
         description="最近的原文对话"
     )

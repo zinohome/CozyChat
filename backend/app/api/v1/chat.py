@@ -20,10 +20,14 @@ from app.api.deps import (
     get_personality_registry,
     get_tool_manager_factory,
     get_llm_engine_pool,
+    get_memory_manager,
+    get_context_builder,  # 新增：智能上下文构建器
 )
 from app.core.personality import PersonalityRegistry
+from app.core.context.builder import ContextBuilder  # 新增：上下文构建器
 from app.engines.ai import ChatMessage as EngineChatMessage
 from app.engines.ai.engine_pool import LLMEnginePool
+from app.config.config import settings  # 新增：用于配置
 from app.engines.tools import builtin  # 导入以注册工具
 from app.engines.tools.factory import ToolManagerFactory
 from app.middleware.rate_limit import rate_limit
@@ -46,6 +50,108 @@ from sqlalchemy import and_
 router = APIRouter()
 
 
+def _convert_context_bundle_to_messages(
+    context_bundle,
+    current_message_content: str
+) -> list[EngineChatMessage]:
+    """
+    将ContextBundle转换为LLM消息列表
+    
+    Args:
+        context_bundle: ContextBundle对象，包含分层上下文
+        current_message_content: 当前用户消息内容
+        
+    Returns:
+        list[EngineChatMessage]: LLM消息列表
+    """
+    messages = []
+    
+    # 1. 系统提示词（人格、策略等）
+    for prompt in context_bundle.system_prompts:
+        messages.append(EngineChatMessage(role="system", content=prompt))
+    
+    # 2. 用户画像（如果有）
+    if context_bundle.user_profile:
+        profile_text = "## 用户信息\n"
+        if isinstance(context_bundle.user_profile, dict):
+            for key, value in context_bundle.user_profile.items():
+                profile_text += f"- {key}: {value}\n"
+        else:
+            profile_text += str(context_bundle.user_profile)
+        messages.append(EngineChatMessage(role="system", content=profile_text))
+    
+    # 3. 历史摘要（压缩的对话历史）
+    if context_bundle.summarized_history:
+        summary_text = "## 对话历史摘要\n\n"
+        for summary in context_bundle.summarized_history:
+            summary_text += f"**消息 {summary.start_message_index}-{summary.end_message_index}**:\n"
+            summary_text += f"{summary.summary_text}\n\n"
+        messages.append(EngineChatMessage(role="system", content=summary_text))
+        
+        logger.info(
+            "Added historical summaries to context",
+            extra={
+                "summary_count": len(context_bundle.summarized_history),
+                "total_messages_summarized": sum(
+                    s.end_message_index - s.start_message_index + 1 
+                    for s in context_bundle.summarized_history
+                )
+            }
+        )
+    
+    # 4. 检索到的长期记忆
+    if context_bundle.retrieved_memories:
+        memory_text = "## 相关记忆\n\n"
+        
+        # 按类型分组
+        user_memories = [m for m in context_bundle.retrieved_memories if m.role == "user"]
+        assistant_memories = [m for m in context_bundle.retrieved_memories if m.role == "assistant"]
+        
+        if user_memories:
+            memory_text += "### 用户相关记忆\n"
+            for mem in user_memories[:5]:  # 限制数量
+                memory_text += f"- {mem.content}\n"
+            memory_text += "\n"
+        
+        if assistant_memories:
+            memory_text += "### 对话历史记忆\n"
+            for mem in assistant_memories[:5]:  # 限制数量
+                memory_text += f"- {mem.content}\n"
+            memory_text += "\n"
+        
+        messages.append(EngineChatMessage(role="system", content=memory_text))
+        
+        logger.info(
+            "Added retrieved memories to context",
+            extra={
+                "user_memories": len(user_memories),
+                "assistant_memories": len(assistant_memories),
+                "total_memories": len(context_bundle.retrieved_memories)
+            }
+        )
+    
+    # 5. 最近的原始消息（保持对话的连贯性）
+    if context_bundle.recent_messages:
+        for msg in context_bundle.recent_messages:
+            messages.append(EngineChatMessage(
+                role=msg.role,
+                content=msg.content
+            ))
+        
+        logger.debug(
+            "Added recent messages to context",
+            extra={"recent_count": len(context_bundle.recent_messages)}
+        )
+    
+    # 6. 当前用户消息
+    messages.append(EngineChatMessage(
+        role="user",
+        content=current_message_content
+    ))
+    
+    return messages
+
+
 @router.post("/completions", response_model=ChatCompletionResponse)
 @rate_limit("30/minute", per_user=True)
 async def create_chat_completion(
@@ -56,6 +162,8 @@ async def create_chat_completion(
     personality_registry: PersonalityRegistry = Depends(get_personality_registry),
     tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
     engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
+    context_builder: ContextBuilder = Depends(get_context_builder),  # 新增：智能上下文构建
+    memory_manager = Depends(get_memory_manager),  # 新增：记忆管理器
 ):
     """创建聊天补全（OpenAI兼容接口）
     
@@ -224,90 +332,158 @@ async def create_chat_completion(
             model=actual_model
         )
         
-        # 构建完整消息列表（包含系统提示词）
-        full_messages = []
-        
-        # 如果确定了personality_id，添加系统提示词
-        if personality_id:
-            try:
-                personality = personality_registry.get_personality(personality_id)
-                
-                if personality and personality.ai.system_prompt:
-                    # 添加系统提示词
-                    system_prompt = personality.ai.system_prompt
-                    full_messages.append(
-                        EngineChatMessage(
-                            role="system",
-                            content=system_prompt
-                        )
-                    )
-                    logger.debug(
-                        f"Added system prompt from personality",
-                        extra={
-                            "personality_id": personality_id,
-                            "prompt_length": len(system_prompt)
-                        }
-                    )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to add system prompt: {e}",
-                    exc_info=False
+        # ============================================
+        # 智能上下文构建（Phase 4优化）
+        # ============================================
+        # 检查是否启用智能上下文管理
+        use_intelligent_context = (
+            getattr(settings, 'context_intelligent_enabled', True) and  # 配置开关
+            user_id and  # 需要user_id
+            data.session_id and  # 需要session_id
+            personality_id and  # 需要personality_id
+            len(data.messages) > 0  # 至少有一条消息
         )
         
-        # 转换并添加用户消息
-        for msg in data.messages:
-            full_messages.append(
-            EngineChatMessage(
-                role=msg.role,
-                content=msg.content,
-                name=msg.name,
-                function_call=msg.function_call,
-                tool_calls=msg.tool_calls
-            )
-            )
+        full_messages = []
         
-        # 如果确定了personality_id，根据 token_budget 截断消息历史
-        # 同时检索相关记忆，避免丢失上下文
-        if personality_id:
+        if use_intelligent_context:
             try:
-                personality = personality_registry.get_personality(personality_id)
+                logger.info(
+                    "Using intelligent context building",
+                    extra={
+                        "user_id": user_id,
+                        "session_id": data.session_id,
+                        "personality_id": personality_id,
+                        "message_count": len(data.messages)
+                    }
+                )
                 
-                if personality:
-                    # 1. 如果启用了记忆系统，先检索相关记忆
-                    retrieved_memories = None
-                    if personality.memory.enabled and data.use_memory and user_id and data.session_id:
-                        try:
-                            from app.engines.memory.manager import MemoryManager
-                            memory_manager = MemoryManager()
-                            
-                            # 获取最后一条用户消息作为查询
-                            last_user_message = None
-                            for msg in reversed(data.messages):
-                                if msg.role == "user" and msg.content:
-                                    last_user_message = msg.content
-                                    break
-                            
-                            if last_user_message:
-                                memory_config = personality.memory
-                                include_user = memory_config.save_mode in ["both", "user_only"]
-                                include_ai = memory_config.save_mode in ["both", "assistant_only"]
+                # 提取当前用户消息（假设最后一条是当前消息）
+                current_message_data = data.messages[-1]
+                current_message_content = current_message_data.content
+                
+                # 获取personality配置
+                personality = personality_registry.get_personality(personality_id)
+                if not personality:
+                    logger.warning(f"Personality {personality_id} not found, falling back to simple mode")
+                    use_intelligent_context = False
+                else:
+                    # 使用ContextBuilder构建智能上下文
+                    context_bundle = await context_builder.build_context(
+                        user_id=user_id,
+                        session_id=data.session_id,
+                        current_message=current_message_content,
+                        personality_config=personality,
+                        max_tokens=actual_max_tokens or settings.context_max_tokens
+                    )
+                    
+                    # 转换ContextBundle为LLM消息格式
+                    full_messages = _convert_context_bundle_to_messages(
+                        context_bundle,
+                        current_message_content
+                    )
+                    
+                    logger.info(
+                        "Intelligent context built successfully",
+                        extra={
+                            "total_messages": len(full_messages),
+                            "has_summaries": len(context_bundle.summarized_history) > 0,
+                            "has_memories": len(context_bundle.retrieved_memories) > 0,
+                            "recent_messages": len(context_bundle.recent_messages)
+                        }
+                    )
+                
+            except Exception as e:
+                logger.warning(
+                    f"Failed to build intelligent context, falling back to simple mode: {e}",
+                    exc_info=True
+                )
+                use_intelligent_context = False  # 回退到简单模式
+        
+        # 如果未启用智能上下文或智能上下文构建失败，使用简单模式
+        if not use_intelligent_context:
+            logger.debug("Using simple context building (legacy mode)")
+            
+            # 如果确定了personality_id，添加系统提示词
+            if personality_id:
+                try:
+                    personality = personality_registry.get_personality(personality_id)
+                    
+                    if personality and personality.ai.system_prompt:
+                        # 添加系统提示词
+                        system_prompt = personality.ai.system_prompt
+                        full_messages.append(
+                            EngineChatMessage(
+                                role="system",
+                                content=system_prompt
+                            )
+                        )
+                        logger.debug(
+                            f"Added system prompt from personality",
+                            extra={
+                                "personality_id": personality_id,
+                                "prompt_length": len(system_prompt)
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to add system prompt: {e}",
+                        exc_info=False
+                    )
+        
+            # 转换并添加用户消息
+            for msg in data.messages:
+                full_messages.append(
+                    EngineChatMessage(
+                        role=msg.role,
+                        content=msg.content,
+                        name=msg.name,
+                        function_call=msg.function_call,
+                        tool_calls=msg.tool_calls
+                    )
+                )
+            
+            # 如果确定了personality_id，根据 token_budget 截断消息历史
+            # 同时检索相关记忆，避免丢失上下文
+            if personality_id:
+                try:
+                    personality = personality_registry.get_personality(personality_id)
+                    
+                    if personality:
+                        # 1. 如果启用了记忆系统，先检索相关记忆
+                        retrieved_memories = None
+                        if personality.memory.enabled and data.use_memory and user_id and data.session_id:
+                            try:
+                                # 使用依赖注入的MemoryManager实例
                                 
-                                # 获取similarity_threshold并记录（用于调试）
-                                similarity_threshold = memory_config.retrieval.similarity_threshold
-                                logger.warning(
-                                    f"chat.py: Calling retrieve_memories with similarity_threshold",
-                                    extra={
-                                        "personality_id": personality_id,
-                                        "similarity_threshold": similarity_threshold,
-                                        "similarity_threshold_type": type(similarity_threshold).__name__,
-                                        "memory_config_retrieval": {
-                                            "max_results": memory_config.retrieval.max_results,
-                                            "similarity_threshold": memory_config.retrieval.similarity_threshold,
-                                            "timeout_seconds": memory_config.retrieval.timeout_seconds
-                                        },
-                                        "personality_memory_retrieval_type": type(memory_config.retrieval).__name__
-                                    }
-                                )
+                                # 获取最后一条用户消息作为查询
+                                last_user_message = None
+                                for msg in reversed(data.messages):
+                                    if msg.role == "user" and msg.content:
+                                        last_user_message = msg.content
+                                        break
+                                
+                                if last_user_message:
+                                    memory_config = personality.memory
+                                    include_user = memory_config.save_mode in ["both", "user_only"]
+                                    include_ai = memory_config.save_mode in ["both", "assistant_only"]
+                                    
+                                    # 获取similarity_threshold并记录（用于调试）
+                                    similarity_threshold = memory_config.retrieval.similarity_threshold
+                                    logger.warning(
+                                        f"chat.py: Calling retrieve_memories with similarity_threshold",
+                                        extra={
+                                            "personality_id": personality_id,
+                                            "similarity_threshold": similarity_threshold,
+                                            "similarity_threshold_type": type(similarity_threshold).__name__,
+                                            "memory_config_retrieval": {
+                                                "max_results": memory_config.retrieval.max_results,
+                                                "similarity_threshold": memory_config.retrieval.similarity_threshold,
+                                                "timeout_seconds": memory_config.retrieval.timeout_seconds
+                                            },
+                                            "personality_memory_retrieval_type": type(memory_config.retrieval).__name__
+                                        }
+                                    )
                                 
                                 retrieved_memories = await memory_manager.retrieve_memories(
                                     user_id=user_id,
@@ -381,11 +557,11 @@ async def create_chat_completion(
                                                 "ai_memories_count": len(ai_memories)
                                             }
                                         )
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to retrieve memories: {e}",
-                                exc_info=False
-                            )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to retrieve memories: {e}",
+                                    exc_info=False
+                                )
                     
                     # 2. 根据 token_budget 截断消息历史（包含摘要功能）
                     if personality.ai.token_budget:
@@ -409,11 +585,11 @@ async def create_chat_completion(
                                     "has_memories": retrieved_memories is not None
                                 }
                             )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to process token budget and memories: {e}",
-                    exc_info=False
-                )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to process token budget and memories: {e}",
+                        exc_info=False
+                    )
         
         messages = full_messages
         
@@ -768,7 +944,7 @@ async def create_chat_completion(
                                             personality = personality_registry.get_personality(personality_id)
                                             
                                             if personality and personality.memory.enabled and data.use_memory:
-                                                memory_manager = MemoryManager()
+                                                # 使用依赖注入的MemoryManager实例
                                                 
                                                 # 使用 async_save=True 异步保存，不阻塞
                                                 await memory_manager.add_conversation_turn(
@@ -924,7 +1100,7 @@ async def create_chat_completion(
                                 personality = personality_registry.get_personality(personality_id)
                                 
                                 if personality and personality.memory.enabled and data.use_memory:
-                                    memory_manager = MemoryManager()
+                                    # 使用依赖注入的MemoryManager实例
                                     
                                     # 使用 async_save=True 异步保存，不阻塞
                                     await memory_manager.add_conversation_turn(

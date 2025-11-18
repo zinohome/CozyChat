@@ -23,9 +23,8 @@ from app.utils.logger import logger
 from app.engines.memory.manager import MemoryManager
 from app.engines.ai.engine_pool import LLMEnginePool
 from app.core.personality.models import Personality
-from app.schemas.context import ContextBundle
-from app.schemas.message import MessageResponse
-from app.models.message import Message
+from app.schemas.context import ContextBundle, Message as MessageSchema
+from app.models.message import Message as DBMessage
 from app.models.session_context import SessionContext
 from app.models.user import User
 
@@ -149,7 +148,7 @@ class ContextBuilder:
         self,
         session_id: str,
         count: int
-    ) -> List[MessageResponse]:
+    ) -> List[MessageSchema]:
         """获取最近的消息原文
         
         Args:
@@ -157,14 +156,14 @@ class ContextBuilder:
             count: 消息数量
             
         Returns:
-            List[MessageResponse]: 消息列表
+            List[MessageSchema]: 消息列表
         """
         try:
             # 查询数据库获取最近的消息
             stmt = (
-                select(Message)
-                .where(Message.session_id == UUID(session_id))
-                .order_by(desc(Message.created_at))
+                select(DBMessage)
+                .where(DBMessage.session_id == UUID(session_id))
+                .order_by(desc(DBMessage.created_at))
                 .limit(count)
             )
             
@@ -173,7 +172,7 @@ class ContextBuilder:
             
             # 转换为响应模型并反转顺序（从旧到新）
             message_responses = [
-                MessageResponse(
+                MessageSchema(
                     id=msg.id,
                     session_id=msg.session_id,
                     role=msg.role,
@@ -304,7 +303,7 @@ class ContextBuilder:
     def _assemble_context(
         self,
         personality_config: Personality,
-        recent_messages: List[MessageResponse],
+        recent_messages: List[MessageSchema],
         summaries: List[str],
         memories: List[Any],
         user_profile: Optional[Dict[str, Any]],
