@@ -260,7 +260,7 @@ def get_memory_manager():
 # ===== 智能上下文相关依赖 =====
 
 async def get_context_builder(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     memory_manager = Depends(get_memory_manager)
 ):
     """获取上下文构建器

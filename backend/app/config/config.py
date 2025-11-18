@@ -268,6 +268,18 @@ class Settings(BaseSettings):
         description="摘要生成的温度参数"
     )
     
+    # ===== 性能监控配置 =====
+    performance_slow_request_threshold: float = Field(
+        default=0.2,
+        alias="PERFORMANCE_SLOW_REQUEST_THRESHOLD",
+        description="慢请求阈值（秒），超过此时间的请求会记录为警告"
+    )
+    performance_slow_delete_threshold: float = Field(
+        default=0.5,
+        alias="PERFORMANCE_SLOW_DELETE_THRESHOLD",
+        description="DELETE操作的慢请求阈值（秒），通常需要更长时间"
+    )
+    
     # ===== 日志配置 =====
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="logs/app.log", alias="LOG_FILE")

@@ -77,6 +77,30 @@ personality:
       similarity_threshold: 0.3  # 进一步降低阈值以提高召回率（"我是哪里人？"和"我是湖北人"的语义相似度可能不够高）
       timeout_seconds: 0.5
       cache_ttl_seconds: 300
+      # 智能筛选配置
+      intelligent_scoring:
+        enabled: true
+        numeric_query_keywords:
+          - '身高'
+          - '体重'
+          - '年龄'
+          - '多少'
+          - '几'
+          - '多高'
+          - '多重'
+          - '多大'
+        numeric_memory_keywords:
+          - '身高'
+          - '体重'
+          - '年龄'
+          - '高'
+          - '重'
+          - '岁'
+        weights:
+          numeric_boost: 0.5      # 包含数字的加分
+          keyword_match_boost: 0.3  # 同时包含关键词和数字的加分
+          length_boost: 0.1        # 内容长度适中的加分
+        optimal_length_range: [10, 100]
   
   # 工具配置
   tools:

@@ -13,6 +13,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # 本地库
+from app.config.config import settings
 from app.utils.logger import logger
 from app.utils.cache import cache_manager
 
@@ -78,8 +79,14 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
             response: 响应对象
             process_time: 处理时间（秒）
         """
-        # 记录慢请求（>200ms）
-        if process_time > 0.2:
+        # 根据请求类型设置不同的慢请求阈值（从配置读取）
+        if request.method == "DELETE":
+            slow_threshold = settings.performance_slow_delete_threshold
+        else:
+            slow_threshold = settings.performance_slow_request_threshold
+        
+        # 记录慢请求
+        if process_time > slow_threshold:
             logger.warning(
                 f"Slow request: {request.url.path}",
                 extra={

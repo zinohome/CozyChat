@@ -51,12 +51,35 @@ class MemoryStrategy:
 
 
 @dataclass
+class IntelligentScoring:
+    """智能评分配置"""
+    enabled: bool = True
+    # 数值查询检测关键词
+    numeric_query_keywords: List[str] = field(default_factory=lambda: [
+        '身高', '体重', '年龄', '多少', '几', '多高', '多重', '多大'
+    ])
+    # 数值记忆关键词（用于匹配记忆内容）
+    numeric_memory_keywords: List[str] = field(default_factory=lambda: [
+        '身高', '体重', '年龄', '高', '重', '岁'
+    ])
+    # 评分权重
+    numeric_boost: float = 0.5  # 包含数字的加分
+    keyword_match_boost: float = 0.3  # 同时包含关键词和数字的加分
+    length_boost: float = 0.1  # 内容长度适中的加分
+    # 内容长度范围 [min, max]
+    optimal_length_min: int = 10
+    optimal_length_max: int = 100
+
+
+@dataclass
 class MemoryRetrieval:
     """记忆检索配置"""
     max_results: int = 5
     similarity_threshold: float = 0.7
     timeout_seconds: float = 0.5
     cache_ttl_seconds: int = 300
+    # 智能筛选配置
+    intelligent_scoring: IntelligentScoring = field(default_factory=IntelligentScoring)
 
 
 @dataclass
@@ -173,21 +196,42 @@ class Personality:
         
         retrieval_data = memory_data.get("retrieval", {})
         similarity_threshold = retrieval_data.get("similarity_threshold", 0.7)
+        
+        # 解析智能筛选配置
+        intelligent_scoring_data = retrieval_data.get("intelligent_scoring", {})
+        intelligent_scoring = IntelligentScoring(
+            enabled=intelligent_scoring_data.get("enabled", True),
+            numeric_query_keywords=intelligent_scoring_data.get(
+                "numeric_query_keywords",
+                ['身高', '体重', '年龄', '多少', '几', '多高', '多重', '多大']
+            ),
+            numeric_memory_keywords=intelligent_scoring_data.get(
+                "numeric_memory_keywords",
+                ['身高', '体重', '年龄', '高', '重', '岁']
+            ),
+            numeric_boost=intelligent_scoring_data.get("weights", {}).get("numeric_boost", 0.5),
+            keyword_match_boost=intelligent_scoring_data.get("weights", {}).get("keyword_match_boost", 0.3),
+            length_boost=intelligent_scoring_data.get("weights", {}).get("length_boost", 0.1),
+            optimal_length_min=intelligent_scoring_data.get("optimal_length_range", [10, 100])[0],
+            optimal_length_max=intelligent_scoring_data.get("optimal_length_range", [10, 100])[1]
+        )
+        
         # 记录加载的相似度阈值（用于调试）
-        from app.utils.logger import logger
         logger.debug(
             f"Loading similarity_threshold from config",
             extra={
                 "personality_id": config.get("id", "unknown"),
                 "similarity_threshold": similarity_threshold,
-                "retrieval_data": retrieval_data
+                "retrieval_data": retrieval_data,
+                "intelligent_scoring_enabled": intelligent_scoring.enabled
             }
         )
         retrieval = MemoryRetrieval(
             max_results=retrieval_data.get("max_results", 5),
             similarity_threshold=similarity_threshold,
             timeout_seconds=retrieval_data.get("timeout_seconds", 0.5),
-            cache_ttl_seconds=retrieval_data.get("cache_ttl_seconds", 300)
+            cache_ttl_seconds=retrieval_data.get("cache_ttl_seconds", 300),
+            intelligent_scoring=intelligent_scoring
         )
         memory = MemoryConfig(
             enabled=memory_data.get("enabled", True),

@@ -83,19 +83,16 @@ def _convert_context_bundle_to_messages(
     # 3. 历史摘要（压缩的对话历史）
     if context_bundle.summarized_history:
         summary_text = "## 对话历史摘要\n\n"
-        for summary in context_bundle.summarized_history:
-            summary_text += f"**消息 {summary.start_message_index}-{summary.end_message_index}**:\n"
-            summary_text += f"{summary.summary_text}\n\n"
+        # summarized_history 是 List[str]，直接使用字符串
+        for i, summary in enumerate(context_bundle.summarized_history, 1):
+            summary_text += f"**摘要 {i}**:\n"
+            summary_text += f"{summary}\n\n"
         messages.append(EngineChatMessage(role="system", content=summary_text))
         
         logger.info(
             "Added historical summaries to context",
             extra={
-                "summary_count": len(context_bundle.summarized_history),
-                "total_messages_summarized": sum(
-                    s.end_message_index - s.start_message_index + 1 
-                    for s in context_bundle.summarized_history
-                )
+                "summary_count": len(context_bundle.summarized_history)
             }
         )
     
@@ -103,9 +100,17 @@ def _convert_context_bundle_to_messages(
     if context_bundle.retrieved_memories:
         memory_text = "## 相关记忆\n\n"
         
-        # 按类型分组
-        user_memories = [m for m in context_bundle.retrieved_memories if m.role == "user"]
-        assistant_memories = [m for m in context_bundle.retrieved_memories if m.role == "assistant"]
+        # 按类型分组（retrieved_memories 现在是 Memory 对象列表）
+        from app.engines.memory.models import MemoryType
+        
+        user_memories = [
+            m for m in context_bundle.retrieved_memories 
+            if m.memory_type == MemoryType.USER
+        ]
+        assistant_memories = [
+            m for m in context_bundle.retrieved_memories 
+            if m.memory_type == MemoryType.ASSISTANT
+        ]
         
         if user_memories:
             memory_text += "### 用户相关记忆\n"

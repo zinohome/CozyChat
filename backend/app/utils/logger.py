@@ -107,16 +107,19 @@ class CompactConsoleRenderer:
     
     特点：
     1. 时间格式：2025-11-18 15:06:55.699
-    2. 日志级别：[info] 带背景色，使用对比色文字
-    3. 代码位置：[app/file.py:123] 无函数名
-    4. 保留颜色
+    2. INFO/DEBUG：简单格式 [info]（无底色）
+    3. WARNING及以上：带背景色标签（醒目）
+    4. 代码位置：[app/file.py:123] 无函数名
     """
     
-    # 日志级别样式（高强度背景色 + 白色文字 + 粗体）
-    # 所有级别统一使用亮白色文字(\x1b[97m)
-    LEVEL_STYLES = {
-        "debug": "\x1b[106m\x1b[97m\x1b[1m",      # 亮青色背景 + 亮白色文字 + 粗体
-        "info": "\x1b[102m\x1b[97m\x1b[1m",       # 亮绿色背景 + 亮白色文字 + 粗体
+    # 日志级别颜色（文字颜色 + 粗体，用于 INFO/DEBUG）
+    LEVEL_COLORS = {
+        "debug": "\x1b[1m\x1b[36m",      # 粗体 + 青色文字
+        "info": "\x1b[1m\x1b[32m",       # 粗体 + 绿色文字
+    }
+    
+    # 日志级别样式（高强度背景色 + 白色文字 + 粗体，用于 WARNING 及以上）
+    LEVEL_BACKGROUND_STYLES = {
         "warning": "\x1b[103m\x1b[97m\x1b[1m",    # 亮黄色背景 + 亮白色文字 + 粗体
         "error": "\x1b[101m\x1b[97m\x1b[1m",      # 亮红色背景 + 亮白色文字 + 粗体
         "critical": "\x1b[105m\x1b[97m\x1b[1m",   # 亮紫色背景 + 亮白色文字 + 粗体
@@ -132,7 +135,7 @@ class CompactConsoleRenderer:
         event = event_dict.pop("event", "")
         
         # 去掉日志级别的空格填充（重要！）
-        level = level.strip()
+        level = level.strip().lower()
         
         # 构建日志行
         parts = []
@@ -141,10 +144,15 @@ class CompactConsoleRenderer:
         if timestamp:
             parts.append(f"{self.DIM}{timestamp}{self.RESET}")
         
-        # 2. 日志级别（带背景色和对比色文字）
-        level_style = self.LEVEL_STYLES.get(level.lower(), "")
-        # 格式：背景色 + 文字 + 重置，两边加空格使其更醒目
-        parts.append(f"{level_style} {level.upper()} {self.RESET}")
+        # 2. 日志级别（根据级别决定格式）
+        if level in ("info", "debug"):
+            # INFO/DEBUG：简单格式 [info]，仅文字颜色
+            level_color = self.LEVEL_COLORS.get(level, "")
+            parts.append(f"{level_color}[{level}]{self.RESET}")
+        else:
+            # WARNING 及以上：带背景色的标签
+            level_style = self.LEVEL_BACKGROUND_STYLES.get(level, "")
+            parts.append(f"{level_style} {level.upper()} {self.RESET}")
         
         # 3. 事件消息
         parts.append(event)

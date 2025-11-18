@@ -641,13 +641,13 @@ class MemoryManager:
                 )
                 
                 # 按memory_type分类结果
+                # 注意：不限制每种类型的数量，让调用方统一排序筛选
+                # 这样可以确保最重要的记忆（按相似度）被包含进来
                 for result in mixed_results:
                     if result.memory.memory_type == MemoryType.USER:
-                        if len(user_memories) < max_results:
-                            user_memories.append(result)
+                        user_memories.append(result)
                     elif result.memory.memory_type == MemoryType.ASSISTANT:
-                        if len(ai_memories) < max_results:
-                            ai_memories.append(result)
+                        ai_memories.append(result)
                 
                 # 记录混合检索结果
                 logger.info(
