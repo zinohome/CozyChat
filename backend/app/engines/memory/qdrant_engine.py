@@ -63,11 +63,24 @@ class QdrantMemoryEngine(MemoryEngineBase):
         if not url:
             raise ValueError("Qdrant URL is required")
         
-        # 初始化Qdrant客户端
-        if api_key:
-            self.client = QdrantClient(url=url, api_key=api_key)
-        else:
-            self.client = QdrantClient(url=url)
+        # 使用全局QdrantClient单例，避免重复创建连接
+        try:
+            from app.engines.memory.qdrant_client_manager import get_qdrant_client
+            self.client = get_qdrant_client()
+            logger.debug(
+                "Using global QdrantClient singleton",
+                extra={"url": url}
+            )
+        except Exception as e:
+            # 如果全局客户端未初始化，则创建新的（向后兼容）
+            logger.warning(
+                f"Global QdrantClient not available, creating new client: {e}",
+                exc_info=False
+            )
+            if api_key:
+                self.client = QdrantClient(url=url, api_key=api_key)
+            else:
+                self.client = QdrantClient(url=url)
         
         # 集合配置
         collection_prefix = self.config.get("collection_prefix", "cozychat_")

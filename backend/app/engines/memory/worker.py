@@ -34,6 +34,7 @@ class MemoryWorker:
         self,
         queue: MemoryQueue,
         engine: QdrantMemoryEngine,
+        deduplicator: Optional[MemoryDeduplicator] = None,
         batch_size: Optional[int] = None,
         poll_interval: float = 1.0
     ):
@@ -42,6 +43,7 @@ class MemoryWorker:
         Args:
             queue: 记忆写入队列
             engine: Qdrant引擎
+            deduplicator: 去重器（可选，如果不提供则创建新的）
             batch_size: 批次大小（可选，默认从配置读取）
             poll_interval: 轮询间隔（秒）
         """
@@ -52,8 +54,8 @@ class MemoryWorker:
         self.running = False
         self.task: Optional[asyncio.Task] = None
         
-        # 去重器
-        self.deduplicator = MemoryDeduplicator(engine=engine)
+        # 去重器：复用传入的实例，避免重复初始化
+        self.deduplicator = deduplicator or MemoryDeduplicator(engine=engine)
         self.dedup_enabled = settings.memory_dedup_enabled
         self.dedup_mode = settings.memory_dedup_mode
         

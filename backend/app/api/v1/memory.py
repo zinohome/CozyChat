@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, status, Request, Response
 from pydantic import BaseModel
 
 # 本地库
-from app.engines.memory import MemoryManager, MemoryType
+from app.engines.memory import get_memory_manager, MemoryType
 from app.middleware.rate_limit import rate_limit
 from app.schemas.memory import (
     MemoryCreate,
@@ -26,8 +26,8 @@ from app.utils.logger import logger
 
 router = APIRouter()
 
-# 全局记忆管理器实例
-memory_manager = MemoryManager()
+# 全局记忆管理器实例（使用单例，避免重复初始化）
+memory_manager = get_memory_manager()
 
 
 class MemoryCreateResponse(BaseModel):

@@ -78,7 +78,8 @@ async def lifespan(app: FastAPI):
     try:
         from app.engines.memory.qdrant_client_manager import init_qdrant_client
         qdrant_client = init_qdrant_client()
-        logger.info("Qdrant client initialized")
+        # 注意：init_qdrant_client() 内部已经记录了 "Qdrant client initialized" 日志
+        # 这里不需要重复记录
     except Exception as e:
         logger.warning(f"Failed to initialize Qdrant client: {e}", exc_info=False)
     
@@ -86,22 +87,36 @@ async def lifespan(app: FastAPI):
     memory_worker = None
     if settings.memory_async_write:
         try:
-            from app.engines.memory.queue import MemoryQueue
+            from app.engines.memory import get_memory_manager
             from app.engines.memory.worker import MemoryWorker
-            from app.engines.memory.qdrant_engine import QdrantMemoryEngine
             
-            # 创建队列和引擎
-            memory_queue = MemoryQueue()
-            memory_engine = QdrantMemoryEngine()
+            # 使用全局单例，避免重复初始化
+            memory_manager = get_memory_manager()
             
-            # 创建并启动Worker
-            memory_worker = MemoryWorker(
-                queue=memory_queue,
-                engine=memory_engine,
-                batch_size=settings.memory_batch_size
-            )
-            await memory_worker.start()
-            logger.info("Memory worker started")
+            # 从memory_manager获取queue和engine，避免重复创建
+            if memory_manager.queue and memory_manager.engine:
+                # 类型检查：MemoryWorker 需要 QdrantMemoryEngine
+                from app.engines.memory.qdrant_engine import QdrantMemoryEngine
+                if not isinstance(memory_manager.engine, QdrantMemoryEngine):
+                    logger.warning(
+                        "Memory engine is not QdrantMemoryEngine, "
+                        "memory worker requires Qdrant engine"
+                    )
+                else:
+                    # 创建并启动Worker，复用已有的queue和engine
+                    memory_worker = MemoryWorker(
+                        queue=memory_manager.queue,
+                        engine=memory_manager.engine,  # type: ignore[arg-type]
+                        deduplicator=memory_manager.deduplicator,  # 复用deduplicator
+                        batch_size=settings.memory_batch_size
+                    )
+                    await memory_worker.start()
+                    logger.info("Memory worker started")
+            else:
+                logger.warning(
+                    "Memory manager queue or engine not available, "
+                    "memory worker not started"
+                )
         except Exception as e:
             logger.error(f"Failed to start memory worker: {e}", exc_info=True)
     
@@ -173,7 +188,7 @@ app.add_middleware(PerformanceMiddleware)
 
 # ===== 配置限流中间件 =====
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)  # type: ignore[arg-type]
 
 # ===== 配置静态文件路由 =====
 # 挂载静态文件目录，提供 Swagger UI 和 ReDoc 的 JS 文件
@@ -207,8 +222,10 @@ async def global_exception_handler(request, exc: Exception):
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     """自定义 Swagger UI，使用本地静态文件"""
+    # openapi_url 可能为 None，需要提供默认值
+    openapi_url = app.openapi_url or "/openapi.json"
     return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
+        openapi_url=openapi_url,
         title=f"{settings.app_name} - API Documentation",
         swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
         swagger_css_url="/static/swagger-ui/swagger-ui.css",
