@@ -105,6 +105,35 @@ personality:
           keyword_match_boost: 0.3  # 同时包含关键词和数字的加分
           length_boost: 0.1        # 内容长度适中的加分
         optimal_length_range: [10, 100]
+        # 关键词-数值匹配配置
+        keyword_number_matching:
+          enabled: true
+          max_distance: 5  # 关键词和数字之间的最大距离（字符数）
+          formats:
+            - "关键词数字"      # "体重90kg"
+            - "关键词 数字"     # "体重 90kg"
+            - "关键词是数字"    # "体重是90kg"
+            - "关键词：数字"    # "体重：90kg"
+            - "关键词为数字"     # "体重为90kg"
+          super_boost: 1.5  # 匹配成功后的超级boost
+      # 多因子排序权重配置
+      scoring:
+        weights:
+          similarity: 0.4      # 语义相似度权重
+          importance: 0.2       # 重要性权重
+          recency: 0.1          # 时效性权重
+          relevance: 0.3        # 相关性权重
+      # 混合检索配置
+      hybrid_search:
+        enabled: true
+        strategy: "semantic_first"  # semantic_first / keyword_first / balanced
+        semantic_weight: 0.7
+        keyword_weight: 0.3
+      # 记忆层级配置
+      memory_levels:
+        enabled: true
+        session_memory_boost: 1.2  # 当前会话记忆权重
+        cross_session_memory_boost: 1.0  # 跨会话记忆权重
   
   # 工具配置
   tools:

@@ -51,6 +51,30 @@ class MemoryStrategy:
 
 
 @dataclass
+class KeywordNumberMatching:
+    """关键词-数值匹配配置"""
+    enabled: bool = True
+    max_distance: int = 5  # 关键词和数字之间的最大距离（字符数）
+    formats: List[str] = field(default_factory=lambda: [
+        "关键词数字",      # "体重90kg"
+        "关键词 数字",     # "体重 90kg"
+        "关键词是数字",    # "体重是90kg"
+        "关键词：数字",    # "体重：90kg"
+        "关键词为数字"     # "体重为90kg"
+    ])
+    super_boost: float = 1.5  # 匹配成功后的超级boost
+
+
+@dataclass
+class ScoringWeights:
+    """多因子排序权重配置"""
+    similarity: float = 0.4      # 语义相似度权重
+    importance: float = 0.2       # 重要性权重
+    recency: float = 0.1          # 时效性权重
+    relevance: float = 0.3        # 相关性权重
+
+
+@dataclass
 class IntelligentScoring:
     """智能评分配置"""
     enabled: bool = True
@@ -69,6 +93,25 @@ class IntelligentScoring:
     # 内容长度范围 [min, max]
     optimal_length_min: int = 10
     optimal_length_max: int = 100
+    # 关键词-数值匹配配置
+    keyword_number_matching: KeywordNumberMatching = field(default_factory=KeywordNumberMatching)
+
+
+@dataclass
+class HybridSearchConfig:
+    """混合检索配置"""
+    enabled: bool = True
+    strategy: str = "semantic_first"  # semantic_first / keyword_first / balanced
+    semantic_weight: float = 0.7
+    keyword_weight: float = 0.3
+
+
+@dataclass
+class MemoryLevelsConfig:
+    """记忆层级配置"""
+    enabled: bool = True
+    session_memory_boost: float = 1.2  # 当前会话记忆权重
+    cross_session_memory_boost: float = 1.0  # 跨会话记忆权重
 
 
 @dataclass
@@ -80,6 +123,12 @@ class MemoryRetrieval:
     cache_ttl_seconds: int = 300
     # 智能筛选配置
     intelligent_scoring: IntelligentScoring = field(default_factory=IntelligentScoring)
+    # 多因子排序权重
+    scoring_weights: ScoringWeights = field(default_factory=ScoringWeights)
+    # 混合检索配置
+    hybrid_search: HybridSearchConfig = field(default_factory=HybridSearchConfig)
+    # 记忆层级配置
+    memory_levels: MemoryLevelsConfig = field(default_factory=MemoryLevelsConfig)
 
 
 @dataclass
@@ -199,6 +248,18 @@ class Personality:
         
         # 解析智能筛选配置
         intelligent_scoring_data = retrieval_data.get("intelligent_scoring", {})
+        
+        # 解析关键词-数值匹配配置
+        keyword_number_matching_data = intelligent_scoring_data.get("keyword_number_matching", {})
+        keyword_number_matching = KeywordNumberMatching(
+            enabled=keyword_number_matching_data.get("enabled", True),
+            max_distance=keyword_number_matching_data.get("max_distance", 5),
+            formats=keyword_number_matching_data.get("formats", [
+                "关键词数字", "关键词 数字", "关键词是数字", "关键词：数字", "关键词为数字"
+            ]),
+            super_boost=keyword_number_matching_data.get("super_boost", 1.5)
+        )
+        
         intelligent_scoring = IntelligentScoring(
             enabled=intelligent_scoring_data.get("enabled", True),
             numeric_query_keywords=intelligent_scoring_data.get(
@@ -213,7 +274,34 @@ class Personality:
             keyword_match_boost=intelligent_scoring_data.get("weights", {}).get("keyword_match_boost", 0.3),
             length_boost=intelligent_scoring_data.get("weights", {}).get("length_boost", 0.1),
             optimal_length_min=intelligent_scoring_data.get("optimal_length_range", [10, 100])[0],
-            optimal_length_max=intelligent_scoring_data.get("optimal_length_range", [10, 100])[1]
+            optimal_length_max=intelligent_scoring_data.get("optimal_length_range", [10, 100])[1],
+            keyword_number_matching=keyword_number_matching
+        )
+        
+        # 解析多因子排序权重配置
+        scoring_weights_data = retrieval_data.get("scoring", {}).get("weights", {})
+        scoring_weights = ScoringWeights(
+            similarity=scoring_weights_data.get("similarity", 0.4),
+            importance=scoring_weights_data.get("importance", 0.2),
+            recency=scoring_weights_data.get("recency", 0.1),
+            relevance=scoring_weights_data.get("relevance", 0.3)
+        )
+        
+        # 解析混合检索配置
+        hybrid_search_data = retrieval_data.get("hybrid_search", {})
+        hybrid_search = HybridSearchConfig(
+            enabled=hybrid_search_data.get("enabled", True),
+            strategy=hybrid_search_data.get("strategy", "semantic_first"),
+            semantic_weight=hybrid_search_data.get("semantic_weight", 0.7),
+            keyword_weight=hybrid_search_data.get("keyword_weight", 0.3)
+        )
+        
+        # 解析记忆层级配置
+        memory_levels_data = retrieval_data.get("memory_levels", {})
+        memory_levels = MemoryLevelsConfig(
+            enabled=memory_levels_data.get("enabled", True),
+            session_memory_boost=memory_levels_data.get("session_memory_boost", 1.2),
+            cross_session_memory_boost=memory_levels_data.get("cross_session_memory_boost", 1.0)
         )
         
         # 记录加载的相似度阈值（用于调试）
@@ -231,7 +319,10 @@ class Personality:
             similarity_threshold=similarity_threshold,
             timeout_seconds=retrieval_data.get("timeout_seconds", 0.5),
             cache_ttl_seconds=retrieval_data.get("cache_ttl_seconds", 300),
-            intelligent_scoring=intelligent_scoring
+            intelligent_scoring=intelligent_scoring,
+            scoring_weights=scoring_weights,
+            hybrid_search=hybrid_search,
+            memory_levels=memory_levels
         )
         memory = MemoryConfig(
             enabled=memory_data.get("enabled", True),

@@ -10,7 +10,7 @@
 
 # 标准库
 import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID
 
 # 第三方库
@@ -22,7 +22,7 @@ from app.config.config import settings
 from app.utils.logger import logger
 from app.engines.memory.manager import MemoryManager
 from app.engines.ai.engine_pool import LLMEnginePool
-from app.core.personality.models import Personality, IntelligentScoring
+from app.core.personality.models import Personality, IntelligentScoring, ScoringWeights
 from app.schemas.context import ContextBundle, Message as MessageSchema
 from app.models.message import Message as DBMessage
 from app.models.session_context import SessionContext
@@ -99,15 +99,25 @@ class ContextBuilder:
         )
         
         try:
-            # 并发执行各个组件
-            tasks = [
-                self._get_recent_messages(session_id, recent_message_count),
-                self._load_history_summaries(session_id) if include_summaries else asyncio.coroutine(lambda: [])(),
-                self._retrieve_memories(user_id, session_id, current_message, personality_config) if include_memories else asyncio.coroutine(lambda: [])(),
-                self._load_user_profile(user_id),
-            ]
+            # 注意：SQLAlchemy的AsyncSession不支持并发操作，必须顺序执行
+            # 或者为每个查询创建独立的会话（但会增加开销）
+            # 这里采用顺序执行，因为查询通常很快
             
-            recent_messages, summaries, memories, user_profile = await asyncio.gather(*tasks)
+            # 1. 获取最近消息
+            recent_messages = await self._get_recent_messages(session_id, recent_message_count)
+            
+            # 2. 加载历史摘要（如果启用）
+            summaries = []
+            if include_summaries:
+                summaries = await self._load_history_summaries(session_id)
+            
+            # 3. 检索记忆（如果启用）
+            memories = []
+            if include_memories:
+                memories = await self._retrieve_memories(user_id, session_id, current_message, personality_config)
+            
+            # 4. 加载用户画像
+            user_profile = await self._load_user_profile(user_id)
             
             # 组装上下文
             context_bundle = self._assemble_context(
@@ -171,15 +181,17 @@ class ContextBuilder:
             messages = result.scalars().all()
             
             # 转换为响应模型并反转顺序（从旧到新）
+            # 注意：SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
+            # 类型检查器可能报错，但运行时不会有问题
             message_responses = [
                 MessageSchema(
-                    id=msg.id,
-                    session_id=msg.session_id,
-                    role=msg.role,
-                    content=msg.content,
+                    id=msg.id,  # type: ignore[arg-type]
+                    session_id=msg.session_id,  # type: ignore[arg-type]
+                    role=msg.role,  # type: ignore[arg-type]
+                    content=msg.content,  # type: ignore[arg-type]
                     tokens=getattr(msg, 'tokens', None),  # tokens 可能不存在
-                    model=msg.model,
-                    created_at=msg.created_at
+                    model=msg.model,  # type: ignore[arg-type]
+                    created_at=msg.created_at  # type: ignore[arg-type]
                 )
                 for msg in reversed(messages)
             ]
@@ -218,7 +230,9 @@ class ContextBuilder:
             result = await self.db.execute(stmt)
             summaries = result.scalars().all()
             
-            return [s.content for s in summaries]
+            # 注意：SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
+            # 类型检查器可能报错，但运行时不会有问题
+            return [str(s.content) for s in summaries]  # type: ignore[misc]
             
         except Exception as e:
             logger.error(f"Failed to load history summaries: {e}", exc_info=True)
@@ -253,9 +267,9 @@ class ContextBuilder:
                 max_results = 5
                 timeout = 0.5
             
-            # 为了确保重要记忆不被过滤，检索更多结果（2倍），然后统一排序筛选
-            # 这样可以避免按类型分别限制导致的遗漏
-            search_max_results = max_results * 2
+            # 为了确保重要记忆不被过滤，检索更多结果（3倍），然后统一排序筛选
+            # 这样可以避免按类型分别限制导致的遗漏，特别是对于相似度较低但包含关键信息的记忆
+            search_max_results = max_results * 3
             
             logger.debug(
                 f"Retrieving memories with personality config",
@@ -306,6 +320,28 @@ class ContextBuilder:
             all_memories.sort(key=lambda m: getattr(m, 'similarity', getattr(m, 'score', 0)), reverse=True)
             
             # 详细记录所有检索到的记忆（用于调试）
+            # 特别记录包含关键信息的记忆（包含数字+关键词）
+            import re
+            key_memories = []
+            # 获取智能评分配置（如果可用）
+            intelligent_scoring_config = None
+            if personality_config and hasattr(personality_config, 'memory') and hasattr(personality_config.memory, 'retrieval'):
+                intelligent_scoring_config = personality_config.memory.retrieval.intelligent_scoring
+            
+            if intelligent_scoring_config and intelligent_scoring_config.enabled:
+                numeric_keywords = intelligent_scoring_config.numeric_memory_keywords
+                for m in all_memories:
+                    content = m.memory.content
+                    has_number = bool(re.search(r'\d+', content))
+                    has_keyword = any(kw in content for kw in numeric_keywords)
+                    if has_number and has_keyword:
+                        key_memories.append({
+                            "id": m.memory.id,
+                            "content": content[:100],
+                            "similarity": round(m.similarity, 4),
+                            "memory_type": m.memory.memory_type.value
+                        })
+            
             logger.info(
                 f"All retrieved memories (sorted by similarity)",
                 extra={
@@ -313,6 +349,8 @@ class ContextBuilder:
                     "session_id": session_id,
                     "query": query[:50],
                     "total_count": len(all_memories),
+                    "key_memories_count": len(key_memories),  # 包含关键信息的记忆数量
+                    "key_memories": key_memories[:5],  # 记录前5个关键记忆
                     "all_memories": [
                         {
                             "id": m.memory.id,
@@ -326,16 +364,32 @@ class ContextBuilder:
                 }
             )
             
-            # 智能筛选：优先包含关键信息的记忆（如果启用）
+            # 应用多因子排序和智能评分
+            # 1. 智能评分（关键词匹配、数值匹配等）
             intelligent_scoring = None
+            scoring_weights = None
+            memory_levels_config = None
             if personality_config and hasattr(personality_config, 'memory') and hasattr(personality_config.memory, 'retrieval'):
                 intelligent_scoring = personality_config.memory.retrieval.intelligent_scoring
+                scoring_weights = personality_config.memory.retrieval.scoring_weights
+                memory_levels_config = personality_config.memory.retrieval.memory_levels
             
+            # 2. 应用智能评分
             if intelligent_scoring and intelligent_scoring.enabled:
                 all_memories = self._apply_intelligent_scoring(
                     all_memories,
                     query,
                     intelligent_scoring
+                )
+            
+            # 3. 应用多因子排序（相似度 + 重要性 + 时效性 + 相关性）
+            if scoring_weights:
+                all_memories = self._apply_comprehensive_scoring(
+                    all_memories,
+                    query,
+                    session_id,
+                    scoring_weights,
+                    memory_levels_config
                 )
             
             # 使用配置的 max_results（不是硬编码的5）
@@ -365,6 +419,69 @@ class ContextBuilder:
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {e}", exc_info=True)
             return []
+    
+    def _match_keyword_with_number(
+        self,
+        content: str,
+        keyword: str,
+        max_distance: int = 5
+    ) -> Optional[Tuple[str, float]]:
+        """匹配关键词和数值，支持多种格式
+        
+        支持的格式：
+        - "体重90kg"
+        - "体重 90kg"
+        - "体重是90kg"
+        - "体重：90kg"
+        - "体重为90公斤"
+        - "体重90"
+        
+        Args:
+            content: 记忆内容
+            keyword: 关键词
+            max_distance: 关键词和数字之间的最大距离（字符数）
+            
+        Returns:
+            Optional[Tuple[str, float]]: (匹配的数值文本, 数值) 或 None
+        """
+        import re
+        
+        # 模式1：关键词 + 可选分隔符 + 数字 + 可选单位
+        patterns = [
+            rf'{re.escape(keyword)}[：:是]?\s*(\d+(?:\.\d+)?)\s*(?:kg|公斤|千克|cm|厘米|岁|岁数)?',
+            rf'{re.escape(keyword)}\s+(\d+(?:\.\d+)?)',
+            rf'{re.escape(keyword)}(\d+(?:\.\d+)?)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                value_text = match.group(1)
+                try:
+                    value = float(value_text)
+                    return (value_text, value)
+                except ValueError:
+                    continue
+        
+        # 模式2：在关键词附近查找数字（距离限制）
+        keyword_pos = content.find(keyword)
+        if keyword_pos != -1:
+            # 在关键词前后max_distance个字符内查找数字
+            search_start = max(0, keyword_pos - max_distance)
+            search_end = min(len(content), keyword_pos + len(keyword) + max_distance)
+            search_text = content[search_start:search_end]
+            
+            # 查找数字
+            number_match = re.search(r'(\d+(?:\.\d+)?)', search_text)
+            if number_match:
+                value_text = number_match.group(1)
+                try:
+                    value = float(value_text)
+                    return (value_text, value)
+                except ValueError:
+                    pass
+        
+        return None
     
     def _apply_intelligent_scoring(
         self,
@@ -408,8 +525,34 @@ class ContextBuilder:
                     score += config.numeric_boost
                     
                     # 如果记忆同时包含查询关键词和数字，额外加分
-                    if any(kw in content for kw in config.numeric_memory_keywords):
+                    # 对于包含查询关键词+具体数值的记忆，给予更大的boost
+                    matched_keywords = [kw for kw in config.numeric_memory_keywords if kw in content]
+                    if matched_keywords:
                         score += config.keyword_match_boost
+                        # 特殊处理：如果记忆包含查询关键词+具体数值，且查询也包含该关键词
+                        # 给予额外的大幅boost，确保包含关键信息的记忆能够进入top 5
+                        # 检查查询中是否包含关键词，且记忆中也包含该关键词
+                        # 例如："我体重多少？" 查询包含"体重"，记忆"体重90kg"也包含"体重"
+                        query_keywords = [kw for kw in config.numeric_query_keywords if kw in query]
+                        if query_keywords:
+                            # 检查记忆是否包含查询中的关键词
+                            for qk in query_keywords:
+                                if qk in content:
+                                    # 对于"我体重多少？"和"体重90kg"这样的精确匹配，给予额外的大幅boost
+                                    # 这个boost足够大，确保即使原始相似度较低（如0.37），也能进入top 5
+                                    score += 0.8  # 大幅boost，确保关键记忆进入top 5
+                                    
+                                    # 使用灵活的关键词-数值匹配函数
+                                    if config.keyword_number_matching.enabled:
+                                        match_result = self._match_keyword_with_number(
+                                            content,
+                                            qk,
+                                            max_distance=config.keyword_number_matching.max_distance
+                                        )
+                                        if match_result:
+                                            # 如果关键词和数值匹配成功，给予超级boost
+                                            score += config.keyword_number_matching.super_boost
+                                    break  # 找到一个匹配就足够了
             
             # 加分项：内容长度适中（使用配置的范围）
             content_len = len(content)
@@ -441,6 +584,212 @@ class ContextBuilder:
                         "boost": round(score - original_similarities.get(id(m), 0), 4)
                     }
                     for score, m in scored_memories[:10]
+                ]
+            }
+        )
+        
+        return sorted_memories
+    
+    def _calculate_recency_score(self, created_at) -> float:
+        """计算时效性分数
+        
+        Args:
+            created_at: 记忆创建时间
+            
+        Returns:
+            float: 时效性分数（0-1），越新越高
+        """
+        from datetime import datetime, timezone
+        
+        if not created_at:
+            return 0.5  # 默认分数
+        
+        # 计算距离现在的时间（天）
+        if isinstance(created_at, datetime):
+            now = datetime.now(timezone.utc) if created_at.tzinfo else datetime.now()
+            delta = (now - created_at).total_seconds() / 86400  # 转换为天
+        else:
+            return 0.5
+        
+        # 使用指数衰减：7天内=1.0, 30天=0.5, 90天=0.1
+        if delta <= 7:
+            return 1.0
+        elif delta <= 30:
+            return 0.5 + 0.5 * (1 - (delta - 7) / 23)
+        elif delta <= 90:
+            return 0.1 + 0.4 * (1 - (delta - 30) / 60)
+        else:
+            return 0.1
+    
+    def _calculate_relevance_score(
+        self,
+        content: str,
+        query: str,
+        query_intent: Optional[Dict[str, Any]] = None
+    ) -> float:
+        """计算相关性分数
+        
+        Args:
+            content: 记忆内容
+            query: 查询文本
+            query_intent: 查询意图（可选）
+            
+        Returns:
+            float: 相关性分数（0-1）
+        """
+        import re
+        
+        # 基础相关性：关键词匹配
+        query_words = set(re.findall(r'\w+', query.lower()))
+        content_words = set(re.findall(r'\w+', content.lower()))
+        
+        # 计算Jaccard相似度
+        if query_words:
+            jaccard = len(query_words & content_words) / len(query_words | content_words)
+        else:
+            jaccard = 0.0
+        
+        # 如果查询意图已知，根据意图类型调整
+        if query_intent:
+            if query_intent.get("type") == "numeric_query":
+                # 数值查询：检查是否包含数值
+                if re.search(r'\d+', content):
+                    jaccard += 0.3  # 额外加分
+        
+        return min(1.0, jaccard)
+    
+    def _analyze_query_intent(self, query: str) -> Dict[str, Any]:
+        """分析查询意图
+        
+        Args:
+            query: 查询文本
+            
+        Returns:
+            Dict[str, Any]: 查询意图信息
+        """
+        import re
+        
+        # 检测数值查询关键词
+        numeric_keywords = ['身高', '体重', '年龄', '多少', '几', '多高', '多重', '多大', '血压', '血糖']
+        is_numeric_query = any(kw in query for kw in numeric_keywords)
+        
+        # 提取关键词
+        keywords = [kw for kw in numeric_keywords if kw in query]
+        
+        # 判断是否为问题
+        is_question = any(qw in query for qw in ['什么', '多少', '几', '如何', '怎么', '？', '?'])
+        
+        # 判断查询类型
+        if is_numeric_query and is_question:
+            query_type = "numeric_query"
+            # 根据关键词推断期望格式
+            if '体重' in keywords:
+                expected_format = "体重XXkg"
+            elif '身高' in keywords:
+                expected_format = "身高XXcm"
+            elif '年龄' in keywords:
+                expected_format = "年龄XX岁"
+            else:
+                expected_format = None
+        elif is_question:
+            query_type = "factual_query"
+            expected_format = None
+        else:
+            query_type = "conversational"
+            expected_format = None
+        
+        return {
+            "type": query_type,
+            "keywords": keywords,
+            "expected_format": expected_format,
+            "is_question": is_question
+        }
+    
+    def _apply_comprehensive_scoring(
+        self,
+        memories: List[Any],
+        query: str,
+        session_id: str,
+        weights: ScoringWeights,
+        memory_levels_config: Optional[Any] = None
+    ) -> List[Any]:
+        """应用多因子综合评分
+        
+        Args:
+            memories: 记忆列表
+            query: 查询文本
+            session_id: 当前会话ID
+            weights: 权重配置
+            memory_levels_config: 记忆层级配置
+            
+        Returns:
+            List[MemorySearchResult]: 重新排序后的记忆列表
+        """
+        # 分析查询意图
+        query_intent = self._analyze_query_intent(query)
+        
+        # 对每个记忆计算综合分数
+        def calculate_comprehensive_score(mem_result):
+            """计算综合评分"""
+            memory = mem_result.memory
+            
+            # 1. 相似度分数（归一化到0-1）
+            similarity_score = mem_result.similarity
+            
+            # 2. 重要性分数（归一化到0-1）
+            importance_score = memory.importance
+            
+            # 3. 时效性分数（归一化到0-1）
+            recency_score = self._calculate_recency_score(memory.created_at)
+            
+            # 4. 相关性分数（基于查询意图）
+            relevance_score = self._calculate_relevance_score(
+                memory.content,
+                query,
+                query_intent
+            )
+            
+            # 5. 加权求和
+            comprehensive_score = (
+                similarity_score * weights.similarity +
+                importance_score * weights.importance +
+                recency_score * weights.recency +
+                relevance_score * weights.relevance
+            )
+            
+            # 6. 记忆层级boost（如果启用）
+            if memory_levels_config and memory_levels_config.enabled:
+                if memory.session_id == session_id:
+                    # 当前会话记忆：更高权重
+                    comprehensive_score *= memory_levels_config.session_memory_boost
+                else:
+                    # 跨会话记忆：标准权重
+                    comprehensive_score *= memory_levels_config.cross_session_memory_boost
+            
+            return comprehensive_score
+        
+        # 按综合评分重新排序
+        scored_memories = [(calculate_comprehensive_score(m), m) for m in memories]
+        scored_memories.sort(key=lambda x: x[0], reverse=True)
+        sorted_memories = [m for _, m in scored_memories]
+        
+        logger.debug(
+            f"Memories after comprehensive scoring",
+            extra={
+                "query": query[:50],
+                "query_intent": query_intent,
+                "weights": {
+                    "similarity": weights.similarity,
+                    "importance": weights.importance,
+                    "recency": weights.recency,
+                    "relevance": weights.relevance
+                },
+                "top_5_scores": [
+                    {
+                        "content": m.memory.content[:50],
+                        "score": round(score, 4)
+                    }
+                    for score, m in scored_memories[:5]
                 ]
             }
         )
@@ -506,10 +855,13 @@ class ContextBuilder:
         system_prompts = []
         
         # 1. 人格定义
-        if hasattr(personality_config, 'system_prompt') and personality_config.system_prompt:
-            system_prompts.append(personality_config.system_prompt)
-        elif hasattr(personality_config, 'description') and personality_config.description:
-            system_prompts.append(personality_config.description)
+        if personality_config and hasattr(personality_config, 'ai'):
+            # 从AI配置中获取system_prompt
+            ai_config = personality_config.ai
+            if hasattr(ai_config, 'system_prompt') and ai_config.system_prompt:
+                system_prompts.append(ai_config.system_prompt)
+            elif hasattr(personality_config, 'description') and personality_config.description:
+                system_prompts.append(personality_config.description)
         
         # 2. 用户画像
         if user_profile:
@@ -580,10 +932,13 @@ class ContextBuilder:
         """
         system_prompts = []
         
-        if hasattr(personality_config, 'system_prompt') and personality_config.system_prompt:
-            system_prompts.append(personality_config.system_prompt)
-        elif hasattr(personality_config, 'description') and personality_config.description:
-            system_prompts.append(personality_config.description)
+        if personality_config and hasattr(personality_config, 'ai'):
+            # 从AI配置中获取system_prompt
+            ai_config = personality_config.ai
+            if hasattr(ai_config, 'system_prompt') and ai_config.system_prompt:
+                system_prompts.append(ai_config.system_prompt)
+            elif hasattr(personality_config, 'description') and personality_config.description:
+                system_prompts.append(personality_config.description)
         
         return ContextBundle(
             system_prompts=system_prompts,
@@ -591,7 +946,7 @@ class ContextBuilder:
             summarized_history=[],
             retrieved_memories=[],
             user_profile=None,
-            total_tokens=len(system_prompts[0]) * 1.5 if system_prompts else 0,
+            total_tokens=int(len(system_prompts[0]) * 1.5) if system_prompts else 0,
             metadata={"fallback": True}
         )
 
