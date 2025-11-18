@@ -142,17 +142,17 @@ class User(UserBase):
     @property
     def is_authenticated(self) -> bool:
         """用户是否已认证"""
-        return self.status == "active"
+        return str(self.status) == "active"  # type: ignore[arg-type]
     
     @property
     def is_active(self) -> bool:
         """用户是否激活"""
-        return self.status == "active"
+        return str(self.status) == "active"  # type: ignore[arg-type]
     
     @property
     def is_admin(self) -> bool:
         """用户是否为管理员"""
-        return self.role == "admin"
+        return str(self.role) == "admin"  # type: ignore[arg-type]
     
     def update_last_login(self, ip_address: Optional[str] = None) -> None:
         """更新最后登录时间和IP

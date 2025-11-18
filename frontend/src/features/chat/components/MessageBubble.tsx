@@ -74,7 +74,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     queryFn: () => userApi.getCurrentUserPreferences(),
     enabled: !preferencesProp, // 只有在没有传递时才获取
     staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
-    cacheTime: 10 * 60 * 1000, // 10分钟内保留缓存
+    gcTime: 10 * 60 * 1000, // 10分钟内保留缓存（原 cacheTime，React Query v5 已重命名）
   });
 
   // 优先使用传递的值，否则使用查询结果

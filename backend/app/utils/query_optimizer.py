@@ -190,7 +190,8 @@ class QueryOptimizer:
         for rel in relationships:
             # 根据关系类型选择合适的加载策略
             # 这里简化实现，实际应该根据关系类型选择
-            query = query.options(selectinload(rel))
+            # selectinload 可以接受字符串（通过 getattr 内部处理），但类型检查器不识别
+            query = query.options(selectinload(rel))  # type: ignore[arg-type]
         
         return query
     

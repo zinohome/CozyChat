@@ -5,7 +5,16 @@ API依赖注入
 """
 
 # 标准库
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Generator, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.context.builder import ContextBuilder
+    from app.core.context.summary_generator import SummaryGenerator
+    from app.core.personality import PersonalityRegistry
+    from app.engines.tools.factory import ToolManagerFactory
+    from app.engines.ai.engine_pool import LLMEnginePool
+    from app.engines.memory.manager import MemoryManager
+    from qdrant_client import QdrantClient
 
 # 第三方库
 from fastapi import Depends, HTTPException, status
@@ -34,7 +43,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_sync_session() -> Session:
+def get_sync_session() -> Generator[Session, None, None]:
     """获取同步数据库会话依赖
     
     Yields:
@@ -205,7 +214,7 @@ async def get_current_user_optional(
 
 # ===== 全局组件依赖注入（Phase 2: Lifecycle Optimization） =====
 
-def get_personality_registry():
+def get_personality_registry() -> "PersonalityRegistry":
     """获取人格注册表依赖
     
     Returns:
@@ -215,7 +224,7 @@ def get_personality_registry():
     return get_personality_registry()
 
 
-def get_tool_manager_factory():
+def get_tool_manager_factory() -> "ToolManagerFactory":
     """获取工具管理器工厂依赖
     
     Returns:
@@ -225,7 +234,7 @@ def get_tool_manager_factory():
     return get_tool_manager_factory()
 
 
-def get_llm_engine_pool():
+def get_llm_engine_pool() -> "LLMEnginePool":
     """获取LLM引擎池依赖
     
     Returns:
@@ -235,7 +244,7 @@ def get_llm_engine_pool():
     return get_llm_engine_pool()
 
 
-def get_qdrant_client():
+def get_qdrant_client() -> "QdrantClient":
     """获取Qdrant客户端依赖
     
     Returns:
@@ -247,7 +256,7 @@ def get_qdrant_client():
 
 # ===== Memory Manager依赖 =====
 
-def get_memory_manager():
+def get_memory_manager() -> "MemoryManager":
     """获取MemoryManager依赖
     
     Returns:
@@ -262,8 +271,12 @@ def get_memory_manager():
 async def get_context_builder(
     db: AsyncSession = Depends(get_db),
     memory_manager = Depends(get_memory_manager)
-):
+) -> "ContextBuilder":
     """获取上下文构建器
+    
+    Args:
+        db: 异步数据库会话
+        memory_manager: 记忆管理器
     
     Returns:
         ContextBuilder: 上下文构建器实例
@@ -281,9 +294,12 @@ async def get_context_builder(
 
 
 async def get_summary_generator(
-    db: Session = Depends(get_db)
-):
+    sync_db: Session = Depends(get_sync_session)
+) -> "SummaryGenerator":
     """获取摘要生成器
+    
+    Args:
+        db: 异步数据库会话
     
     Returns:
         SummaryGenerator: 摘要生成器实例
@@ -303,6 +319,6 @@ async def get_summary_generator(
     
     return SummaryGenerator(
         engine_pool=engine_pool,
-        db=db,
+        db=sync_db,
         memory_engine=memory_engine
     )

@@ -85,7 +85,7 @@ async def list_models(
                 
                 # 获取引擎支持的模型列表
                 if hasattr(engine, 'list_models'):
-                    engine_models = engine.list_models()
+                    engine_models = engine.list_models()  # type: ignore[attr-defined]
                 else:
                     # 默认模型（从引擎配置获取）
                     engine_models = [engine.model] if engine.model else []
@@ -164,7 +164,7 @@ async def get_model(
                 
                 # 检查模型是否属于此引擎
                 if hasattr(engine, 'list_models'):
-                    engine_models = engine.list_models()
+                    engine_models = engine.list_models()  # type: ignore[attr-defined]
                 else:
                     engine_models = [engine.model] if engine.model else []
                 
@@ -172,7 +172,7 @@ async def get_model(
                     # 获取定价信息（如果有）
                     pricing = None
                     if hasattr(engine, 'get_pricing'):
-                        pricing = engine.get_pricing(model_id)
+                        pricing = engine.get_pricing(model_id)  # type: ignore[attr-defined]
                     
                     model_info = ModelDetail(
                         id=model_id,

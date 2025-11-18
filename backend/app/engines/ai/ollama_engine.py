@@ -58,11 +58,12 @@ class OllamaEngine(AIEngineBase):
             models_config = engine_config.get("models", [])
             if models_config:
                 # 从配置中提取模型名称列表
-                self._supported_models = [
-                    model_item.get("name") 
+                model_names = [
+                    str(model_item.get("name", ""))
                     for model_item in models_config 
-                    if isinstance(model_item, dict) and "name" in model_item
+                    if isinstance(model_item, dict) and "name" in model_item and model_item.get("name")
                 ]
+                self._supported_models = model_names if model_names else None  # type: ignore[assignment]
         except Exception as e:
             logger.warning(f"Failed to load model list from config: {e}")
             self._supported_models = None
@@ -164,7 +165,7 @@ class OllamaEngine(AIEngineBase):
                 "Ollama API call completed",
                 extra={
                     "response_id": response_id,
-                    "tokens": chat_response.usage["total_tokens"]
+                    "tokens": chat_response.usage["total_tokens"] if chat_response.usage else 0  # type: ignore[index]
                 }
             )
             

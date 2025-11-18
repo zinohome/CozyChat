@@ -111,9 +111,10 @@ class SessionTitleGenerator:
                 return None
             
             # 如果标题已经是自动生成的（不是默认的"新会话"），跳过
-            if session.title and session.title != "新会话":
+            session_title = str(session.title) if session.title is not None else ""  # type: ignore[arg-type]
+            if session_title and session_title != "新会话":
                 logger.debug(
-                    f"Session already has a custom title: {session.title}",
+                    f"Session already has a custom title: {session_title}",
                     extra={"session_id": session_id}
                 )
                 return None
@@ -121,8 +122,10 @@ class SessionTitleGenerator:
             # 构建消息内容摘要（只取前10条消息，避免token过多）
             message_texts = []
             for msg in messages[:10]:
-                role_name = "用户" if msg.role == "user" else "助手"
-                content = msg.content[:200] if len(msg.content) > 200 else msg.content  # 每条消息最多200字符
+                msg_role = str(msg.role)  # type: ignore[arg-type]
+                msg_content = str(msg.content)  # type: ignore[arg-type]
+                role_name = "用户" if msg_role == "user" else "助手"
+                content = msg_content[:200] if len(msg_content) > 200 else msg_content  # 每条消息最多200字符
                 message_texts.append(f"{role_name}: {content}")
             
             messages_text = "\n".join(message_texts)
@@ -178,7 +181,7 @@ class SessionTitleGenerator:
             
             # 提取标题
             if response.message:
-                if hasattr(response.message, 'content'):
+                if hasattr(response.message, 'content') and response.message.content:
                     title = response.message.content.strip()
                 elif isinstance(response.message, dict):
                     title = response.message.get("content", "").strip()
@@ -251,7 +254,8 @@ class SessionTitleGenerator:
                 return False
             
             # 如果标题已经是自动生成的（不是默认的"新会话"），跳过
-            if session.title and session.title != "新会话":
+            session_title = str(session.title) if session.title is not None else ""  # type: ignore[arg-type]
+            if session_title and session_title != "新会话":
                 return False
             
             # 生成标题
@@ -259,9 +263,9 @@ class SessionTitleGenerator:
             
             if title:
                 # 更新会话标题
-                session.title = title
+                session.title = title  # type: ignore[assignment]
                 from datetime import datetime
-                session.updated_at = datetime.utcnow()
+                session.updated_at = datetime.utcnow()  # type: ignore[assignment]
                 self.db.commit()
                 self.db.refresh(session)
                 

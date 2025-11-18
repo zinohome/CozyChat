@@ -100,13 +100,17 @@ class OpenAISTTEngine(STTEngineBase):
             language_code = normalize_language_code(language or self.language)
             
             # 调用Whisper API
-            response = await self.client.audio.transcriptions.create(
-                model=self.model,
-                file=audio_file,
-                language=language_code,
-                response_format="text",
+            # 只在language_code不为None时传递language参数
+            create_params: Dict[str, Any] = {
+                "model": self.model,
+                "file": audio_file,
+                "response_format": "text",
                 **kwargs
-            )
+            }
+            if language_code is not None:
+                create_params["language"] = language_code
+            
+            response = await self.client.audio.transcriptions.create(**create_params)
             
             # OpenAI API返回的是字符串（当response_format="text"时）
             # 注意：当response_format="text"时，response直接是字符串

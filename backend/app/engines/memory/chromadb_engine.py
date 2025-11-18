@@ -283,7 +283,7 @@ class ChromaDBMemoryEngine(MemoryEngineBase):
             # 从两个集合中删除
             for collection in [self.user_collection, self.assistant_collection]:
                 try:
-                    collection.delete(where=where_filter)
+                    collection.delete(where=where_filter)  # type: ignore[arg-type]
                     # ChromaDB不返回删除数量，假设成功
                     deleted_count += 1
                 except Exception as e:

@@ -29,15 +29,21 @@ class ImportanceScorer:
         if config is None:
             config_loader = get_config_loader()
             memory_config = config_loader.load_memory_config()
-            importance_config = memory_config.get("importance", {})
-            scoring_config = importance_config.get("scoring", {})
-            config = scoring_config.get("default", {})
+            importance_config = memory_config.get("importance", {}) if memory_config else {}
+            scoring_config = importance_config.get("scoring", {}) if importance_config else {}
+            config = scoring_config.get("default", {}) if scoring_config else {}
         
         # 权重配置
-        self.content_length_weight = config.get("content_length_weight", 0.3)
-        self.keyword_weight = config.get("keyword_weight", 0.4)
-        self.frequency_weight = config.get("frequency_weight", 0.2)
-        self.recency_weight = config.get("recency_weight", 0.1)
+        if config:
+            self.content_length_weight = config.get("content_length_weight", 0.3)
+            self.keyword_weight = config.get("keyword_weight", 0.4)
+            self.frequency_weight = config.get("frequency_weight", 0.2)
+            self.recency_weight = config.get("recency_weight", 0.1)
+        else:
+            self.content_length_weight = 0.3
+            self.keyword_weight = 0.4
+            self.frequency_weight = 0.2
+            self.recency_weight = 0.1
         
         # 重要关键词列表（可根据实际需求扩展）
         self.important_keywords = [

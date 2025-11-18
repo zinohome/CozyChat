@@ -96,7 +96,8 @@ class PermissionChecker:
                     detail="未认证或令牌无效"
                 )
             
-            if user.role not in allowed_roles:
+            user_role = str(user.role)  # type: ignore[arg-type]
+            if user_role not in allowed_roles:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"需要以下角色之一: {', '.join(allowed_roles)}"
@@ -128,7 +129,7 @@ class PermissionChecker:
                     detail="未认证或令牌无效"
                 )
             
-            if not self.has_permission(user.role, permission):
+            if not self.has_permission(str(user.role), permission):  # type: ignore[arg-type]
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"需要权限: {permission}"

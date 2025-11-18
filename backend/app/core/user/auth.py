@@ -145,12 +145,12 @@ class AuthService:
                 return None
             
             # 检查用户状态
-            if user.status != "active":
+            if str(user.status) != "active":  # type: ignore[arg-type]
                 logger.warning(f"User is not active: {username}, status: {user.status}")
                 return None
             
             # 验证密码
-            if not self.verify_password(password, user.password_hash):
+            if not self.verify_password(password, str(user.password_hash)):  # type: ignore[arg-type]
                 logger.warning(f"Invalid password for user: {username}")
                 return None
             
@@ -187,7 +187,11 @@ class AuthService:
             # 查询用户
             user = db.query(User).filter(User.id == user_id).first()
             
-            if not user or user.status != "active":
+            if not user:
+                return None
+            
+            # 检查用户状态
+            if str(user.status) != "active":  # type: ignore[arg-type]
                 return None
             
             return user

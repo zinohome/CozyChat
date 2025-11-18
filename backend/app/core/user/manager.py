@@ -142,13 +142,13 @@ class UserManager:
             # 生成token
             access_token = self.auth_service.create_access_token(
                 user_id=str(user.id),
-                username=user.username,
-                role=user.role
+                username=str(user.username),  # type: ignore[arg-type]
+                role=str(user.role)  # type: ignore[arg-type]
             )
             
             refresh_token = self.auth_service.create_refresh_token(
                 user_id=str(user.id),
-                username=user.username
+                username=str(user.username)  # type: ignore[arg-type]
             )
             
             logger.info(
@@ -257,7 +257,7 @@ class UserManager:
             
             # 更新密码（如果提供）
             if "password" in updates:
-                user.password_hash = self.auth_service.hash_password(updates["password"])
+                user.password_hash = self.auth_service.hash_password(updates["password"])  # type: ignore[assignment]
             
             self.db.commit()
             self.db.refresh(user)
@@ -292,8 +292,8 @@ class UserManager:
             
             if soft_delete:
                 # 软删除
-                user.status = "deleted"
-                user.deleted_at = datetime.utcnow()
+                user.status = "deleted"  # type: ignore[assignment]
+                user.deleted_at = datetime.utcnow()  # type: ignore[assignment]
             else:
                 # 硬删除
                 self.db.delete(user)
@@ -424,7 +424,7 @@ class UserManager:
                 "total_sessions": user.total_sessions,
                 "total_messages": user.total_messages,
                 "total_tokens_used": user.total_tokens_used,
-                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at is not None else None,  # type: ignore[arg-type]
                 "created_at": user.created_at.isoformat(),
                 "profile": {
                     "interests": profile.interests if profile else [],

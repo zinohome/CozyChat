@@ -50,6 +50,257 @@ docs/
 - 提交前自动运行 pre-commit hooks 检查
 - API变更必须更新文档
 
+### 代码检查要求 ⚠️ 强制
+
+**所有代码必须通过类型检查，不允许有任何类型错误！**
+
+#### 1. 类型检查流程（强制）
+
+**每次编写或修改代码后，必须执行以下检查：**
+
+```bash
+# 1. 检查单个文件
+# 在IDE中打开文件时，必须确保没有类型检查错误提示
+
+# 2. 检查整个模块
+# 修改某个模块后，检查该模块下所有文件
+
+# 3. 提交前检查所有文件
+# 提交代码前，必须确保整个backend/app目录没有类型错误
+```
+
+#### 2. 常见类型错误及修复方法
+
+**2.1 SQLAlchemy ORM 属性访问**
+
+```python
+# ❌ 错误：直接使用ORM属性，类型检查器会报错
+username=user.username  # Column[str] 类型不兼容
+
+# ✅ 正确：使用str()转换并添加类型忽略注释
+username=str(user.username),  # type: ignore[arg-type]
+
+# ✅ 正确：条件检查时使用 is not None
+if user.status is not None and str(user.status) != "active":
+    pass
+```
+
+**2.2 SQLAlchemy ORM 属性赋值**
+
+```python
+# ❌ 错误：直接赋值，类型检查器会报错
+session.title = "新标题"  # str 与 Column[str] 不兼容
+
+# ✅ 正确：添加类型忽略注释
+session.title = "新标题"  # type: ignore[assignment]
+session.updated_at = datetime.utcnow()  # type: ignore[assignment]
+```
+
+**2.3 SQLAlchemy 条件检查**
+
+```python
+# ❌ 错误：直接布尔判断，类型检查器会报错
+if user.status != "active":  # ColumnElement[bool] 类型无效
+    pass
+
+# ✅ 正确：先检查是否为None，再转换比较
+if user.status is not None:
+    if str(user.status) != "active":  # type: ignore[arg-type]
+        pass
+
+# ✅ 正确：分离检查
+if not user:
+    raise HTTPException(...)
+if str(user.status) != "active":  # type: ignore[arg-type]
+    raise HTTPException(...)
+```
+
+**2.4 变量名冲突**
+
+```python
+# ❌ 错误：函数参数与局部变量同名
+async def get_token(
+    response: Response = None,  # FastAPI Response
+    ...
+):
+    response = await client.post(...)  # httpx Response，冲突！
+
+# ✅ 正确：使用不同的变量名
+async def get_token(
+    ...
+):
+    http_response = await client.post(...)  # 避免冲突
+    response_data = http_response.json()  # 避免与函数参数冲突
+```
+
+**2.5 生成器函数返回类型**
+
+```python
+# ❌ 错误：缺少正确的返回类型
+def get_sync_session() -> Session:
+    for session in get_sync_db():
+        yield session
+
+# ✅ 正确：使用Generator类型
+from typing import Generator
+def get_sync_session() -> Generator[Session, None, None]:
+    for session in get_sync_db():
+        yield session
+```
+
+**2.6 可选参数处理**
+
+```python
+# ❌ 错误：直接访问可能为None的属性
+personality_id = data.personality_id if request else None
+
+# ✅ 正确：检查data是否为None
+personality_id = data.personality_id if data else None
+
+# ✅ 正确：使用is not None检查
+if data is not None and data.personality_id:
+    pass
+```
+
+**2.7 类型注解完整性**
+
+```python
+# ❌ 错误：缺少返回类型注解
+def get_personality_registry():
+    from app.core.personality import get_personality_registry
+    return get_personality_registry()
+
+# ✅ 正确：添加返回类型注解（使用TYPE_CHECKING避免循环导入）
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.personality import PersonalityRegistry
+
+def get_personality_registry() -> "PersonalityRegistry":
+    from app.core.personality import get_personality_registry
+    return get_personality_registry()
+```
+
+**2.8 异步迭代器类型**
+
+```python
+# ❌ 错误：类型检查器可能误报
+async for chunk in ai_engine.chat_stream(...):  # 可能报错
+
+# ✅ 正确：添加类型忽略注释（chat_stream确实是异步生成器）
+async for chunk in ai_engine.chat_stream(...):  # type: ignore[misc]
+    pass
+```
+
+#### 3. 代码检查清单（提交前必做）
+
+**在提交代码前，必须完成以下检查：**
+
+```markdown
+类型检查：
+[ ] 打开每个修改的.py文件，确保没有红色波浪线（类型错误）
+[ ] 检查所有SQLAlchemy ORM属性访问，已添加str()转换和类型忽略注释
+[ ] 检查所有SQLAlchemy ORM属性赋值，已添加类型忽略注释
+[ ] 检查所有条件判断，避免直接对Column类型进行布尔判断
+[ ] 检查所有变量命名，确保没有冲突（函数参数 vs 局部变量）
+[ ] 检查所有生成器函数，已添加正确的返回类型注解
+[ ] 检查所有可选参数，已正确处理None值
+[ ] 检查所有函数，已添加返回类型注解
+[ ] 运行 read_lints 工具检查整个backend/app目录，确保0个错误
+
+代码质量：
+[ ] 所有导入已按规范排序（标准库、第三方库、本地库）
+[ ] 所有函数都有类型注解和docstring
+[ ] 所有错误处理完善
+[ ] 所有日志记录充分
+```
+
+#### 4. 类型检查工具使用
+
+**在Cursor IDE中：**
+
+1. **实时检查**：打开文件时，IDE会自动进行类型检查，必须确保没有错误提示
+2. **批量检查**：使用 `read_lints` 工具检查整个目录
+3. **配置检查**：确保 `backend/pyrightconfig.json` 配置正确
+
+**检查命令：**
+
+```bash
+# 在Cursor中，使用工具检查
+read_lints(paths=['backend/app'])  # 检查整个app目录
+read_lints(paths=['backend/app/api/v1'])  # 检查特定模块
+```
+
+#### 5. 修复优先级
+
+**发现类型错误时，按以下优先级修复：**
+
+1. **P0 - 阻塞性错误**：导致代码无法运行的类型错误（如未导入的类、语法错误）
+2. **P1 - 严重错误**：SQLAlchemy ORM属性访问/赋值错误、变量名冲突
+3. **P2 - 一般错误**：缺少类型注解、可选参数处理不当
+4. **P3 - 警告**：类型检查器误报（使用类型忽略注释处理）
+
+#### 6. 禁止的做法
+
+**以下做法严格禁止：**
+
+```python
+# ❌ 禁止：忽略所有类型检查
+# type: ignore  # 太宽泛，不允许
+
+# ❌ 禁止：使用Any类型逃避类型检查
+def process(data: Any) -> Any:  # 不允许
+
+# ❌ 禁止：不处理类型错误，直接提交
+# 必须修复所有类型错误才能提交
+
+# ❌ 禁止：使用过于宽泛的类型忽略
+# type: ignore  # 必须指定具体错误类型
+```
+
+**允许的做法：**
+
+```python
+# ✅ 允许：针对特定错误类型使用类型忽略
+username=str(user.username),  # type: ignore[arg-type]
+session.title = "标题"  # type: ignore[assignment]
+
+# ✅ 允许：使用TYPE_CHECKING避免循环导入
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.core.context.builder import ContextBuilder
+```
+
+#### 7. 代码审查要求
+
+**代码审查时必须检查：**
+
+```markdown
+[ ] 所有类型检查错误已修复（0个错误）
+[ ] SQLAlchemy ORM属性访问已正确处理
+[ ] 变量命名没有冲突
+[ ] 所有函数都有完整的类型注解
+[ ] 所有可选参数都已正确处理
+[ ] 类型忽略注释使用合理（不是滥用）
+```
+
+#### 8. 违反规范的后果
+
+**如果提交的代码包含类型检查错误：**
+
+1. **代码审查将直接拒绝**
+2. **必须修复所有错误后才能合并**
+3. **重复违反将要求重新学习类型检查规范**
+
+---
+
+**重要提醒**：
+
+1. **零容忍政策**：不允许有任何类型检查错误
+2. **主动检查**：每次修改代码后立即检查，不要等到提交时
+3. **系统修复**：发现一个错误时，检查整个文件是否有类似问题
+4. **持续改进**：遇到新的类型错误模式，及时更新此规范
+
 ### Git提交规范
 使用 Conventional Commits 格式：
 ```

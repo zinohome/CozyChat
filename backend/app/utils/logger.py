@@ -10,7 +10,7 @@ import logging.handlers
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 # 第三方库
 import structlog
@@ -310,7 +310,7 @@ def log_function_call(func_name: str, **kwargs: Any) -> None:
     )
 
 
-def log_error(error: Exception, context: Dict[str, Any] = None) -> None:
+def log_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> None:
     """记录错误
     
     Args:

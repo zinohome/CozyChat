@@ -205,12 +205,12 @@ async def get_current_user_info(
     """
     return UserResponse(
         id=str(current_user.id),
-        username=current_user.username,
-        email=current_user.email,
-        role=current_user.role,
-        display_name=current_user.display_name,
-        avatar_url=current_user.avatar_url,
-        bio=current_user.bio,
+        username=str(current_user.username),  # type: ignore[arg-type]
+        email=str(current_user.email),  # type: ignore[arg-type]
+        role=str(current_user.role),  # type: ignore[arg-type]
+        display_name=current_user.display_name if current_user.display_name else None,  # type: ignore[arg-type]
+        avatar_url=current_user.avatar_url if current_user.avatar_url else None,  # type: ignore[arg-type]
+        bio=current_user.bio if current_user.bio else None,  # type: ignore[arg-type]
         preferences=current_user.get_preferences(),
         created_at=current_user.created_at.isoformat()
     )

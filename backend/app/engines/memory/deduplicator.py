@@ -125,7 +125,7 @@ class MemoryDeduplicator:
             reverse=True
         )
         
-        primary_memory = sorted_memories[0]
+        primary_memory: Memory = sorted_memories[0]
         other_memories = sorted_memories[1:]
         
         # 合并内容（去重）
@@ -158,9 +158,9 @@ class MemoryDeduplicator:
         
         # 创建合并后的记忆
         merged_memory = Memory(
-            id=primary_memory.id,
-            user_id=primary_memory.user_id,
-            session_id=primary_memory.session_id,
+            id=str(primary_memory.id),
+            user_id=str(primary_memory.user_id),
+            session_id=str(primary_memory.session_id),
             memory_type=primary_memory.memory_type,
             content=merged_content,
             importance=merged_importance,

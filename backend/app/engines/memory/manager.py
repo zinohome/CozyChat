@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # 第三方库
 from cachetools import TTLCache
@@ -125,7 +125,10 @@ class MemoryManager:
             self.cross_session_enabled = False
         
         self.engine = engine
-        self.cache: TTLCache = TTLCache(maxsize=cache_maxsize, ttl=cache_ttl)
+        # 确保cache_maxsize和cache_ttl不为None
+        final_cache_maxsize = cache_maxsize if cache_maxsize is not None else 100
+        final_cache_ttl = cache_ttl if cache_ttl is not None else 300
+        self.cache: TTLCache = TTLCache(maxsize=final_cache_maxsize, ttl=float(final_cache_ttl))
         self.save_timeout = save_timeout
         self.search_timeout = search_timeout
         self.pending_saves: List[Memory] = []
@@ -260,14 +263,14 @@ class MemoryManager:
         
         # 创建Memory对象
         memory = Memory(
-            id=f"mem-{uuid.uuid4().hex}",
-            user_id=user_id,
-            session_id=session_id,
+            id=str(f"mem-{uuid.uuid4().hex}"),
+            user_id=str(user_id),
+            session_id=str(session_id),
             memory_type=memory_type,
-            content=content,
-            importance=importance,
-            metadata=metadata,
-            created_at=created_at
+            content=str(content),
+            importance=float(importance) if importance is not None else 0.5,
+            metadata=metadata if metadata else {},
+            created_at=created_at if created_at else datetime.utcnow()
         )
         
         # 智能去重（如果启用）- 检查是否有重复，但不直接保存
@@ -299,7 +302,7 @@ class MemoryManager:
                     memory_id=memory.id,
                     user_id=user_id,
                     session_id=session_id,
-                    role=memory_type.value,
+                    role=memory_type.value if memory_type != MemoryType.SYSTEM else "assistant",  # type: ignore[arg-type]
                     content=content,
                     importance=importance,
                     metadata=metadata,
@@ -339,7 +342,7 @@ class MemoryManager:
                         memory_id=memory.id,
                         user_id=user_id,
                         session_id=session_id,
-                        role=memory_type.value,
+                        role=memory_type.value if memory_type != MemoryType.SYSTEM else "assistant",  # type: ignore[arg-type]
                         content=content,
                         importance=importance,
                         metadata=metadata,
@@ -387,7 +390,7 @@ class MemoryManager:
         similarity_threshold: float = 0.7,
         use_cache: bool = True,
         use_hybrid_search: bool = False,
-        keyword_extraction: Optional[callable] = None
+        keyword_extraction: Optional[Callable[[str], List[str]]] = None
     ) -> List[MemorySearchResult]:
         """搜索相关记忆（支持混合检索）
         
@@ -415,19 +418,34 @@ class MemoryManager:
         
         # 执行搜索（带超时）
         try:
-            results = await asyncio.wait_for(
-                self.engine.search_memories(
-                    query=query,
-                    user_id=user_id,
-                    session_id=session_id,
-                    memory_type=memory_type,
-                    limit=limit,
-                    similarity_threshold=similarity_threshold,
-                    use_hybrid_search=use_hybrid_search,
-                    keyword_extraction=keyword_extraction
-                ),
-                timeout=self.search_timeout
-            )
+            # 检查引擎是否支持混合搜索参数
+            from .qdrant_engine import QdrantMemoryEngine
+            if isinstance(self.engine, QdrantMemoryEngine):
+                results = await asyncio.wait_for(
+                    self.engine.search_memories(
+                        query=query,
+                        user_id=user_id,
+                        session_id=session_id,
+                        memory_type=memory_type,
+                        limit=limit,
+                        similarity_threshold=similarity_threshold,
+                        use_hybrid_search=use_hybrid_search,
+                        keyword_extraction=keyword_extraction
+                    ),
+                    timeout=self.search_timeout
+                )
+            else:
+                results = await asyncio.wait_for(
+                    self.engine.search_memories(
+                        query=query,
+                        user_id=user_id,
+                        session_id=session_id,
+                        memory_type=memory_type,
+                        limit=limit,
+                        similarity_threshold=similarity_threshold
+                    ),
+                    timeout=self.search_timeout
+                )
             
             # 更新缓存（仅非混合检索）
             if use_cache and cache_key:
@@ -592,7 +610,7 @@ class MemoryManager:
         timeout: float = 0.5,
         similarity_threshold: float = 0.7,
         use_hybrid_search: bool = False,
-        keyword_extraction: Optional[callable] = None
+        keyword_extraction: Optional[Callable[[str], List[str]]] = None
     ) -> Dict[str, List[MemorySearchResult]]:
         """检索相关记忆（用于orchestrator）
         

@@ -48,7 +48,7 @@ class ChatMessage:
         - assistant 消息必须有 content 字段（即使为空字符串），除非有 tool_calls
         - 如果有 tool_calls，content 可以为 null
         """
-        result = {"role": self.role}
+        result: Dict[str, Any] = {"role": self.role}
         
         # 处理 content 字段
         if self.role == "assistant":

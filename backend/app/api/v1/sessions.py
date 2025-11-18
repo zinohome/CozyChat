@@ -170,8 +170,8 @@ async def create_session(
             )
             db.add(welcome_message)
             # 更新会话统计信息
-            session.message_count = 1
-            session.last_message_at = welcome_message.created_at
+            session.message_count = 1  # type: ignore[assignment]
+            session.last_message_at = welcome_message.created_at  # type: ignore[assignment]
             db.commit()
             
             logger.info(
@@ -195,8 +195,8 @@ async def create_session(
         
         return CreateSessionResponse(
             session_id=str(session.id),
-            personality_id=session.personality_id,
-            title=session.title,
+            personality_id=str(session.personality_id),  # type: ignore[arg-type]
+            title=str(session.title),  # type: ignore[arg-type]
             created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
@@ -277,14 +277,14 @@ async def list_sessions(
         # 构建响应
         items = []
         for session in sessions:
-            personality = personality_registry.get_personality(session.personality_id)
+            personality = personality_registry.get_personality(str(session.personality_id))  # type: ignore[arg-type]
             items.append(SessionListItem(
                 session_id=str(session.id),
-                personality_id=session.personality_id,
-                personality_name=personality.name if personality else None,
-                title=session.title,
-                message_count=session.message_count,
-                last_message_at=session.last_message_at.replace(tzinfo=timezone.utc).isoformat() if session.last_message_at else None,
+                personality_id=str(session.personality_id),  # type: ignore[arg-type]
+                personality_name=str(personality.name) if personality else None,  # type: ignore[arg-type]
+                title=str(session.title),  # type: ignore[arg-type]
+                message_count=int(session.message_count),  # type: ignore[arg-type]
+                last_message_at=session.last_message_at.replace(tzinfo=timezone.utc).isoformat() if session.last_message_at is not None else None,  # type: ignore[arg-type]
                 created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
             ))
         
@@ -372,7 +372,7 @@ async def get_session(
         for msg in messages:
             # 注意：Message 模型中有 metadata = Base.metadata（SQLAlchemy 元数据对象）
             # 实际的 JSONB 字段是 message_metadata，必须使用 message_metadata 而不是 metadata
-            msg_metadata = msg.message_metadata if msg.message_metadata else {}
+            msg_metadata = msg.message_metadata if msg.message_metadata is not None else {}  # type: ignore[comparison-overlap]
             
             # 确保 metadata 是字典类型
             if not isinstance(msg_metadata, dict):
@@ -381,8 +381,8 @@ async def get_session(
             message_items.append(
                 MessageInfo(
                     id=str(msg.id),
-                    role=msg.role,
-                    content=msg.content,
+                    role=str(msg.role),  # type: ignore[arg-type]
+                    content=str(msg.content),  # type: ignore[arg-type]
                     created_at=msg.created_at.replace(tzinfo=timezone.utc).isoformat(),
                     metadata=msg_metadata
                 )
@@ -395,8 +395,8 @@ async def get_session(
         
         return SessionDetailResponse(
             session_id=str(session.id),
-            personality_id=session.personality_id,
-            title=session.title,
+            personality_id=str(session.personality_id),  # type: ignore[arg-type]
+            title=str(session.title),  # type: ignore[arg-type]
             messages=message_items,
             total_messages=len(message_items),
             created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
@@ -454,9 +454,9 @@ async def update_session(
         
         # 更新
         if request.title is not None:
-            session.title = request.title
+            session.title = request.title  # type: ignore[assignment]
         
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.utcnow()  # type: ignore[assignment]
         db.commit()
         db.refresh(session)
         
@@ -467,7 +467,7 @@ async def update_session(
         
         return UpdateSessionResponse(
             session_id=str(session.id),
-            title=session.title,
+            title=str(session.title),  # type: ignore[arg-type]
             updated_at=session.updated_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
@@ -538,8 +538,9 @@ async def generate_session_title(
         
         # 优先使用session.message_count字段（性能更好，避免时序问题）
         # 如果字段为None或0，再查询实际消息数
-        if session.message_count and session.message_count > 0:
-            message_count = session.message_count
+        session_msg_count = int(session.message_count) if session.message_count is not None else 0  # type: ignore[arg-type]
+        if session_msg_count > 0:
+            message_count = session_msg_count
         else:
             # Fallback: 查询实际消息数
             messages = db.query(MessageModel).filter(
@@ -562,9 +563,9 @@ async def generate_session_title(
             if session.title_generated_at is not None:
                 return GenerateTitleResponse(
                     session_id=session_id,
-                    title=session.title,
+                    title=str(session.title),  # type: ignore[arg-type]
                     generated_at=session.title_generated_at.replace(tzinfo=timezone.utc).isoformat(),
-                    used_message_count=message_count
+                    used_message_count=int(message_count)  # type: ignore[arg-type]
                 )
         
         # 生成标题
@@ -584,8 +585,10 @@ async def generate_session_title(
         # 构建消息文本
         message_texts = []
         for msg in messages_for_title:
-            role_name = "用户" if msg.role == "user" else "助手"
-            content = msg.content[:200] if len(msg.content) > 200 else msg.content
+            msg_role = str(msg.role)  # type: ignore[arg-type]
+            msg_content = str(msg.content)  # type: ignore[arg-type]
+            role_name = "用户" if msg_role == "user" else "助手"
+            content = msg_content[:200] if len(msg_content) > 200 else msg_content
             message_texts.append(f"{role_name}: {content}")
         
         messages_text = "\n".join(message_texts)
@@ -614,7 +617,7 @@ async def generate_session_title(
         
         # 提取标题
         if response.message:
-            if hasattr(response.message, 'content'):
+            if hasattr(response.message, 'content') and response.message.content:
                 title = response.message.content.strip()
             elif isinstance(response.message, dict):
                 title = response.message.get("content", "").strip()
@@ -629,9 +632,9 @@ async def generate_session_title(
                 title = title[:50]
             
             # 更新会话标题
-            session.title = title
-            session.title_generated_at = datetime.utcnow()
-            session.updated_at = datetime.utcnow()
+            session.title = title  # type: ignore[assignment]
+            session.title_generated_at = datetime.utcnow()  # type: ignore[assignment]
+            session.updated_at = datetime.utcnow()  # type: ignore[assignment]
             db.commit()
             db.refresh(session)
             
@@ -713,7 +716,7 @@ async def delete_session(
             )
         
         # 软删除会话
-        session.deleted_at = datetime.utcnow()
+        session.deleted_at = datetime.utcnow()  # type: ignore[assignment]
         
         # 删除该会话的所有消息（物理删除，因为消息通常不需要恢复）
         # 注意：虽然 Message 表有 CASCADE，但软删除不会触发，需要手动删除

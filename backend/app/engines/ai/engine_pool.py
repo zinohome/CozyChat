@@ -5,7 +5,7 @@ LLM引擎池
 """
 
 # 标准库
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 import threading
 
 # 本地库
@@ -129,11 +129,11 @@ class LLMEnginePool:
             self._engines.clear()
             logger.info("LLMEnginePool cleared")
     
-    def get_pool_stats(self) -> Dict[str, any]:
+    def get_pool_stats(self) -> Dict[str, Any]:
         """获取池统计信息
         
         Returns:
-            Dict[str, any]: 池统计信息
+            Dict[str, Any]: 池统计信息
         """
         with self._pool_lock:
             return {

@@ -54,15 +54,15 @@ class UserStatsManager:
             
             return {
                 "user_id": str(user.id),
-                "username": user.username,
-                "email": user.email,
-                "display_name": user.display_name,
-                "role": user.role,
-                "status": user.status,
-                "total_sessions": user.total_sessions,
-                "total_messages": user.total_messages,
-                "total_tokens_used": user.total_tokens_used,
-                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+                "username": str(user.username),  # type: ignore[arg-type]
+                "email": str(user.email),  # type: ignore[arg-type]
+                "display_name": str(user.display_name) if user.display_name else None,  # type: ignore[arg-type]
+                "role": str(user.role),  # type: ignore[arg-type]
+                "status": str(user.status),  # type: ignore[arg-type]
+                "total_sessions": int(user.total_sessions) if user.total_sessions else 0,  # type: ignore[arg-type]
+                "total_messages": int(user.total_messages) if user.total_messages else 0,  # type: ignore[arg-type]
+                "total_tokens_used": int(user.total_tokens_used) if user.total_tokens_used else 0,  # type: ignore[arg-type]
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at is not None else None,  # type: ignore[arg-type]
                 "created_at": user.created_at.isoformat(),
                 "profile": {
                     "interests": profile.interests if profile else [],
@@ -101,21 +101,25 @@ class UserStatsManager:
             
             # 这里应该查询会话和消息表，但表还未创建
             # 简化实现：返回基础统计
+            total_sessions = int(user.total_sessions) if user.total_sessions else 0  # type: ignore[arg-type]
+            total_messages = int(user.total_messages) if user.total_messages else 0  # type: ignore[arg-type]
+            total_tokens_used = int(user.total_tokens_used) if user.total_tokens_used else 0  # type: ignore[arg-type]
+            
             return {
                 "user_id": str(user.id),
                 "period_days": days,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
-                "total_sessions": user.total_sessions,
-                "total_messages": user.total_messages,
-                "total_tokens_used": user.total_tokens_used,
+                "total_sessions": total_sessions,
+                "total_messages": total_messages,
+                "total_tokens_used": total_tokens_used,
                 "avg_messages_per_session": (
-                    user.total_messages / user.total_sessions
-                    if user.total_sessions > 0 else 0
+                    total_messages / total_sessions
+                    if total_sessions > 0 else 0
                 ),
                 "avg_tokens_per_message": (
-                    user.total_tokens_used / user.total_messages
-                    if user.total_messages > 0 else 0
+                    total_tokens_used / total_messages
+                    if total_messages > 0 else 0
                 )
             }
             
@@ -138,8 +142,8 @@ class UserStatsManager:
             # 统计活跃用户（最近30天登录）
             active_users = self.db.query(func.count(User.id)).filter(
                 and_(
-                    User.status == "active",
-                    User.last_login_at >= datetime.utcnow() - timedelta(days=30)
+                    User.status == "active",  # type: ignore[arg-type]
+                    User.last_login_at >= datetime.utcnow() - timedelta(days=30)  # type: ignore[arg-type]
                 )
             ).scalar() or 0
             
@@ -194,13 +198,13 @@ class UserStatsManager:
                 return False
             
             if sessions > 0:
-                user.total_sessions += sessions
+                user.total_sessions = (user.total_sessions or 0) + sessions  # type: ignore[assignment]
             
             if messages > 0:
-                user.total_messages += messages
+                user.total_messages = (user.total_messages or 0) + messages  # type: ignore[assignment]
             
             if tokens > 0:
-                user.total_tokens_used += tokens
+                user.total_tokens_used = (user.total_tokens_used or 0) + tokens  # type: ignore[assignment]
             
             self.db.commit()
             

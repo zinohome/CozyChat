@@ -8,7 +8,7 @@ Qdrant记忆引擎实现
 import threading
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # 第三方库
 from qdrant_client import QdrantClient
@@ -77,10 +77,10 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 f"Global QdrantClient not available, creating new client: {e}",
                 exc_info=False
             )
-            if api_key:
-                self.client = QdrantClient(url=url, api_key=api_key)
-            else:
-                self.client = QdrantClient(url=url)
+        if api_key:
+            self.client = QdrantClient(url=url, api_key=api_key)
+        else:
+            self.client = QdrantClient(url=url)
         
         # 集合配置
         collection_prefix = self.config.get("collection_prefix", "cozychat_")
@@ -551,7 +551,7 @@ class QdrantMemoryEngine(MemoryEngineBase):
         limit: int = 5,
         similarity_threshold: float = 0.7,
         use_hybrid_search: bool = False,
-        keyword_extraction: Optional[callable] = None
+        keyword_extraction: Optional[Callable[[str], List[str]]] = None
     ) -> List[MemorySearchResult]:
         """搜索相关记忆（支持混合检索：向量搜索 + 关键词搜索）
         
@@ -806,7 +806,7 @@ class QdrantMemoryEngine(MemoryEngineBase):
     def _extract_keywords(
         self,
         query: str,
-        keyword_extraction: Optional[callable] = None
+        keyword_extraction: Optional[Callable[[str], List[str]]] = None
     ) -> List[str]:
         """从查询中提取关键词
         

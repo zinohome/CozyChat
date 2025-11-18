@@ -40,12 +40,16 @@ class EvictionPolicy:
         if config is None:
             config_loader = get_config_loader()
             memory_config = config_loader.load_memory_config()
-            importance_config = memory_config.get("importance", {})
-            eviction_config = importance_config.get("eviction", {})
+            importance_config = memory_config.get("importance", {}) if memory_config else {}
+            eviction_config = importance_config.get("eviction", {}) if importance_config else {}
             config = eviction_config
         
-        self.strategy = config.get("strategy", "importance_based")
-        self.importance_based_config = config.get("importance_based", {})
+        if config:
+            self.strategy = config.get("strategy", "importance_based")
+            self.importance_based_config = config.get("importance_based", {})
+        else:
+            self.strategy = "importance_based"
+            self.importance_based_config = {}
         
         logger.info(
             "Eviction policy initialized",

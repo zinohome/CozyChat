@@ -274,6 +274,8 @@ async def update_personality(
         HTTPException: 如果人格不存在或配置无效
     """
     try:
+        # 注意：更新人格需要写入文件，使用PersonalityManager
+        from app.core.personality import PersonalityManager
         manager = PersonalityManager()
         
         # 构建更新字典

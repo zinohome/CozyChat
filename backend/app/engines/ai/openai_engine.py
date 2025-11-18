@@ -64,11 +64,12 @@ class OpenAIEngine(AIEngineBase):
             models_config = engine_config.get("models", [])
             if models_config:
                 # 从配置中提取模型名称列表
-                self._supported_models = [
-                    model_item.get("name") 
+                model_names = [
+                    str(model_item.get("name", ""))
                     for model_item in models_config 
-                    if isinstance(model_item, dict) and "name" in model_item
+                    if isinstance(model_item, dict) and "name" in model_item and model_item.get("name")
                 ]
+                self._supported_models = model_names if model_names else None  # type: ignore[assignment]
         except Exception as e:
             logger.warning(f"Failed to load model list from config: {e}")
             self._supported_models = None
@@ -260,7 +261,7 @@ class OpenAIEngine(AIEngineBase):
                     "has_tools": bool(tools),
                     "tools_count": len(tools) if tools else 0,
                     "first_message_role": messages[0].role if messages else None,
-                    "system_prompt_length": len(messages[0].content) if messages and messages[0].role == "system" else 0,
+                    "system_prompt_length": len(messages[0].content) if messages and messages[0].role == "system" and messages[0].content else 0,  # type: ignore[arg-type]
                     "tool_choice": "auto" if tools else None
                 }
             )

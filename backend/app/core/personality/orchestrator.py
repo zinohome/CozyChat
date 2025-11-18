@@ -210,6 +210,8 @@ class Orchestrator:
             last_user_message = ""
         
         # 使用ContextBuilder构建上下文
+        # 类型检查：此方法只在 context_builder 不为 None 时调用
+        assert self.context_builder is not None, "context_builder should not be None here"
         context_bundle = await self.context_builder.build_context(
             user_id=user_id,
             session_id=session_id,
@@ -421,6 +423,9 @@ class Orchestrator:
                 if last_user_message:
                     # response是ChatResponse对象，需要通过message.content获取内容
                     assistant_content = response.message.content if response.message else ""
+                    # 确保assistant_content是字符串类型
+                    if assistant_content is None:
+                        assistant_content = ""
                     # 不传入importance参数，让系统自动计算重要性分数
                     await self.memory_manager.add_conversation_turn(
                         user_id=user_id,
@@ -482,7 +487,8 @@ class Orchestrator:
         try:
             full_content = ""
             
-            async for chunk in ai_engine.chat_stream(
+            # chat_stream 返回 AsyncIterator[StreamChunk]，可以直接用于 async for
+            async for chunk in ai_engine.chat_stream(  # type: ignore[misc]
                 messages=messages,
                 temperature=personality.ai.temperature,
                 max_tokens=personality.ai.max_tokens,

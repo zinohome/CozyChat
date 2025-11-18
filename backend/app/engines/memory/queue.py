@@ -25,13 +25,14 @@ class MemoryQueue:
     RETRY_QUEUE_KEY = "memory:retry_queue"
     DLQ_KEY = "memory:dlq"  # Dead Letter Queue
     
+    redis_client: aioredis.Redis  # 类型注解：确保不为None
+    
     def __init__(self, redis_client: Optional[aioredis.Redis] = None):
         """初始化队列
         
         Args:
             redis_client: Redis客户端（可选，默认使用全局配置）
         """
-        self.redis_client = redis_client
         if redis_client is None:
             # 如果没有提供redis_client，创建一个新的
             redis_url = settings.redis_url
@@ -54,6 +55,11 @@ class MemoryQueue:
                 decode_responses=True,
                 max_connections=settings.redis_max_connections
             )
+        else:
+            self.redis_client = redis_client
+        
+        # 类型断言：确保redis_client不为None
+        assert self.redis_client is not None
         
         logger.info(
             "Memory queue initialized",

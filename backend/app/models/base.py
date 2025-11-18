@@ -6,7 +6,7 @@
 
 # 标准库
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Generator
 
 # 第三方库
 from sqlalchemy import Column, DateTime, Integer, create_engine
@@ -94,12 +94,9 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-def get_sync_db() -> Session:
+def get_sync_db() -> Generator[Session, None, None]:
     """获取同步数据库会话（用于依赖注入）
     
-    Returns:
-        Session: 数据库会话
-        
     Yields:
         Session: 数据库会话，使用完毕后自动关闭
     """

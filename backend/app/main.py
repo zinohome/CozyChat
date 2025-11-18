@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 # 本地库
 from app import __version__
@@ -161,9 +163,29 @@ app = FastAPI(
 if settings.is_development:
     cors_origins = ["*"]
     cors_allow_credentials = False
+    logger.info(
+        "CORS configured for development: allow all origins",
+        extra={"cors_origins": ["*"], "allow_credentials": False}
+    )
 else:
+    # 生产环境：使用配置的 origins
     cors_origins = settings.cors_origins
-    cors_allow_credentials = True
+    
+    # 微信浏览器特殊处理：如果配置为空或未包含微信域名，添加警告
+    if not cors_origins or len(cors_origins) == 0:
+        logger.warning(
+            "CORS_ORIGINS 未配置或为空，微信浏览器可能无法访问。"
+            "建议在 .env 中配置 CORS_ORIGINS，包含前端域名。"
+        )
+        # 如果未配置，使用通配符（不推荐，但可以临时解决）
+        cors_origins = ["*"]
+        cors_allow_credentials = False
+    else:
+        cors_allow_credentials = True
+        logger.info(
+            f"CORS origins configured: {cors_origins}",
+            extra={"cors_origins": cors_origins, "allow_credentials": cors_allow_credentials}
+        )
 
 app.add_middleware(
     CORSMiddleware,
@@ -178,10 +200,129 @@ app.add_middleware(
         "Authorization",
         "X-Requested-With",
         "X-CSRFToken",
+        "X-OpenAI-Agents-SDK",  # WebRTC 需要
     ],
     expose_headers=["*"],
     max_age=3600,  # 预检请求缓存时间
 )
+
+# ===== 添加CORS诊断和修复中间件（用于调试微信浏览器问题） =====
+class CORSDiagnosticMiddleware(BaseHTTPMiddleware):
+    """CORS诊断和修复中间件，用于调试和修复微信浏览器问题
+    
+    微信浏览器有时不发送 Origin 头，但会发送 Referer 头。
+    当 Origin 为 None 时，从 Referer 中提取 origin 并添加到请求头中。
+    """
+    
+    async def dispatch(self, request: Request, call_next):
+        # 检查是否是微信浏览器
+        user_agent = request.headers.get("user-agent", "")
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+        is_wechat = "MicroMessenger" in user_agent
+        
+        # 微信浏览器特殊处理：如果 origin 为 None 但有 referer，从 referer 提取 origin
+        if is_wechat and not origin and referer:
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(referer)
+                # 提取 scheme://host:port
+                extracted_origin = f"{parsed.scheme}://{parsed.netloc}"
+                # 将提取的 origin 添加到请求头中（FastAPI 的 Request 是只读的，但我们可以创建一个新的请求）
+                # 注意：这里我们修改请求的 scope，但更好的方法是在响应时处理
+                logger.info(
+                    "WeChat browser: extracted origin from referer",
+                    extra={
+                        "referer": referer,
+                        "extracted_origin": extracted_origin
+                    }
+                )
+                # 由于 Request 是只读的，我们在响应时处理
+                origin = extracted_origin
+            except Exception as e:
+                logger.warning(f"Failed to extract origin from referer: {e}")
+        
+        # 记录微信浏览器的请求
+        if is_wechat:
+            logger.info(
+                "WeChat browser request detected",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "origin": origin,
+                    "referer": referer,
+                    "user_agent": user_agent[:100],  # 只记录前100个字符
+                }
+            )
+        
+        # 记录OPTIONS预检请求
+        if request.method == "OPTIONS":
+            logger.debug(
+                "CORS preflight request",
+                extra={
+                    "origin": origin,
+                    "access_control_request_method": request.headers.get("access-control-request-method"),
+                    "access_control_request_headers": request.headers.get("access-control-request-headers"),
+                    "is_wechat": is_wechat
+                }
+            )
+        
+        response = await call_next(request)
+        
+        # 微信浏览器特殊处理：如果 origin 为 None 但响应中没有 CORS 头，手动添加
+        if is_wechat:
+            # 检查响应中是否有 CORS 头
+            has_cors_origin = "access-control-allow-origin" in response.headers
+            
+            # 如果没有 CORS 头，手动添加（开发环境允许所有来源）
+            if not has_cors_origin:
+                if settings.is_development:
+                    response.headers["access-control-allow-origin"] = "*"
+                    response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                    response.headers["access-control-allow-headers"] = "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRFToken, X-OpenAI-Agents-SDK"
+                    logger.debug(
+                        "WeChat browser: manually added CORS headers (development mode)",
+                        extra={
+                            "path": request.url.path,
+                            "method": request.method
+                        }
+                    )
+                elif origin:
+                    # 生产环境：如果从 referer 提取了 origin，使用它
+                    response.headers["access-control-allow-origin"] = origin
+                    response.headers["access-control-allow-methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                    response.headers["access-control-allow-headers"] = "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRFToken, X-OpenAI-Agents-SDK"
+                    logger.debug(
+                        "WeChat browser: manually added CORS headers (production mode)",
+                        extra={
+                            "origin": origin,
+                            "path": request.url.path,
+                            "method": request.method
+                        }
+                    )
+        
+        # 记录CORS响应头
+        if is_wechat:
+            cors_headers = {
+                "access-control-allow-origin": response.headers.get("access-control-allow-origin"),
+                "access-control-allow-credentials": response.headers.get("access-control-allow-credentials"),
+                "access-control-allow-methods": response.headers.get("access-control-allow-methods"),
+                "access-control-allow-headers": response.headers.get("access-control-allow-headers"),
+            }
+            logger.debug(
+                "CORS response headers for WeChat browser",
+                extra={
+                    "origin": origin or "None (extracted from referer)",
+                    "cors_headers": cors_headers,
+                    "status_code": response.status_code,
+                    "path": request.url.path
+                }
+            )
+        
+        return response
+
+# 在CORS中间件之后添加诊断中间件
+app.add_middleware(CORSDiagnosticMiddleware)
 
 # ===== 配置性能监控中间件 =====
 app.add_middleware(PerformanceMiddleware)

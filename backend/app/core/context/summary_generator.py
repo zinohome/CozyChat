@@ -194,13 +194,14 @@ class SummaryGenerator:
             
             if last_summary:
                 # 计算未摘要的消息数
-                unsummarized_count = total_messages - last_summary.end_message_index
+                end_index = int(last_summary.end_message_index) if last_summary.end_message_index is not None else 0  # type: ignore[arg-type]
+                unsummarized_count = total_messages - end_index
             else:
                 # 没有任何摘要
                 unsummarized_count = total_messages
             
             # 判断是否达到阈值
-            return unsummarized_count >= settings.context_summary_trigger_count
+            return bool(unsummarized_count >= settings.context_summary_trigger_count)  # type: ignore[comparison-overlap]
             
         except Exception as e:
             logger.error(f"Failed to check summary trigger: {e}", exc_info=True)
@@ -272,8 +273,8 @@ class SummaryGenerator:
             result = self.db.execute(stmt)
             all_messages = result.scalars().all()
             
-            # 切片获取指定范围
-            return all_messages[start_index:end_index + 1]
+            # 切片获取指定范围，转换为List
+            return list(all_messages[start_index:end_index + 1])
             
         except Exception as e:
             logger.error(f"Failed to get messages: {e}", exc_info=True)
@@ -293,7 +294,8 @@ class SummaryGenerator:
         """
         lines = []
         for msg in messages:
-            role = "用户" if msg.role == "user" else "助手"
+            msg_role = str(msg.role)  # type: ignore[arg-type]
+            role = "用户" if msg_role == "user" else "助手"
             lines.append(f"{role}: {msg.content}")
         
         return "\n".join(lines)
@@ -321,16 +323,22 @@ class SummaryGenerator:
             )
             
             # 调用LLM
-            messages = [{"role": "user", "content": prompt}]
-            response = await engine.chat_completion(
+            from app.engines.ai import ChatMessage
+            messages = [ChatMessage(role="user", content=prompt)]
+            response = await engine.chat(  # type: ignore[attr-defined]
                 messages=messages,
                 temperature=settings.context_summary_temperature,
-                max_tokens=300,  # 限制摘要长度
-                stream=False
+                max_tokens=300  # 限制摘要长度
             )
             
-            summary_text = response.get("content", "").strip()
-            return summary_text
+            # 提取响应内容
+            if hasattr(response, 'message') and hasattr(response.message, 'content'):
+                summary_text = response.message.content or ""
+            elif isinstance(response, dict):
+                summary_text = response.get("content", "")
+            else:
+                summary_text = str(response)
+            return summary_text.strip()
             
         except Exception as e:
             logger.error(f"Failed to call LLM for summary: {e}", exc_info=True)
@@ -372,7 +380,7 @@ class SummaryGenerator:
                         id=str(uuid4()),
                         user_id=user_id,
                         session_id=session_id,
-                        memory_type=MemoryType.MIXED,  # 使用混合类型
+                        memory_type=MemoryType.ASSISTANT,  # 摘要属于AI生成的内容
                         content=content,
                         importance=0.8,  # 摘要很重要
                         metadata={

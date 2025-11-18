@@ -79,7 +79,7 @@ class UserProfileManager:
             
             # 更新字段
             if interests is not None:
-                profile.interests = interests
+                profile.interests = interests  # type: ignore[assignment]
             
             if habits is not None:
                 profile.update_habits(habits)
@@ -119,12 +119,12 @@ class UserProfileManager:
                 profile = UserProfile(user_id=user_id)
                 # 确保interests字段被初始化
                 if profile.interests is None:
-                    profile.interests = []
+                    profile.interests = []  # type: ignore[assignment]
                 self.db.add(profile)
             
             # 确保interests字段存在
             if profile.interests is None:
-                profile.interests = []
+                profile.interests = []  # type: ignore[assignment]
             
             if interest not in profile.interests:
                 profile.interests.append(interest)

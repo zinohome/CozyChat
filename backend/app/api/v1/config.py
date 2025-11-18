@@ -117,7 +117,6 @@ class RealtimeTokenRequest(BaseModel):
 async def get_realtime_token(
     request: Request,
     data: Optional[RealtimeTokenRequest] = Body(None),
-    response: Response = None,
     user: User = Depends(get_current_active_user)
 ) -> RealtimeTokenResponse:
     """
@@ -220,7 +219,7 @@ async def get_realtime_token(
                         logger.error(
                             f"❌ Failed to load personality voice config: {e}",
                             extra={
-                                "personality_id": data.personality_id if request else None,
+                                "personality_id": data.personality_id if data else None,
                                 "error": str(e),
                                 "error_type": type(e).__name__
                             },
@@ -238,7 +237,7 @@ async def get_realtime_token(
                         f"Using global voice '{voice}' for ephemeral token",
                         extra={
                             "user_id": str(user.id),
-                            "personality_id": data.personality_id if request else None,
+                            "personality_id": data.personality_id if data else None,
                             "voice": voice
                         }
                     )
@@ -247,7 +246,7 @@ async def get_realtime_token(
                     # New API 请求格式：使用 session 对象（与 OpenAI 官方格式相同）
                     # 关键：必须在创建 ephemeral token 时配置转录功能和 voice
                     # 参考 curl 成功的响应格式，正确的结构是：session.audio.input.transcription 和 session.audio.output.voice
-                    response = await client.post(
+                    http_response = await client.post(
                         client_secrets_url,
                         headers={
                             'Authorization': f'Bearer {settings.openai_api_key}',
@@ -273,17 +272,17 @@ async def get_realtime_token(
                         }
                     )
                     
-                    if response.status_code == 200:
-                        data = response.json()
+                    if http_response.status_code == 200:
+                        new_api_response_data: Dict[str, Any] = http_response.json()
                         
                         # ✅ 调试：记录响应数据（不包含敏感信息）
                         logger.debug(
                             "Ephemeral token response received",
                             extra={
                                 "user_id": str(user.id),
-                                "has_value": 'value' in data,
-                                "has_token": 'token' in data,
-                                "has_session": 'session' in data,
+                                "has_value": 'value' in new_api_response_data,
+                                "has_token": 'token' in new_api_response_data,
+                                "has_session": 'session' in new_api_response_data,
                                 "voice_used": voice,  # 记录使用的 voice
                             }
                         )
@@ -291,11 +290,11 @@ async def get_realtime_token(
                         # New API 响应格式：可能包含 value（顶层）、token、ephemeral_token 或 client_secret.value
                         # 根据日志，响应格式是：{'value': 'ek_...', 'expires_at': ..., 'session': {...}}
                         client_secret = (
-                            data.get('value', '') or  # 顶层 value（New API 格式）
-                            data.get('token', '') or
-                            data.get('ephemeral_token', '') or
-                            data.get('client_secret', {}).get('value', '') or
-                            data.get('session', {}).get('client_secret', {}).get('value', '')
+                            new_api_response_data.get('value', '') or  # 顶层 value（New API 格式）
+                            new_api_response_data.get('token', '') or
+                            new_api_response_data.get('ephemeral_token', '') or
+                            new_api_response_data.get('client_secret', {}).get('value', '') or
+                            new_api_response_data.get('session', {}).get('client_secret', {}).get('value', '')
                         )
                         
                         if client_secret:
@@ -303,7 +302,7 @@ async def get_realtime_token(
                                 f"✅ Successfully generated ephemeral client key (New API) with voice '{voice}'",
                                 extra={
                                     "user_id": str(user.id),
-                                    "personality_id": data.personality_id if request else None,
+                                    "personality_id": data.personality_id if data else None,
                                     "voice": voice
                                 }
                             )
@@ -312,16 +311,16 @@ async def get_realtime_token(
                                 "New API response missing token",
                                 extra={
                                     "user_id": str(user.id),
-                                    "response": data
+                                    "response": new_api_response_data
                                 }
                             )
                     else:
                         logger.warning(
-                            f"Failed to generate ephemeral client key (New API): {response.status_code}",
+                            f"Failed to generate ephemeral client key (New API): {http_response.status_code}",
                             extra={
                                 "user_id": str(user.id),
                                 "client_secrets_url": client_secrets_url,
-                                "error": response.text[:200]
+                                "error": http_response.text[:200]
                             }
                         )
             except Exception as e:
@@ -347,7 +346,7 @@ async def get_realtime_token(
             voice = 'shimmer'  # 默认值
             
             # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
-            if request and data.personality_id:
+            if data and data.personality_id:
                 try:
                     personality_registry = get_personality_registry()
                     personality = personality_registry.get_personality(data.personality_id)
@@ -372,16 +371,16 @@ async def get_realtime_token(
                 except Exception as e:
                     logger.warning(
                         f"Failed to load personality voice config: {e}",
-                        extra={"personality_id": data.personality_id if request else None}
+                        extra={"personality_id": data.personality_id if data else None}
                     )
             
             # 如果没有 personality 配置，使用全局配置
-            if not request or not data.personality_id or voice == 'shimmer':
+            if not data or not data.personality_id or voice == 'shimmer':
                 realtime_config = config_loader.load_voice_config('realtime')
                 openai_config = realtime_config.get('openai', {})
                 global_voice = openai_config.get('voice', 'shimmer')
                 # 只有在没有 personality 配置时才使用全局配置
-                if not request or not data.personality_id or voice == 'shimmer':
+                if not data or not data.personality_id or voice == 'shimmer':
                     voice = global_voice
                     logger.info(
                         f"Using global voice '{voice}' for ephemeral token (OpenAI)",
@@ -391,7 +390,7 @@ async def get_realtime_token(
             client_secrets_url = "https://api.openai.com/v1/realtime/client_secrets"
             
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
+                http_response = await client.post(
                     client_secrets_url,
                     headers={
                         'Authorization': f'Bearer {settings.openai_api_key}',
@@ -416,24 +415,24 @@ async def get_realtime_token(
                     }
                 )
                 
-                if response.status_code != 200:
-                    error_text = response.text[:500]
+                if http_response.status_code != 200:
+                    error_text = http_response.text[:500]
                     logger.error(
-                        f"Failed to generate ephemeral client key: {response.status_code} - {error_text}",
+                        f"Failed to generate ephemeral client key: {http_response.status_code} - {error_text}",
                         extra={"user_id": str(user.id)}
                     )
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Failed to generate ephemeral client key: {response.status_code} - {error_text}"
+                        detail=f"Failed to generate ephemeral client key: {http_response.status_code} - {error_text}"
                     )
                 
-                data = response.json()
-                client_secret = data.get('client_secret', {}).get('value', '')
+                response_data: Dict[str, Any] = http_response.json()
+                client_secret = response_data.get('client_secret', {}).get('value', '')
                 
                 if not client_secret:
                     logger.error(
                         "Ephemeral client key response missing 'client_secret.value'",
-                        extra={"user_id": str(user.id), "response": data}
+                        extra={"user_id": str(user.id), "response": response_data}
                     )
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,

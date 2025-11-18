@@ -138,9 +138,10 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     
     # 计算重试时间
     retry_after = None
-    if hasattr(exc, 'reset_time') and exc.reset_time:
+    reset_time = getattr(exc, 'reset_time', None)
+    if reset_time is not None:
         import time
-        retry_after = max(0, int(exc.reset_time - time.time()))
+        retry_after = max(0, int(reset_time - time.time()))
     
     raise HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,

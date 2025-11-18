@@ -12,7 +12,7 @@ const createTestQueryClient = () =>
     defaultOptions: {
       queries: {
         retry: false,
-        cacheTime: 0,
+        gcTime: 0, // 原 cacheTime，React Query v5 已重命名
       },
       mutations: {
         retry: false,

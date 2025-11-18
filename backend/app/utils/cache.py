@@ -239,7 +239,7 @@ class CacheManager:
     def get_or_set(
         self,
         key: str,
-        callable_func: callable,
+        callable_func: Callable[..., Any],
         ttl: Optional[Union[int, timedelta]] = None,
         *args,
         **kwargs
@@ -525,7 +525,7 @@ multi_level_cache = MultiLevelCache(
 def cached(
     key_prefix: str,
     ttl: Optional[Union[int, timedelta]] = None,
-    key_func: Optional[callable] = None
+    key_func: Optional[Callable[..., str]] = None
 ):
     """缓存装饰器
     
