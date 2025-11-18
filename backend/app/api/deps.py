@@ -243,3 +243,55 @@ def get_qdrant_client():
     """
     from app.engines.memory.qdrant_client_manager import get_qdrant_client
     return get_qdrant_client()
+
+
+# ===== 智能上下文相关依赖 =====
+
+async def get_context_builder(
+    db: Session = Depends(get_db)
+):
+    """获取上下文构建器
+    
+    Returns:
+        ContextBuilder: 上下文构建器实例
+    """
+    from app.core.context.builder import ContextBuilder
+    from app.engines.memory.manager import MemoryManager
+    from app.engines.ai.engine_pool import get_llm_engine_pool
+    
+    memory_manager = MemoryManager()
+    engine_pool = get_llm_engine_pool()
+    
+    return ContextBuilder(
+        memory_manager=memory_manager,
+        engine_pool=engine_pool,
+        db=db
+    )
+
+
+async def get_summary_generator(
+    db: Session = Depends(get_db)
+):
+    """获取摘要生成器
+    
+    Returns:
+        SummaryGenerator: 摘要生成器实例
+    """
+    from app.core.context.summary_generator import SummaryGenerator
+    from app.engines.ai.engine_pool import get_llm_engine_pool
+    from app.engines.memory.qdrant_engine import QdrantMemoryEngine
+    from app.utils.logger import logger
+    
+    engine_pool = get_llm_engine_pool()
+    
+    try:
+        memory_engine = QdrantMemoryEngine()
+    except Exception as e:
+        logger.warning(f"Failed to initialize memory engine: {e}")
+        memory_engine = None
+    
+    return SummaryGenerator(
+        engine_pool=engine_pool,
+        db=db,
+        memory_engine=memory_engine
+    )

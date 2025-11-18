@@ -73,6 +73,10 @@ class QdrantMemoryEngine(MemoryEngineBase):
         collection_prefix = self.config.get("collection_prefix", "cozychat_")
         self.user_collection_name = f"{collection_prefix}user_memories"
         self.assistant_collection_name = f"{collection_prefix}assistant_memories"
+        self.mixed_collection_name = f"{collection_prefix}mixed_memories"
+        
+        # 存储模式配置 (hybrid/dual/unified)
+        self.storage_mode = settings.memory_storage_mode
         
         # 向量配置
         embedding_config = self.config.get("embedding", {})
@@ -87,6 +91,8 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 "url": url,
                 "user_collection": self.user_collection_name,
                 "assistant_collection": self.assistant_collection_name,
+                "mixed_collection": self.mixed_collection_name,
+                "storage_mode": self.storage_mode,
                 "embedding_dimension": self.embedding_dimension
             }
         )
@@ -232,6 +238,45 @@ class QdrantMemoryEngine(MemoryEngineBase):
                     f"Created collection: {self.assistant_collection_name} "
                     f"(dimension: {self.embedding_dimension})"
                 )
+            
+            # 检查混合记忆集合（仅在hybrid模式下创建）
+            if self.storage_mode == "hybrid":
+                if self.mixed_collection_name in collection_info:
+                    # 检查维度是否匹配
+                    collection = self.client.get_collection(self.mixed_collection_name)
+                    vectors_config = collection.config.params.vectors
+                    # 处理不同的向量配置类型
+                    if hasattr(vectors_config, 'size'):
+                        current_dim = vectors_config.size  # type: ignore
+                    elif isinstance(vectors_config, dict):
+                        # 如果是字典类型，取第一个向量的size
+                        first_vector = next(iter(vectors_config.values())) if vectors_config else None
+                        current_dim = first_vector.size if first_vector and hasattr(first_vector, 'size') else None  # type: ignore
+                    else:
+                        current_dim = None
+                    
+                    if current_dim is None or current_dim != self.embedding_dimension:
+                        if current_dim is not None:
+                            logger.warning(
+                                f"Collection {self.mixed_collection_name} dimension mismatch: "
+                                f"expected {self.embedding_dimension}, got {current_dim}. "
+                                "Deleting and recreating..."
+                            )
+                        self.client.delete_collection(self.mixed_collection_name)
+                        collection_info.pop(self.mixed_collection_name, None)
+                
+                if self.mixed_collection_name not in collection_info:
+                    self.client.create_collection(
+                        collection_name=self.mixed_collection_name,
+                        vectors_config=VectorParams(
+                            size=self.embedding_dimension,
+                            distance=Distance.COSINE
+                        )
+                    )
+                    logger.info(
+                        f"Created mixed collection: {self.mixed_collection_name} "
+                        f"(dimension: {self.embedding_dimension})"
+                    )
                 
         except Exception as e:
             logger.error(f"Failed to ensure collections: {e}", exc_info=True)
@@ -348,21 +393,140 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 payload=payload
             )
             
-            # 添加到集合
+            # 写入原始collection (user/assistant)
             self.client.upsert(
                 collection_name=collection_name,
                 points=[point]
             )
             
-            logger.debug(
-                f"Added {memory.memory_type.value} memory",
-                extra={"memory_id": memory.id, "user_id": memory.user_id}
-            )
+            # 在hybrid模式下，同时写入mixed collection
+            if self.storage_mode == "hybrid":
+                self.client.upsert(
+                    collection_name=self.mixed_collection_name,
+                    points=[point]
+                )
+                logger.debug(
+                    f"Added {memory.memory_type.value} memory to both {collection_name} and {self.mixed_collection_name}",
+                    extra={"memory_id": memory.id, "user_id": memory.user_id}
+                )
+            else:
+                logger.debug(
+                    f"Added {memory.memory_type.value} memory to {collection_name}",
+                    extra={"memory_id": memory.id, "user_id": memory.user_id}
+                )
             
             return memory.id
             
         except Exception as e:
             logger.error(f"Failed to add memory: {e}", exc_info=True)
+            raise
+    
+    async def batch_add_memories(self, memories: List[Memory]) -> List[str]:
+        """批量添加记忆到向量数据库
+        
+        使用Qdrant的批量接口，提升写入性能。
+        
+        Args:
+            memories: 记忆对象列表
+            
+        Returns:
+            List[str]: 成功写入的记忆ID列表
+        """
+        if not memories:
+            return []
+        
+        try:
+            # 按collection分组
+            collections_map: Dict[str, List[Memory]] = {}
+            
+            for memory in memories:
+                collection_name = self._get_collection_name(memory.memory_type)
+                if collection_name not in collections_map:
+                    collections_map[collection_name] = []
+                collections_map[collection_name].append(memory)
+            
+            success_ids = []
+            
+            # 批量写入每个collection
+            for collection_name, collection_memories in collections_map.items():
+                points = []
+                
+                for memory in collection_memories:
+                    # 准备payload
+                    payload = {
+                        "user_id": memory.user_id,
+                        "session_id": memory.session_id,
+                        "content": memory.content,
+                        "importance": memory.importance,
+                        "created_at": memory.created_at.timestamp(),
+                        "memory_type": memory.memory_type.value,
+                        **memory.metadata
+                    }
+                    
+                    if memory.expires_at:
+                        payload["expires_at"] = memory.expires_at.timestamp()
+                    
+                    # 生成embedding（如果没有）
+                    if not memory.embedding:
+                        embedding_model = self.config.get("embedding", {}).get("model", "all-MiniLM-L6-v2")
+                        model = self._get_embedding_model(embedding_model)
+                        embedding = model.encode(memory.content, convert_to_numpy=False, convert_to_tensor=True)
+                        
+                        if hasattr(embedding, 'cpu') and callable(getattr(embedding, 'cpu', None)):
+                            embedding_raw = embedding.cpu().tolist()  # type: ignore
+                        elif hasattr(embedding, 'tolist') and callable(getattr(embedding, 'tolist', None)):
+                            embedding_raw = embedding.tolist()  # type: ignore
+                        elif isinstance(embedding, list):
+                            embedding_raw = embedding
+                        else:
+                            embedding_raw = list(embedding)
+                        
+                        memory.embedding = [float(x) for x in embedding_raw]
+                    
+                    embedding_vector: List[float] = [float(x) for x in memory.embedding]
+                    
+                    # 创建point
+                    qdrant_id = self._convert_to_qdrant_id(memory.id)
+                    point = PointStruct(
+                        id=qdrant_id,
+                        vector=embedding_vector,
+                        payload=payload
+                    )
+                    points.append(point)
+                
+                # 批量upsert到原collection
+                self.client.upsert(
+                    collection_name=collection_name,
+                    points=points
+                )
+                
+                # 在hybrid模式下，同时写入mixed collection
+                if self.storage_mode == "hybrid":
+                    self.client.upsert(
+                        collection_name=self.mixed_collection_name,
+                        points=points
+                    )
+                
+                success_ids.extend([mem.id for mem in collection_memories])
+                
+                logger.debug(
+                    f"Batch added {len(points)} memories to {collection_name}",
+                    extra={
+                        "collection": collection_name,
+                        "count": len(points),
+                        "hybrid_mode": self.storage_mode == "hybrid"
+                    }
+                )
+            
+            logger.info(
+                f"Batch added {len(success_ids)} memories",
+                extra={"total_count": len(success_ids)}
+            )
+            
+            return success_ids
+            
+        except Exception as e:
+            logger.error(f"Failed to batch add memories: {e}", exc_info=True)
             raise
     
     async def search_memories(
@@ -412,13 +576,22 @@ class QdrantMemoryEngine(MemoryEngineBase):
             
             # 确定要搜索的集合
             collections_to_search = []
-            if memory_type:
+            
+            # 在hybrid模式下，优先使用mixed collection进行搜索
+            if self.storage_mode == "hybrid" and not memory_type:
+                # 如果没有指定memory_type，直接搜索mixed collection
+                collections_to_search.append((
+                    self.mixed_collection_name,
+                    None  # mixed collection包含所有类型
+                ))
+            elif memory_type:
+                # 指定了memory_type，搜索对应的collection
                 collections_to_search.append((
                     self._get_collection_name(memory_type),
                     memory_type
                 ))
             else:
-                # 搜索两种类型的记忆
+                # dual/unified模式，或需要分别搜索
                 collections_to_search.append((
                     self.user_collection_name,
                     MemoryType.USER
@@ -471,10 +644,23 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         payload = scored_point.payload
                         similarity = scored_point.score
                         
+                        # 检查 payload 是否存在
+                        if not payload:
+                            logger.warning(f"Scored point {scored_point.id} has no payload, skipping")
+                            continue
+                        
+                        # 确定memory_type：从payload获取（mixed collection）或使用指定的类型
+                        if mem_type is None:
+                            # 从payload中获取memory_type（mixed collection情况）
+                            memory_type_str = payload.get("memory_type", "user")
+                            actual_mem_type = MemoryType(memory_type_str) if memory_type_str else MemoryType.USER
+                        else:
+                            actual_mem_type = mem_type
+                        
                         # 记录所有原始结果（用于调试）
                         all_raw_results.append({
                             "collection": collection_name,
-                            "memory_type": mem_type.value,
+                            "memory_type": actual_mem_type.value,
                             "similarity": similarity,
                             "content": str(payload.get("content", ""))[:50] if payload else "N/A",
                             "session_id": str(payload.get("session_id", "")) if payload else "N/A"
@@ -482,11 +668,6 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         
                         # 应用相似度阈值
                         if similarity < similarity_threshold:
-                            continue
-                        
-                        # 检查 payload 是否存在
-                        if not payload:
-                            logger.warning(f"Scored point {scored_point.id} has no payload, skipping")
                             continue
                         
                         # 将Qdrant返回的UUID格式ID转换回mem-{hex}格式
@@ -497,7 +678,7 @@ class QdrantMemoryEngine(MemoryEngineBase):
                             id=original_id,
                             user_id=str(payload.get("user_id", "")),
                             session_id=str(payload.get("session_id", "")),
-                            memory_type=mem_type,
+                            memory_type=actual_mem_type,
                             content=str(payload.get("content", "")),
                             importance=float(payload.get("importance", 0.5)),
                             metadata={k: v for k, v in payload.items() 
@@ -513,7 +694,8 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         ))
                         
                 except Exception as e:
-                    logger.warning(f"Search failed for {mem_type.value} memories: {e}")
+                    mem_type_str = mem_type.value if mem_type else "mixed"
+                    logger.warning(f"Search failed for {mem_type_str} memories in {collection_name}: {e}")
                     continue
             
             # 记录所有原始结果（用于调试）

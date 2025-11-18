@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from cachetools import TTLCache
 
 # 本地库
+from app.config.config import settings
 from app.utils.logger import logger
 from app.utils.config_loader import get_config_loader
 from .base import MemoryEngineBase
@@ -24,6 +25,8 @@ from .models import Memory, MemorySearchResult, MemoryType
 from .importance_scorer import ImportanceScorer
 from .deduplicator import MemoryDeduplicator
 from .eviction_policy import EvictionPolicy
+from .queue import MemoryQueue
+from .jobs import MemoryWriteJob, MemoryWriteJobStatus
 
 
 class MemoryManager:
@@ -110,6 +113,17 @@ class MemoryManager:
         self.search_timeout = search_timeout
         self.pending_saves: List[Memory] = []
         
+        # 异步写入配置
+        self.async_write_enabled = settings.memory_async_write
+        self.queue: Optional[MemoryQueue] = None
+        if self.async_write_enabled:
+            try:
+                self.queue = MemoryQueue()
+                logger.info("Memory queue initialized for async writes")
+            except Exception as e:
+                logger.warning(f"Failed to initialize memory queue, falling back to sync writes: {e}")
+                self.async_write_enabled = False
+        
         # 初始化智能覆盖组件
         try:
             importance_config = memory_config.get("importance", {})
@@ -145,6 +159,7 @@ class MemoryManager:
                 "cache_maxsize": cache_maxsize,
                 "cross_session_enabled": self.cross_session_enabled,
                 "smart_coverage_enabled": self.smart_coverage_enabled,
+                "async_write_enabled": self.async_write_enabled,
                 "config_source": "yaml"
             }
         )
@@ -259,14 +274,35 @@ class MemoryManager:
                 # 去重失败，继续正常保存流程
         
         if async_save:
-            # 异步保存：添加到待保存队列
-            self.pending_saves.append(memory)
-            logger.debug(f"Memory queued for async save: {memory.id}")
-            
-            # 触发后台保存
-            asyncio.create_task(self._flush_pending_saves())
-            
-            return memory.id
+            # 检查是否启用了队列异步写入
+            if self.async_write_enabled and self.queue:
+                # 使用队列异步写入
+                job = MemoryWriteJob(
+                    job_id=f"job-{uuid.uuid4().hex[:8]}",
+                    memory_id=memory.id,
+                    user_id=user_id,
+                    session_id=session_id,
+                    role=memory_type.value,
+                    content=content,
+                    importance=importance,
+                    metadata=metadata,
+                    created_at=created_at,
+                    source="chat",
+                    status=MemoryWriteJobStatus.PENDING
+                )
+                
+                await self.queue.push(job)
+                logger.debug(f"Memory job pushed to queue: {memory.id}")
+                return memory.id
+            else:
+                # 异步保存：添加到待保存队列（旧方法）
+                self.pending_saves.append(memory)
+                logger.debug(f"Memory queued for async save: {memory.id}")
+                
+                # 触发后台保存
+                asyncio.create_task(self._flush_pending_saves())
+                
+                return memory.id
         else:
             # 同步保存
             try:
@@ -278,8 +314,27 @@ class MemoryManager:
                 return memory_id
             except asyncio.TimeoutError:
                 logger.warning(f"Memory save timeout, falling back to async")
-                self.pending_saves.append(memory)
-                asyncio.create_task(self._flush_pending_saves())
+                
+                # 如果启用了队列，推入队列
+                if self.async_write_enabled and self.queue:
+                    job = MemoryWriteJob(
+                        job_id=f"job-{uuid.uuid4().hex[:8]}",
+                        memory_id=memory.id,
+                        user_id=user_id,
+                        session_id=session_id,
+                        role=memory_type.value,
+                        content=content,
+                        importance=importance,
+                        metadata=metadata,
+                        created_at=created_at,
+                        source="chat",
+                        status=MemoryWriteJobStatus.PENDING
+                    )
+                    await self.queue.push(job)
+                else:
+                    self.pending_saves.append(memory)
+                    asyncio.create_task(self._flush_pending_saves())
+                
                 return memory.id
             except Exception as e:
                 logger.error(f"Failed to save memory: {e}", exc_info=True)
@@ -531,8 +586,14 @@ class MemoryManager:
         # 如果启用跨Session记忆，则不传递session_id，检索所有Session的记忆
         search_session_id: Optional[str] = None if self.cross_session_enabled else session_id
         
+        # 检查是否为hybrid模式
+        storage_mode = getattr(self.engine, 'storage_mode', 'dual')
+        use_hybrid = (storage_mode == "hybrid" and 
+                     include_user_memory and 
+                     include_ai_memory)
+        
         logger.info(
-            f"Retrieving memories with similarity threshold",
+            f"Retrieving memories",
             extra={
                 "user_id": user_id,
                 "session_id": session_id,
@@ -540,92 +601,137 @@ class MemoryManager:
                 "cross_session_enabled": self.cross_session_enabled,
                 "search_session_id": search_session_id,
                 "similarity_threshold": similarity_threshold,
-                "max_results": max_results
+                "max_results": max_results,
+                "storage_mode": storage_mode,
+                "use_hybrid": use_hybrid
             }
         )
         
-        # 搜索用户记忆
-        if include_user_memory:
+        # 在hybrid模式下，使用单次检索mixed collection，然后分类
+        if use_hybrid:
             try:
-                user_results = await asyncio.wait_for(
+                mixed_results = await asyncio.wait_for(
                     self.search_memories(
                         query=query,
                         user_id=user_id,
                         session_id=search_session_id,
-                        memory_type=MemoryType.USER,
-                        limit=max_results,
+                        memory_type=None,  # 不指定类型，将使用mixed collection
+                        limit=max_results * 2,  # 获取更多结果以便分类
                         similarity_threshold=similarity_threshold,
                         use_cache=True
                     ),
                     timeout=timeout
                 )
-                user_memories = user_results
-                # 记录检索到的记忆内容（用于调试）- 显示所有记忆及其相似度
-                if user_memories:
-                    logger.info(
-                        f"Retrieved user memories (all results with similarity scores)",
-                        extra={
-                            "user_id": user_id,
-                            "query": query,
-                            "count": len(user_memories),
-                            "similarity_threshold": similarity_threshold,
-                            "memories": [
-                                {
-                                    "content": mem.memory.content[:100],
-                                    "similarity": round(mem.similarity, 4),
-                                    "memory_id": mem.memory.id,
-                                    "session_id": mem.memory.session_id
-                                }
-                                for mem in user_memories
-                            ]
-                        }
-                    )
-                else:
-                    logger.warning(
-                        f"No user memories retrieved",
-                        extra={
-                            "user_id": user_id,
-                            "query": query,
-                            "similarity_threshold": similarity_threshold,
-                            "search_session_id": search_session_id
-                        }
-                    )
-            except asyncio.TimeoutError:
-                logger.warning(f"User memory search timeout after {timeout}s")
-            except Exception as e:
-                logger.error(f"Failed to retrieve user memories: {e}", exc_info=True)
-        
-        # 搜索AI记忆
-        if include_ai_memory:
-            try:
-                ai_results = await asyncio.wait_for(
-                    self.search_memories(
-                        query=query,
-                        user_id=user_id,
-                        session_id=search_session_id,
-                        memory_type=MemoryType.ASSISTANT,
-                        limit=max_results,
-                        similarity_threshold=similarity_threshold,
-                        use_cache=True
-                    ),
-                    timeout=timeout
+                
+                # 按memory_type分类结果
+                for result in mixed_results:
+                    if result.memory.memory_type == MemoryType.USER:
+                        if len(user_memories) < max_results:
+                            user_memories.append(result)
+                    elif result.memory.memory_type == MemoryType.ASSISTANT:
+                        if len(ai_memories) < max_results:
+                            ai_memories.append(result)
+                
+                # 记录混合检索结果
+                logger.info(
+                    f"Retrieved memories from mixed collection",
+                    extra={
+                        "user_id": user_id,
+                        "query": query,
+                        "total_results": len(mixed_results),
+                        "user_count": len(user_memories),
+                        "ai_count": len(ai_memories),
+                        "similarity_threshold": similarity_threshold
+                    }
                 )
-                ai_memories = ai_results
-                # 记录检索到的记忆内容（用于调试）
-                if ai_memories:
-                    logger.debug(
-                        f"Retrieved AI memories",
-                        extra={
-                            "user_id": user_id,
-                            "query": query,
-                            "count": len(ai_memories),
-                            "memories": [mem.memory.content[:50] for mem in ai_memories[:3]]  # 只记录前3条的前50个字符
-                        }
-                    )
             except asyncio.TimeoutError:
-                logger.warning(f"AI memory search timeout after {timeout}s")
+                logger.warning(f"Mixed memory search timeout after {timeout}s")
             except Exception as e:
-                logger.error(f"Failed to retrieve AI memories: {e}", exc_info=True)
+                logger.error(f"Failed to retrieve mixed memories: {e}", exc_info=True)
+        else:
+            # dual/unified模式，分别检索user和assistant记忆
+            # 搜索用户记忆
+            if include_user_memory:
+                try:
+                    user_results = await asyncio.wait_for(
+                        self.search_memories(
+                            query=query,
+                            user_id=user_id,
+                            session_id=search_session_id,
+                            memory_type=MemoryType.USER,
+                            limit=max_results,
+                            similarity_threshold=similarity_threshold,
+                            use_cache=True
+                        ),
+                        timeout=timeout
+                    )
+                    user_memories = user_results
+                    # 记录检索到的记忆内容（用于调试）- 显示所有记忆及其相似度
+                    if user_memories:
+                        logger.info(
+                            f"Retrieved user memories (all results with similarity scores)",
+                            extra={
+                                "user_id": user_id,
+                                "query": query,
+                                "count": len(user_memories),
+                                "similarity_threshold": similarity_threshold,
+                                "memories": [
+                                    {
+                                        "content": mem.memory.content[:100],
+                                        "similarity": round(mem.similarity, 4),
+                                        "memory_id": mem.memory.id,
+                                        "session_id": mem.memory.session_id
+                                    }
+                                    for mem in user_memories
+                                ]
+                            }
+                        )
+                    else:
+                        logger.warning(
+                            f"No user memories retrieved",
+                            extra={
+                                "user_id": user_id,
+                                "query": query,
+                                "similarity_threshold": similarity_threshold,
+                                "search_session_id": search_session_id
+                            }
+                        )
+                except asyncio.TimeoutError:
+                    logger.warning(f"User memory search timeout after {timeout}s")
+                except Exception as e:
+                    logger.error(f"Failed to retrieve user memories: {e}", exc_info=True)
+            
+            # 搜索AI记忆
+            if include_ai_memory:
+                try:
+                    ai_results = await asyncio.wait_for(
+                        self.search_memories(
+                            query=query,
+                            user_id=user_id,
+                            session_id=search_session_id,
+                            memory_type=MemoryType.ASSISTANT,
+                            limit=max_results,
+                            similarity_threshold=similarity_threshold,
+                            use_cache=True
+                        ),
+                        timeout=timeout
+                    )
+                    ai_memories = ai_results
+                    # 记录检索到的记忆内容（用于调试）
+                    if ai_memories:
+                        logger.debug(
+                            f"Retrieved AI memories",
+                            extra={
+                                "user_id": user_id,
+                                "query": query,
+                                "count": len(ai_memories),
+                                "memories": [mem.memory.content[:50] for mem in ai_memories[:3]]  # 只记录前3条的前50个字符
+                            }
+                        )
+                except asyncio.TimeoutError:
+                    logger.warning(f"AI memory search timeout after {timeout}s")
+                except Exception as e:
+                    logger.error(f"Failed to retrieve AI memories: {e}", exc_info=True)
         
         return {
             "user_memories": user_memories,

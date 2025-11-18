@@ -220,4 +220,105 @@ class MemoryDeduplicator:
             # 无重复，直接保存
             await engine.add_memory(memory)
             return memory
+    
+    async def batch_deduplicate(
+        self,
+        user_id: str,
+        session_id: Optional[str] = None,
+        memory_type: Optional[MemoryType] = None
+    ) -> dict:
+        """批量去重特定范围的记忆
+        
+        对指定用户/会话/类型的记忆进行批量去重处理。
+        
+        Args:
+            user_id: 用户ID
+            session_id: 会话ID（可选，不指定则跨会话去重）
+            memory_type: 记忆类型（可选，不指定则所有类型）
+            
+        Returns:
+            dict: 去重统计信息
+        """
+        stats = {
+            "total_memories": 0,
+            "duplicates_found": 0,
+            "duplicates_removed": 0,
+            "merge_operations": 0,
+            "errors": 0
+        }
+        
+        try:
+            # 获取所有记忆（通过搜索空查询）
+            all_results = await self.engine.search_memories(
+                query="",
+                user_id=user_id,
+                session_id=session_id,
+                memory_type=memory_type,
+                limit=1000,  # 批量处理大量记忆
+                similarity_threshold=0.0  # 获取所有记忆
+            )
+            
+            memories = [result.memory for result in all_results]
+            stats["total_memories"] = len(memories)
+            
+            if not memories:
+                logger.info("No memories found for deduplication")
+                return stats
+            
+            # 使用集合追踪已处理的记忆
+            processed_ids = set()
+            
+            # 遍历每个记忆，查找并合并重复
+            for memory in memories:
+                if memory.id in processed_ids:
+                    continue
+                
+                # 查找重复
+                duplicates = await self.find_duplicates(memory, limit=20)
+                
+                if duplicates:
+                    stats["duplicates_found"] += len(duplicates)
+                    stats["merge_operations"] += 1
+                    
+                    try:
+                        # 合并记忆
+                        all_to_merge = [memory] + duplicates
+                        merged_memory = await self.merge_memories(all_to_merge)
+                        
+                        # 删除重复的记忆
+                        for dup in duplicates:
+                            try:
+                                await self.engine.delete_memory(dup.id, dup.user_id)
+                                stats["duplicates_removed"] += 1
+                                processed_ids.add(dup.id)
+                            except Exception as e:
+                                logger.warning(f"Failed to delete duplicate memory {dup.id}: {e}")
+                                stats["errors"] += 1
+                        
+                        # 更新合并后的记忆
+                        await self.engine.add_memory(merged_memory)
+                        processed_ids.add(memory.id)
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to merge memories for {memory.id}: {e}", exc_info=True)
+                        stats["errors"] += 1
+                else:
+                    processed_ids.add(memory.id)
+            
+            logger.info(
+                f"Batch deduplication completed",
+                extra={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "memory_type": memory_type.value if memory_type else "all",
+                    "stats": stats
+                }
+            )
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Batch deduplication failed: {e}", exc_info=True)
+            stats["errors"] += 1
+            return stats
 

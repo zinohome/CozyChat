@@ -82,12 +82,44 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize Qdrant client: {e}", exc_info=False)
     
+    # 5. 初始化并启动记忆写入Worker（Phase 3.2: Async Memory Queue）
+    memory_worker = None
+    if settings.memory_async_write:
+        try:
+            from app.engines.memory.queue import MemoryQueue
+            from app.engines.memory.worker import MemoryWorker
+            from app.engines.memory.qdrant_engine import QdrantMemoryEngine
+            
+            # 创建队列和引擎
+            memory_queue = MemoryQueue()
+            memory_engine = QdrantMemoryEngine()
+            
+            # 创建并启动Worker
+            memory_worker = MemoryWorker(
+                queue=memory_queue,
+                engine=memory_engine,
+                batch_size=settings.memory_batch_size
+            )
+            await memory_worker.start()
+            logger.info("Memory worker started")
+        except Exception as e:
+            logger.error(f"Failed to start memory worker: {e}", exc_info=True)
+    
     logger.info("All global components initialized successfully")
     
     yield
     
     # 关闭时执行
     logger.info(f"Shutting down {settings.app_name}")
+    
+    # 停止记忆写入Worker
+    if memory_worker:
+        try:
+            await memory_worker.stop(wait_for_completion=True)
+            logger.info("Memory worker stopped gracefully")
+        except Exception as e:
+            logger.error(f"Error stopping memory worker: {e}", exc_info=True)
+    
     cache_manager.close()
     await close_db()
 

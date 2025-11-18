@@ -221,6 +221,48 @@ class Settings(BaseSettings):
         description="去重检查间隔（秒）"
     )
     
+    # ===== 智能上下文配置 =====
+    context_recent_message_count: int = Field(
+        default=6,
+        alias="CONTEXT_RECENT_MESSAGE_COUNT",
+        description="保留的最近消息数量"
+    )
+    context_max_tokens: int = Field(
+        default=8000,
+        alias="CONTEXT_MAX_TOKENS",
+        description="上下文最大token数"
+    )
+    context_summary_weight: float = Field(
+        default=0.3,
+        alias="CONTEXT_SUMMARY_WEIGHT",
+        description="历史摘要权重"
+    )
+    context_memory_weight: float = Field(
+        default=0.2,
+        alias="CONTEXT_MEMORY_WEIGHT",
+        description="记忆权重"
+    )
+    context_summary_trigger_count: int = Field(
+        default=50,
+        alias="CONTEXT_SUMMARY_TRIGGER_COUNT",
+        description="触发摘要生成的消息数阈值"
+    )
+    context_summary_window_size: int = Field(
+        default=20,
+        alias="CONTEXT_SUMMARY_WINDOW_SIZE",
+        description="每次摘要的消息窗口大小"
+    )
+    context_summary_model: str = Field(
+        default="gpt-4o-mini",
+        alias="CONTEXT_SUMMARY_MODEL",
+        description="摘要生成使用的模型"
+    )
+    context_summary_temperature: float = Field(
+        default=0.3,
+        alias="CONTEXT_SUMMARY_TEMPERATURE",
+        description="摘要生成的温度参数"
+    )
+    
     # ===== 日志配置 =====
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="logs/app.log", alias="LOG_FILE")
