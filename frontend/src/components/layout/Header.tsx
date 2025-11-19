@@ -5,6 +5,7 @@ import {
   LogoutOutlined,
   SettingOutlined,
   MenuOutlined,
+  HeartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/store/slices/authSlice';
 import { useUIStore } from '@/store/slices/uiSlice';
@@ -41,6 +42,12 @@ export const Header: React.FC = () => {
 
   const userMenu = {
     items: [
+      {
+        key: 'health-record',
+        icon: <HeartOutlined />,
+        label: '健康档案',
+        onClick: () => navigate('/health-record'),
+      },
       {
         key: 'profile',
         icon: <UserOutlined />,

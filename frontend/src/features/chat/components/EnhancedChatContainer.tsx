@@ -14,6 +14,7 @@ import { MessageBubble } from './MessageBubble';
 import { VirtualizedMessageList } from './VirtualizedMessageList';
 import { VoiceCallIndicator, VoiceWaveform } from './VoiceCallIndicator';
 import { ChatSessionHeader } from './ChatSessionHeader';
+import { ChatToolbar } from './ChatToolbar';
 import { showError } from '@/utils/errorHandler';
 import { userApi } from '@/services/user';
 import { playTTS } from '@/utils/tts';
@@ -654,6 +655,9 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           />
         )}
       </div>
+
+      {/* 工具栏 */}
+      <ChatToolbar isMobile={isMobile} />
 
       {/* 输入区域 */}
       <div

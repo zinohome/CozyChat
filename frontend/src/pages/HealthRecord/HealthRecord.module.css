@@ -1,0 +1,336 @@
+.container {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.header {
+  padding: 16px 24px;
+  background-color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  height: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  box-sizing: border-box;
+}
+
+.backButton {
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-right: 8px;
+}
+
+.backButton:hover {
+  opacity: 0.8;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-left: 8px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.userCard {
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.avatarContainer {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: visible;
+  border-radius: 8px;
+  background-color: var(--bg-secondary);
+  padding-top: 0;
+}
+
+.avatar {
+  width: 100%;
+  height: auto;
+  max-width: 140px;
+  max-height: 140px;
+  object-fit: contain;
+  object-position: top center;
+  display: block;
+  border-radius: 8px;
+}
+
+.userInfo {
+  width: 100%;
+}
+
+.userName {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.userAge {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.userIdCard {
+  font-size: 14px;
+}
+
+.idLabel {
+  color: var(--text-secondary);
+}
+
+.userDetail {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.tabsCard {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Tab激活状态样式 */
+.tabsCard :global(.ant-tabs-tab-active) {
+  color: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-ink-bar) {
+  background: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-tab:hover) {
+  color: var(--primary-color) !important;
+}
+
+.tabContent {
+  padding: 16px 0;
+}
+
+.placeholderImage {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.recordList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.recordCard {
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+}
+
+.recordCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.recordTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recordValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.recordTime {
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.sectionCard {
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.description {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.infoLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timelineLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timelineContent {
+  color: var(--text-secondary);
+}
+
+.statsContainer {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.statItem {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.statLabel {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.medicationList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.medicationItem {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.medicationItem:last-child {
+  border-bottom: none;
+}
+
+.medicationName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.medicationDetail {
+  color: var(--text-secondary);
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fileItem {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.fileItem:hover {
+  background-color: var(--bg-secondary);
+}
+
+.fileItem:last-child {
+  border-bottom: none;
+}
+
+.fileIcon {
+  font-size: 24px;
+  color: var(--primary-color);
+  margin-right: 12px;
+}
+
+.fileName {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fileDetail {
+  color: var(--text-secondary);
+}
+
+.addButton {
+  margin-top: 16px;
+  height: 44px;
+  font-size: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .content {
+    padding: 12px;
+  }
+
+  .header {
+    padding: 12px 16px;
+  }
+
+  .userCard {
+    padding: 12px;
+  }
+
+  /* 移动端：保持左右布局，不改变头像尺寸 */
+  .userName {
+    font-size: 16px;
+  }
+
+  .userAge {
+    font-size: 13px;
+  }
+
+  .userDetail {
+    font-size: 12px;
+  }
+
+  .statsContainer {
+    flex-wrap: wrap;
+  }
+
+  .statItem {
+    flex: 0 0 50%;
+    margin-bottom: 16px;
+  }
+
+  .statValue {
+    font-size: 24px;
+  }
+}
+

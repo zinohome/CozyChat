@@ -10,6 +10,7 @@ const RegisterPage = lazy(() => import('@/features/auth/pages/RegisterPage'));
 const ChatPage = lazy(() => import('@/features/chat/pages/ChatPage'));
 const SettingsPage = lazy(() => import('@/features/user/pages/SettingsPage'));
 const ProfilePage = lazy(() => import('@/features/user/pages/ProfilePage'));
+const HealthRecordPage = lazy(() => import('@/pages/HealthRecord/HealthRecord'));
 
 /**
  * 加载中组件
@@ -88,6 +89,14 @@ export const AppRouter: React.FC = () => {
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-record"
+            element={
+              <ProtectedRoute>
+                <HealthRecordPage />
               </ProtectedRoute>
             }
           />

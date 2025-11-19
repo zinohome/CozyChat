@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 // 日志级别配置
 // 可选值: 'debug' | 'info' | 'warn' | 'error' | 'none'
@@ -10,6 +11,9 @@ import path from 'path';
 // error: 只显示错误
 // none: 不显示任何日志
 const LOG_LEVEL = 'debug'; // 修改这里来控制日志级别
+
+// ES module 中获取 __dirname 的替代方案
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vitejs.dev/config/
 export default defineConfig({

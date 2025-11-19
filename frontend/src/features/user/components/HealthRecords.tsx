@@ -4,8 +4,7 @@ import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { userApi } from '@/services/user';
 import { showError, showSuccess } from '@/utils/errorHandler';
 import { format, parseISO } from 'date-fns';
-import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 
 const { TextArea } = Input;
 
@@ -14,7 +13,7 @@ const { TextArea } = Input;
  */
 interface HealthRecord {
   id: string;
-  date: Dayjs;
+  date: Date;
   weight?: number;
   blood_pressure?: string;
   heart_rate?: number;
@@ -42,7 +41,7 @@ export const HealthRecords: React.FC = () => {
       setRecords(
         healthData.map((record: any) => ({
           ...record,
-          date: dayjs(record.date || new Date()),
+          date: record.date ? new Date(record.date) : new Date(),
         }))
       );
     } catch (error) {
@@ -64,10 +63,13 @@ export const HealthRecords: React.FC = () => {
       const values = await form.validateFields();
       setSubmitting(true);
 
+      // 转换 dayjs 对象为 Date 对象
+      const dateValue = values.date ? (values.date as Dayjs).toDate() : new Date();
+
       // 构建健康记录数据
       const newRecord: HealthRecord = {
         id: `record-${Date.now()}`,
-        date: values.date,
+        date: dateValue,
         weight: values.weight,
         blood_pressure: values.blood_pressure,
         heart_rate: values.heart_rate,
@@ -82,7 +84,7 @@ export const HealthRecords: React.FC = () => {
       // 更新健康记录
       const updatedRecords = [...currentRecords, {
         ...newRecord,
-        date: newRecord.date.format('YYYY-MM-DD'),
+        date: format(newRecord.date, 'yyyy-MM-dd'),
       }];
 
       // 更新用户偏好（将健康记录存储在habits中）
@@ -131,7 +133,7 @@ export const HealthRecords: React.FC = () => {
             rules={[{ required: true, message: '请选择日期' }]}
             initialValue={dayjs()}
           >
-            <DatePicker style={{ width: '100%' }} />
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
           </Form.Item>
 
           <Space style={{ width: '100%' }} size="middle">
@@ -200,7 +202,7 @@ export const HealthRecords: React.FC = () => {
         ) : (
           <div>
             {records
-              .sort((a, b) => b.date.valueOf() - a.date.valueOf())
+              .sort((a, b) => b.date.getTime() - a.date.getTime())
               .map((record) => (
                 <Card
                   key={record.id}
@@ -220,7 +222,7 @@ export const HealthRecords: React.FC = () => {
                   <div>
                     <div style={{ marginBottom: '8px' }}>
                       <strong>日期：</strong>
-                      {format(record.date.toDate(), 'yyyy-MM-dd')}
+                      {format(record.date, 'yyyy-MM-dd')}
                     </div>
                     <Space size="large">
                       {record.weight && (
