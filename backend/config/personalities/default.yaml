@@ -184,7 +184,10 @@ personality:
   # 用户偏好
   user_preferences:
     default_language: "zh-CN"
-    response_style: "detailed"  # brief / detailed / conversational
+    response_style: "chatgpt_like"  # brief / chatgpt_like / detailed
+    style_preset: "chatgpt_like"
+    output_format: "structured"
+    prefer_list: false
     auto_tts: false
     show_reasoning: false       # 是否显示推理过程
   

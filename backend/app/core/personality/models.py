@@ -169,7 +169,10 @@ class VoiceConfig:
 class UserPreferences:
     """用户偏好配置"""
     default_language: str = "zh-CN"
-    response_style: str = "detailed"  # brief / detailed / conversational
+    response_style: str = "chatgpt_like"  # brief / chatgpt_like / detailed
+    style_preset: str = "chatgpt_like"  # chatgpt_like / elder_friendly / medical_detail
+    output_format: str = "structured"  # structured / list / paragraph
+    prefer_list: bool = False
     auto_tts: bool = False
     show_reasoning: bool = False
 
@@ -358,7 +361,10 @@ class Personality:
         prefs_data = config.get("user_preferences", {})
         user_preferences = UserPreferences(
             default_language=prefs_data.get("default_language", "zh-CN"),
-            response_style=prefs_data.get("response_style", "detailed"),
+            response_style=prefs_data.get("response_style", "chatgpt_like"),
+            style_preset=prefs_data.get("style_preset", "chatgpt_like"),
+            output_format=prefs_data.get("output_format", "structured"),
+            prefer_list=prefs_data.get("prefer_list", False),
             auto_tts=prefs_data.get("auto_tts", False),
             show_reasoning=prefs_data.get("show_reasoning", False)
         )
@@ -445,6 +451,9 @@ class Personality:
             "user_preferences": {
                 "default_language": self.user_preferences.default_language,
                 "response_style": self.user_preferences.response_style,
+                "style_preset": self.user_preferences.style_preset,
+                "output_format": self.user_preferences.output_format,
+                "prefer_list": self.user_preferences.prefer_list,
                 "auto_tts": self.user_preferences.auto_tts,
                 "show_reasoning": self.user_preferences.show_reasoning
             },

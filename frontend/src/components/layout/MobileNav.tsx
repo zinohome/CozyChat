@@ -2,7 +2,6 @@ import React from 'react';
 import { Drawer, Menu } from 'antd';
 import {
   MessageOutlined,
-  UserOutlined,
   SettingOutlined,
   CloseOutlined,
 } from '@ant-design/icons';

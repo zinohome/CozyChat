@@ -68,6 +68,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize ToolManagerFactory: {e}", exc_info=True)
     
+    # 2.1. 发现并注册MCP工具
+    mcp_discovery = None
+    try:
+        from app.engines.tools.mcp.discovery import MCPDiscovery
+        mcp_discovery = MCPDiscovery()
+        mcp_results = await mcp_discovery.discover_from_config()
+        if mcp_results:
+            total_tools = sum(len(tools) for tools in mcp_results.values())
+            logger.info(
+                f"MCP discovery completed: {len(mcp_results)} servers, {total_tools} tools",
+                extra={"servers": list(mcp_results.keys())}
+            )
+        else:
+            logger.info("No MCP tools discovered")
+    except Exception as e:
+        logger.warning(f"Failed to discover MCP tools: {e}", exc_info=False)
+    
     # 3. 初始化LLM引擎池
     try:
         from app.engines.ai.engine_pool import init_llm_engine_pool
@@ -128,6 +145,13 @@ async def lifespan(app: FastAPI):
     
     # 关闭时执行
     logger.info(f"Shutting down {settings.app_name}")
+    
+    # 关闭MCP客户端连接
+    if mcp_discovery:
+        try:
+            await mcp_discovery.close_all()
+        except Exception as e:
+            logger.error(f"Error closing MCP clients: {e}", exc_info=True)
     
     # 停止记忆写入Worker
     if memory_worker:

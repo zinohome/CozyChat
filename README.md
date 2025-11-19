@@ -105,16 +105,27 @@ chmod +x scripts/dev.sh
 ./scripts/dev.sh
 ```
 
-#### 前端应用（Week 10开发）
+#### 前端应用
 
 ```bash
 cd frontend
 
 # 安装依赖
-npm install
+npm install  # 或使用 pnpm install
+
+# 配置前端环境变量（可选）
+# 创建 frontend/.env 文件
+cat > .env << EOF
+# 前端 API 基础 URL（可选，开发环境使用代理）
+VITE_API_BASE_URL=http://localhost:8000
+
+# 高德地图 API Key（用于前端天气工具）
+# 获取方式：https://console.amap.com/dev/key/app
+VITE_AMAP_MAPS_API_KEY=your_amap_api_key_here
+EOF
 
 # 启动开发服务器
-npm run dev
+npm run dev  # 或使用 pnpm dev
 ```
 
 ## 📚 文档

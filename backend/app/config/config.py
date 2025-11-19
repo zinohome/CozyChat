@@ -152,6 +152,12 @@ class Settings(BaseSettings):
     # ===== 天气API配置 =====
     openweather_api_key: Optional[str] = Field(default=None, alias="OPENWEATHER_API_KEY")
     
+    # ===== 高德地图API配置 =====
+    amap_maps_api_key: Optional[str] = Field(default=None, alias="AMAP_MAPS_API_KEY")
+    
+    # ===== Tavily搜索API配置 =====
+    tavily_api_key: Optional[str] = Field(default=None, alias="TAVILY_API_KEY")
+    
     # ===== 会话标题生成配置 =====
     session_title_trigger_length: int = Field(
         default=10,

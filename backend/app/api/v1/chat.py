@@ -6,12 +6,15 @@
 
 # 标准库
 import json
-from typing import AsyncIterator, TYPE_CHECKING
+import uuid
+from dataclasses import asdict
+from typing import AsyncIterator, TYPE_CHECKING, Any, Dict, Optional, Tuple
 from datetime import timezone
 
 if TYPE_CHECKING:
     from app.engines.memory.manager import MemoryManager
     from app.schemas.context import ContextBundle
+    from app.core.personality.models import Personality
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
@@ -53,10 +56,157 @@ from sqlalchemy import and_
 
 router = APIRouter()
 
+PREFERENCE_KEYS = [
+    "default_language",
+    "response_style",
+    "style_preset",
+    "output_format",
+    "prefer_list",
+    "show_reasoning",
+]
+
+DEFAULT_INSTRUCTION_PREFS: Dict[str, Any] = {
+    "default_language": "zh-CN",
+    "response_style": "chatgpt_like",
+    "style_preset": "chatgpt_like",
+    "output_format": "structured",
+    "prefer_list": False,
+    "show_reasoning": False,
+}
+
+
+def _detect_message_hints(content: str) -> Dict[str, Any]:
+    """通过简单的关键词识别消息偏好"""
+    hints: Dict[str, Any] = {}
+    if not content:
+        return hints
+    
+    lowered = content.lower()
+    
+    list_keywords = ["列出", "有哪些", "清单", "步骤", "几个", "列表", "有哪些方法", "有哪些措施", "list", "bullet"]
+    if any(keyword in content for keyword in list_keywords):
+        hints["prefer_list"] = True
+    
+    reason_keywords = ["为什么", "原因", "怎么回事", "为何", "reason"]
+    if any(keyword in content for keyword in reason_keywords):
+        hints["response_style"] = "detailed"
+    
+    action_keywords = ["怎么办", "怎么做", "处理", "建议", "方案", "缓解", "should I", "need to"]
+    if any(keyword in content for keyword in action_keywords):
+        hints["needs_action"] = True
+    
+    return hints
+
+
+def _merge_user_preferences(
+    personality_config: Optional["Personality"],
+    user: Optional[User]
+) -> Dict[str, Any]:
+    """合并人格和用户层的偏好设置"""
+    merged = DEFAULT_INSTRUCTION_PREFS.copy()
+    
+    if personality_config and getattr(personality_config, "user_preferences", None):
+        try:
+            merged.update({
+                key: value
+                for key, value in asdict(personality_config.user_preferences).items()
+                if key in PREFERENCE_KEYS
+            })
+        except TypeError:
+            logger.debug("Failed to convert personality user preferences via asdict", exc_info=True)
+    
+    if user:
+        user_prefs = user.get_preferences()
+        for key in PREFERENCE_KEYS:
+            value = user_prefs.get(key)
+            if value is not None:
+                merged[key] = value
+    
+    return merged
+
+
+def _build_user_message_with_preferences(
+    content: str,
+    preferences: Optional[Dict[str, Any]]
+) -> Tuple[str, Optional[str]]:
+    """根据偏好构建最终的用户消息"""
+    if not content:
+        return content, None
+    
+    prefs = DEFAULT_INSTRUCTION_PREFS.copy()
+    if preferences:
+        prefs.update({k: v for k, v in preferences.items() if v is not None})
+    
+    hints = _detect_message_hints(content)
+    instructions: list[str] = []
+    
+    # 首要原则：避免生硬的开场白
+    instructions.append("直接回答问题，避免'以下是...'、'针对您的...'等生硬开场白。")
+    
+    response_style = hints.get("response_style") or prefs.get("response_style", "chatgpt_like")
+    style_preset = prefs.get("style_preset", "chatgpt_like")
+    output_format = prefs.get("output_format", "structured")
+    prefer_list = hints.get("prefer_list") or prefs.get("prefer_list")
+    language = prefs.get("default_language", "zh-CN")
+    
+    if response_style == "brief":
+        instructions.append("简洁回答（120-150字），直接给出：核心结论+1-2条关键建议+就医提醒。用列表形式，每条都要包含具体方法。")
+    elif response_style == "detailed":
+        instructions.append("详细专业回答（400-600字），完全模仿ChatGPT医疗回答风格：1)用emoji标记不同部分（最常见原因、建议检查、处理方案、补充信息）；2)列出3-5个原因，每个包含机理说明；3)分情况详细说明处理方案；4)主动询问2-3个问题以精确判断。每个列表项格式：粗体要点名+详细说明（1-2句）+具体数值/标准。")
+    else:
+        instructions.append("标准回答（250-350字），严格模仿ChatGPT风格：1)用粗体小标题组织内容（如常见原因、具体建议、就医提醒）；2)每个小标题下3-5条列表，格式为粗体要点+详细说明+具体数值；3)用最符合、次要可能等词排序；4)如信息不足，末尾询问2-3个补充问题。内容要充实专业。")
+    
+    if style_preset == "elder_friendly":
+        instructions.append("语气温和亲切，使用通俗易懂的词语和短句，避免生僻医学术语。但内容要充实，不能因为通俗而减少信息量。")
+    elif style_preset == "medical_detail":
+        instructions.append("保持专业权威的语气，提供医学机理解释，引用权威指南或研究（如《中国高血压防治指南》等），给出具体数值和标准。内容要全面深入。")
+    
+    if output_format == "list":
+        instructions.append("用列表形式组织要点，每条要点要详细说明，不要只写标题。")
+    elif output_format == "paragraph":
+        instructions.append("用段落形式叙述，每段内容要充实，包含具体细节和解释。")
+    else:
+        instructions.append("用Markdown小标题和列表组织内容。每个小标题下要有3-5条具体内容，每条都要详细说明。")
+    
+    if prefer_list:
+        instructions.append("具体措施、原因等用列表呈现，每条列表项要包含：要点+详细说明+具体数值/标准（如适用）。")
+    
+    if hints.get("needs_action"):
+        instructions.append("提供可执行的家庭护理建议（包含具体方法、频率、注意事项）和就医指征（明确何时需要就医）。")
+    
+    if prefs.get("show_reasoning"):
+        instructions.append("末尾简述判断依据（2-3句）。")
+    
+    if isinstance(language, str):
+        if language.startswith("zh"):
+            instructions.append("请使用简体中文回答。")
+        elif language.startswith("en"):
+            instructions.append("Please respond in English.")
+    
+    instruction_text = " ".join(instructions).strip()
+    if not instruction_text:
+        return content, None
+    
+    # 不在用户消息中显示指令，而是通过返回值让调用方处理
+    return content, instruction_text
+
+
+def _override_last_user_message(
+    messages: list[EngineChatMessage],
+    new_content: str
+) -> bool:
+    """替换消息列表中最后一条用户消息的内容"""
+    for msg in reversed(messages):
+        if msg.role == "user":
+            msg.content = new_content
+            return True
+    return False
+
 
 def _convert_context_bundle_to_messages(
     context_bundle: "ContextBundle",
-    current_message_content: str
+    current_message_content: str,
+    user_preferences: Optional[Dict[str, Any]] = None
 ) -> list[EngineChatMessage]:
     """
     将ContextBundle转换为LLM消息列表
@@ -152,10 +302,27 @@ def _convert_context_bundle_to_messages(
             extra={"recent_count": len(context_bundle.recent_messages)}
         )
     
-    # 6. 当前用户消息
+    # 6. 用户偏好指令（作为 system 消息）
+    final_message, instruction_text = _build_user_message_with_preferences(
+        current_message_content,
+        user_preferences
+    )
+    
+    if instruction_text:
+        # 将指令作为 system 消息添加，而不是附加在用户消息前面
+        messages.append(EngineChatMessage(
+            role="system",
+            content=f"## 回答要求\n{instruction_text}"
+        ))
+        logger.debug(
+            "Applied user prompt instructions as system message",
+            extra={"instructions": instruction_text}
+        )
+    
+    # 7. 当前用户消息
     messages.append(EngineChatMessage(
         role="user",
-        content=current_message_content
+        content=final_message  # 现在是纯净的用户消息，不包含指令
     ))
     
     return messages
@@ -197,7 +364,6 @@ async def create_chat_completion(
         
         if data.session_id:
             try:
-                import uuid
                 session_uuid = uuid.UUID(data.session_id)
                 session = db.query(SessionModel).filter(
                     SessionModel.id == session_uuid
@@ -223,6 +389,20 @@ async def create_chat_completion(
                     f"Failed to get session info: {e}",
                     exc_info=False
                 )
+        
+        user_obj: Optional[User] = None
+        if user_id:
+            try:
+                user_uuid = uuid.UUID(str(user_id))
+                user_obj = db.query(User).filter(User.id == user_uuid).first()
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load user for preferences: {e}",
+                    exc_info=False,
+                    extra={"user_id": user_id}
+                )
+        
+        personality: Optional["Personality"] = None
         
         # 确定使用的模型和引擎类型：优先使用personality配置，否则使用请求中的或默认值
         actual_model = data.model
@@ -301,6 +481,8 @@ async def create_chat_completion(
                     exc_info=True
                 )
                 # 如果加载失败，继续使用请求中的配置
+        
+        user_prompt_preferences = _merge_user_preferences(personality, user_obj)
         
         # 如果没有模型，使用默认值
         if not actual_model:
@@ -395,7 +577,8 @@ async def create_chat_completion(
                             # 转换ContextBundle为LLM消息格式
                             full_messages = _convert_context_bundle_to_messages(
                                 context_bundle,
-                                current_message_content
+                                current_message_content,
+                                user_prompt_preferences
                             )
                     
                     logger.info(
@@ -457,6 +640,19 @@ async def create_chat_completion(
                         tool_calls=msg.tool_calls
                     )
                 )
+            
+            if current_message_content:
+                updated_content, instruction_text = _build_user_message_with_preferences(
+                    current_message_content,
+                    user_prompt_preferences
+                )
+                if instruction_text:
+                    logger.debug(
+                        "Applied user prompt instructions",
+                        extra={"instructions": instruction_text}
+                    )
+                if not _override_last_user_message(full_messages, updated_content):
+                    logger.debug("No user message found to override with preferences")
             
             # 如果确定了personality_id，根据 token_budget 截断消息历史
             # 同时检索相关记忆，避免丢失上下文

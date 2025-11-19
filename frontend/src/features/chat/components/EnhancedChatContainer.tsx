@@ -443,7 +443,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     // 标记用户已经交互过（发送了消息）
     hasUserInteractedRef.current = true;
 
-    let actualSessionId: string | undefined = currentSessionId;
+    let actualSessionId: string | undefined = currentSessionId ?? undefined;
 
     // 如果没有有效会话（sessionId 为 'default' 或会话列表为空），自动创建新会话
     if (!actualSessionId || actualSessionId === 'default' || sessions.length === 0) {

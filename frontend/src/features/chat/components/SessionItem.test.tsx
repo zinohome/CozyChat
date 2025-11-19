@@ -42,7 +42,7 @@ describe('SessionItem', () => {
   it('应该显示未命名会话', () => {
     const sessionWithoutTitle = {
       ...mockSession,
-      title: undefined,
+      title: '', // 使用空字符串而不是 undefined
     };
 
     customRender(<SessionItem session={sessionWithoutTitle} />);

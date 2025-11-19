@@ -53,6 +53,19 @@ class UserPreferencesUpdateRequest(BaseModel):
     """用户偏好更新请求"""
     default_personality: Optional[str] = Field(None, description="默认人格ID")
     language: Optional[str] = Field(None, description="语言")
+    response_style: Optional[str] = Field(
+        None,
+        description="回答风格（brief/chatgpt_like/detailed）"
+    )
+    style_preset: Optional[str] = Field(
+        None,
+        description="风格预设（chatgpt_like/elder_friendly/medical_detail）"
+    )
+    output_format: Optional[str] = Field(
+        None,
+        description="输出格式（structured/list/paragraph）"
+    )
+    prefer_list: Optional[bool] = Field(None, description="偏好使用列表呈现")
     theme: Optional[str] = Field(
         None, 
         description="主题",

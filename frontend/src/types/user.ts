@@ -51,6 +51,11 @@ export interface UserPreferences {
   always_show_voice_input?: boolean; // 总是显示语音输入按钮（宽屏幕下也显示）
   timezone?: string; // 时区（默认：Asia/Shanghai）
   default_personality?: string; // 默认人格ID
+  response_style?: 'brief' | 'chatgpt_like' | 'detailed';
+  style_preset?: 'chatgpt_like' | 'elder_friendly' | 'medical_detail';
+  output_format?: 'structured' | 'list' | 'paragraph';
+  prefer_list?: boolean;
+  show_reasoning?: boolean;
   notifications?: {
     email?: boolean;
     push?: boolean;

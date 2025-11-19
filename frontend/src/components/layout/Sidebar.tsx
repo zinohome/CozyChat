@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Button, Space } from 'antd';
+import { Layout, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/store/slices/uiSlice';
@@ -129,6 +129,27 @@ export const Sidebar: React.FC = () => {
           size="small"
           loading={isLoadingPersonality}
           disabled={isLoadingPersonality || !personalityId}
+          style={{
+            backgroundColor: 'var(--primary-color)',
+            borderColor: 'var(--primary-color)',
+          }}
+          styles={{
+            icon: {
+              color: '#fff',
+            }
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoadingPersonality && personalityId) {
+              e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+              e.currentTarget.style.borderColor = 'var(--primary-hover)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isLoadingPersonality && personalityId) {
+              e.currentTarget.style.backgroundColor = 'var(--primary-color)';
+              e.currentTarget.style.borderColor = 'var(--primary-color)';
+            }
+          }}
         >
           新建
         </Button>

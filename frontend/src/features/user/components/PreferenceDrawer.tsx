@@ -1,5 +1,5 @@
 import React from 'react';
-import { Drawer, Form, Switch, Select, Space, Button } from 'antd';
+import { Drawer, Form, Switch, Select, Space, Button, Divider } from 'antd';
 import { SettingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/slices/authSlice';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -128,6 +128,64 @@ export const PreferenceDrawer: React.FC<PreferenceDrawerProps> = ({
             <Select.Option value="solid">纯色</Select.Option>
           </Select>
         </Form.Item>
+
+        <Divider orientation="left">对话风格</Divider>
+
+        <Form.Item
+          name="response_style"
+          label="回答风格"
+          tooltip="控制整体回答长度和结构偏好"
+        >
+          <Select placeholder="选择回答风格">
+            <Select.Option value="brief">简洁模式（100字以内）</Select.Option>
+            <Select.Option value="chatgpt_like">ChatGPT 风格（结构化）</Select.Option>
+            <Select.Option value="detailed">详细模式（背景/原因/建议）</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="style_preset"
+          label="风格预设"
+          tooltip="根据受众调整语气，例如老年人更口语、医疗模式更专业"
+        >
+          <Select placeholder="选择风格预设">
+            <Select.Option value="chatgpt_like">标准专业</Select.Option>
+            <Select.Option value="elder_friendly">老年友好</Select.Option>
+            <Select.Option value="medical_detail">医疗细节模式</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="output_format"
+          label="输出格式"
+          tooltip="控制默认的内容排版方式"
+        >
+          <Select placeholder="选择输出格式">
+            <Select.Option value="structured">结构化段落</Select.Option>
+            <Select.Option value="list">列表形式</Select.Option>
+            <Select.Option value="paragraph">纯段落</Select.Option>
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="prefer_list"
+          label="偏好列表呈现"
+          valuePropName="checked"
+          tooltip="勾选后，系统会尽量用列表列出步骤/建议"
+        >
+          <Switch />
+        </Form.Item>
+
+        <Form.Item
+          name="show_reasoning"
+          label="展示判断依据"
+          valuePropName="checked"
+          tooltip="开启后，回答结尾会用2-3句话解释推理过程"
+        >
+          <Switch />
+        </Form.Item>
+
+        <Divider orientation="left">通知与语音</Divider>
 
         <Form.Item
           name={['notifications', 'email']}

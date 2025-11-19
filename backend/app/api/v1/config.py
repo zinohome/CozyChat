@@ -116,6 +116,7 @@ class RealtimeTokenRequest(BaseModel):
 @rate_limit("10/minute", per_user=True)
 async def get_realtime_token(
     request: Request,
+    response: Response,
     data: Optional[RealtimeTokenRequest] = Body(None),
     user: User = Depends(get_current_active_user)
 ) -> RealtimeTokenResponse:

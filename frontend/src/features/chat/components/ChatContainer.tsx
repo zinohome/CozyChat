@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { Chat } from '@chatui/core';
+import Chat from '@chatui/core';
 import '@chatui/core/dist/index.css';
 import { Alert } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -28,7 +28,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   personalityId,
 }) => {
   const { isLoading: isLoadingStore, error, setError } = useChatStore();
-  const { sendStreamMessage, isStreaming } = useStreamChat(sessionId, personalityId);
+  const { sendStreamMessage } = useStreamChat(sessionId, personalityId);
 
   // 显示错误提示
   useEffect(() => {
@@ -56,8 +56,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     staleTime: 5 * 60 * 1000, // 5分钟
   });
   
-  // 合并加载状态
-  const isLoading = isLoadingStore || isLoadingHistory;
+  // 合并加载状态（已移除，ChatUI 不支持 loading prop）
 
   /**
    * 处理发送消息
@@ -114,7 +113,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         onSend={handleSend}
         placeholder="输入消息..."
         locale="zh-CN"
-        loading={isLoading || isLoadingHistory || isStreaming}
+        renderMessageContent={(msg: any) => {
+          return <div>{msg.content?.text || ''}</div>;
+        }}
       />
     </div>
   );

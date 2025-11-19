@@ -278,7 +278,7 @@ export const VoiceCallIndicator: React.FC<VoiceCallIndicatorProps> = ({
     <div className="voice-call-indicator">
           <div className="voice-waveforms">
             <VoiceWaveform 
-          frequencyData={activeFrequencyData} 
+              frequencyData={activeFrequencyData ?? null} 
               color={activeColor}
               isActive={true}
             />

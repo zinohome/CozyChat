@@ -151,9 +151,13 @@ export class VoiceAgentService {
       this.transportStrategy = TransportStrategyFactory.create(transportType);
       log.debug(`使用 ${transportType.toUpperCase()} 传输层策略`);
       
-      // 3. 加载工具
-      const toolInfos = await this.toolManager.getTools(this.config.personalityId, 'builtin');
-      const tools = this.toolManager.convertToRealtimeFormat(toolInfos);
+      // 3. 创建前端内置工具（不加载后端工具）
+      const tools = this.toolManager.createFrontendTools();
+      
+      log.debug('前端工具创建完成:', {
+        toolCount: tools.length,
+        toolNames: tools.map((t: any) => t.name || t.function?.name).filter(Boolean),
+      });
       
       // 4. 创建 Agent
       log.debug('创建 RealtimeAgent，voice:', config.voice);
@@ -162,6 +166,12 @@ export class VoiceAgentService {
         instructions: config.instructions,
         voice: config.voice,
         tools: tools.length > 0 ? (tools as any) : undefined,
+      });
+      
+      log.debug('RealtimeAgent 已创建:', {
+        hasTools: tools.length > 0,
+        toolCount: tools.length,
+        tools: tools.length > 0 ? tools.map((t: any) => t.name || t.function?.name).filter(Boolean) : [],
       });
 
       // 5. 使用策略创建 Session

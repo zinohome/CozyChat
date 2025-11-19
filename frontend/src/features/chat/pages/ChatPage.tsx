@@ -8,7 +8,6 @@ import { useAuthStore } from '@/store/slices/authSlice';
 import { personalityApi } from '@/services/personality';
 import { userApi } from '@/services/user';
 import { useSessions } from '../hooks/useSessions';
-import { showError } from '@/utils/errorHandler';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { logger } from '@/utils/logger';
 
@@ -111,8 +110,6 @@ export const ChatPage: React.FC = () => {
     // 如果需要创建新会话，优先使用用户偏好设置中的 default_personality
     // 如果没有，可以使用 'default' 作为后备
     if (sessions.length === 0) {
-      // 如果 personalityId 为空，使用偏好设置或 'default'
-      const sessionPersonalityId = personalityId || preferences?.default_personality || 'default';
       if (!personalityId && !preferences?.default_personality) {
         // 如果既没有 personalityId 也没有偏好设置，等待一下（但不会阻塞太久）
         log.debug('等待人格ID或偏好设置加载（需要创建新会话）', {

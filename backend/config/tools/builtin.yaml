@@ -44,4 +44,107 @@ tools:
       # 需要OpenWeatherMap API Key
       requires_api_key: true
       api_key_env: "OPENWEATHER_API_KEY"
+    
+    - name: "unit_converter"
+      display_name: "单位转换工具"
+      description: "执行各种单位之间的转换（长度、重量、体积、面积、速度、时间、数据存储、温度等）"
+      enabled: true
+      category: "utility"
+      parameters:
+        value:
+          type: "number"
+          description: "要转换的数值"
+          required: true
+        from_unit:
+          type: "string"
+          description: "源单位名称"
+          required: true
+        to_unit:
+          type: "string"
+          description: "目标单位名称"
+          required: true
+        category:
+          type: "string"
+          description: "单位类别（可选），可选值：length、weight、volume、area、speed、time、data、temperature"
+          required: false
+    
+    - name: "text_summarizer"
+      display_name: "文本摘要工具"
+      description: "对长文本进行摘要，提取关键信息和要点"
+      enabled: true
+      category: "text"
+      parameters:
+        text:
+          type: "string"
+          description: "要摘要的文本内容"
+          required: true
+        max_length:
+          type: "integer"
+          description: "摘要的最大长度（字符数），默认200。如果设置为0，则自动确定长度"
+          required: false
+        style:
+          type: "string"
+          description: "摘要风格（可选），可选值：concise、detailed、bullet、paragraph"
+          required: false
+        language:
+          type: "string"
+          description: "摘要语言（可选），默认为zh（中文），可选值：zh、en"
+          required: false
+    
+    - name: "random_generator"
+      display_name: "随机数生成器"
+      description: "生成各种类型的随机数据（随机整数、浮点数、字符串、随机选择、UUID等）"
+      enabled: true
+      category: "utility"
+      parameters:
+        type:
+          type: "string"
+          description: "生成类型，可选值：integer、float、string、choice、uuid"
+          required: true
+        min:
+          type: "number"
+          description: "最小值（仅用于integer和float类型）"
+          required: false
+        max:
+          type: "number"
+          description: "最大值（仅用于integer和float类型）"
+          required: false
+        length:
+          type: "integer"
+          description: "字符串长度（仅用于string类型），默认10"
+          required: false
+        charset:
+          type: "string"
+          description: "字符集类型（仅用于string类型），可选值：alphanumeric、letters、digits、hex、custom"
+          required: false
+        custom_chars:
+          type: "string"
+          description: "自定义字符集（仅用于string类型，当charset=custom时使用）"
+          required: false
+        choices:
+          type: "array"
+          description: "选择列表（仅用于choice类型）"
+          required: false
+        count:
+          type: "integer"
+          description: "生成数量（可选），默认为1"
+          required: false
+    
+    - name: "tavily_search"
+      display_name: "Tavily搜索工具"
+      description: "用于在互联网上搜索信息的工具，可以获取关于特定问题的答案和相关搜索结果"
+      enabled: true
+      category: "information"
+      parameters:
+        query:
+          type: "string"
+          description: "要搜索的查询语句，例如'谁是梅西？'或'2024年奥运会在哪里举行？'"
+          required: true
+        search_depth:
+          type: "string"
+          description: "搜索深度，basic为基本搜索，advanced为高级搜索，默认为basic"
+          required: false
+      # 需要Tavily API Key
+      requires_api_key: true
+      api_key_env: "TAVILY_API_KEY"
 

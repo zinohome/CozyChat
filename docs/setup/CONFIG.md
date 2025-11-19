@@ -131,6 +131,25 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_FILE=logs/app.log
 ```
 
+#### 前端环境变量配置
+
+前端使用 Vite 环境变量，需要在项目根目录或 `frontend/` 目录下创建 `.env` 文件：
+
+```bash
+# 前端 API 基础 URL（可选，开发环境使用代理）
+VITE_API_BASE_URL=http://localhost:8000
+
+# 高德地图 API Key（用于前端天气工具）
+# 获取方式：https://console.amap.com/dev/key/app
+VITE_AMAP_MAPS_API_KEY=your_amap_api_key_here
+```
+
+**注意**：
+- 前端环境变量必须以 `VITE_` 开头才能在前端代码中访问
+- 开发环境：在 `frontend/` 目录下创建 `.env` 文件
+- 生产环境：在构建时设置环境变量，或使用 `.env.production` 文件
+- 前端环境变量会暴露在浏览器中，请确保 API Key 设置了域名白名单和调用限制
+
 ## 完整配置示例
 
 查看 `.env.example` 文件获取完整的配置模板，包含所有可用选项的详细说明。

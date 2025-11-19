@@ -12,12 +12,56 @@ from app.engines.tools.registry import ToolRegistry
 from .calculator import CalculatorTool
 from .time_tool import TimeTool
 from .weather_tool import WeatherTool
+from .unit_converter import UnitConverterTool
+from .text_summarizer import TextSummarizerTool
+from .random_generator import RandomGeneratorTool
+from .tavily_search import TavilySearchTool
+from .amap_tools import (
+    AmapRegeocodeTool,
+    AmapGeoTool,
+    AmapIPLocationTool,
+    AmapWeatherTool,
+    AmapBicyclingByAddressTool,
+    AmapBicyclingByCoordinatesTool,
+    AmapWalkingByAddressTool,
+    AmapWalkingByCoordinatesTool,
+    AmapDrivingByAddressTool,
+    AmapDrivingByCoordinatesTool,
+    AmapTransitByAddressTool,
+    AmapTransitByCoordinatesTool,
+    AmapDistanceTool,
+    AmapTextSearchTool,
+    AmapAroundSearchTool,
+    AmapSearchDetailTool,
+)
 
 
 # 注册内置工具（工具类从代码注册，但配置从YAML加载）
 ToolRegistry.register("calculator", CalculatorTool)
 ToolRegistry.register("time", TimeTool)
 ToolRegistry.register("weather", WeatherTool)
+ToolRegistry.register("unit_converter", UnitConverterTool)
+ToolRegistry.register("text_summarizer", TextSummarizerTool)
+ToolRegistry.register("random_generator", RandomGeneratorTool)
+ToolRegistry.register("tavily_search", TavilySearchTool)
+
+# 注册高德地图工具
+ToolRegistry.register("amap_regeocode", AmapRegeocodeTool)
+ToolRegistry.register("amap_geo", AmapGeoTool)
+ToolRegistry.register("amap_ip_location", AmapIPLocationTool)
+ToolRegistry.register("amap_weather", AmapWeatherTool)
+ToolRegistry.register("amap_bicycling_by_address", AmapBicyclingByAddressTool)
+ToolRegistry.register("amap_bicycling_by_coordinates", AmapBicyclingByCoordinatesTool)
+ToolRegistry.register("amap_walking_by_address", AmapWalkingByAddressTool)
+ToolRegistry.register("amap_walking_by_coordinates", AmapWalkingByCoordinatesTool)
+ToolRegistry.register("amap_driving_by_address", AmapDrivingByAddressTool)
+ToolRegistry.register("amap_driving_by_coordinates", AmapDrivingByCoordinatesTool)
+ToolRegistry.register("amap_transit_by_address", AmapTransitByAddressTool)
+ToolRegistry.register("amap_transit_by_coordinates", AmapTransitByCoordinatesTool)
+ToolRegistry.register("amap_distance", AmapDistanceTool)
+ToolRegistry.register("amap_text_search", AmapTextSearchTool)
+ToolRegistry.register("amap_around_search", AmapAroundSearchTool)
+ToolRegistry.register("amap_search_detail", AmapSearchDetailTool)
 
 
 def register_builtin_tools():
@@ -75,6 +119,14 @@ def create_builtin_tool(tool_name: str, **kwargs):
         # WeatherTool需要API密钥
         if "api_key" not in kwargs:
             kwargs["api_key"] = settings.openweather_api_key
+    elif tool_name == "tavily_search":
+        # Tavily搜索工具需要API密钥
+        if "api_key" not in kwargs:
+            kwargs["api_key"] = settings.tavily_api_key
+    elif tool_name.startswith("amap_"):
+        # 高德地图工具需要API密钥
+        if "api_key" not in kwargs:
+            kwargs["api_key"] = settings.amap_maps_api_key
     
     try:
         return tool_class(**kwargs)

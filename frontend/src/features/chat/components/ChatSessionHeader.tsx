@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { SessionList } from './SessionList';
 import { useSessions } from '../hooks/useSessions';
 import { useIsMobile } from '@/hooks/useMediaQuery';
-import type { Session } from '@/types/chat';
+import './ChatSessionHeader.css';
 
 /**
  * 聊天会话头部组件属性
@@ -114,6 +114,12 @@ export const ChatSessionHeader: React.FC<ChatSessionHeaderProps> = ({
             style={{
               color: 'var(--text-primary)',
             }}
+            styles={{
+              icon: {
+                color: 'var(--text-primary)',
+              }
+            }}
+            className="session-header-button"
           />
         </Popover>
 
@@ -126,6 +132,12 @@ export const ChatSessionHeader: React.FC<ChatSessionHeaderProps> = ({
           style={{
             color: 'var(--text-primary)',
           }}
+          styles={{
+            icon: {
+              color: 'var(--text-primary)',
+            }
+          }}
+          className="session-header-button"
         />
       </Space>
     </div>

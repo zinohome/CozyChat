@@ -3,6 +3,33 @@ tools:
   mcp:
     # MCP服务器配置
     servers:
+      # 高德地图MCP服务器（已禁用，使用内置工具替代）
+      # 注意：高德地图功能已通过内置工具实现（amap_*），无需MCP服务器
+      # 内置工具更简单、性能更好，且不需要额外的MCP服务器进程
+      # - name: "amap-mcp-server"
+      #   enabled: false  # 已禁用，使用内置工具
+      #   command: "uvx"
+      #   args: ["amap-mcp-server"]
+      #   env:
+      #     AMAP_MAPS_API_KEY: "${AMAP_MAPS_API_KEY}"
+      #   内置工具列表（已实现）：
+      #   - amap_regeocode: 逆地理编码（坐标转地址）
+      #   - amap_geo: 地理编码（地址转坐标）
+      #   - amap_ip_location: IP定位
+      #   - amap_weather: 天气查询
+      #   - amap_bicycling_by_coordinates: 骑行路线规划（坐标）
+      #   - amap_bicycling_by_address: 骑行路线规划（地址）
+      #   - amap_walking_by_coordinates: 步行路线规划（坐标）
+      #   - amap_walking_by_address: 步行路线规划（地址）
+      #   - amap_driving_by_coordinates: 驾车路线规划（坐标）
+      #   - amap_driving_by_address: 驾车路线规划（地址）
+      #   - amap_transit_by_coordinates: 公共交通路线规划（坐标）
+      #   - amap_transit_by_address: 公共交通路线规划（地址）
+      #   - amap_distance: 距离测量
+      #   - amap_text_search: 关键词搜索POI
+      #   - amap_around_search: 周边搜索POI
+      #   - amap_search_detail: POI详情查询
+      
       # 示例：文件系统MCP服务器
       # - name: "filesystem"
       #   enabled: true

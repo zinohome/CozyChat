@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { chatApi } from '@/services/chat';
-import { sessionApi } from '@/services/session';
 import type { ChatRequest, Message } from '@/types/chat';
 
 /**
@@ -35,9 +34,12 @@ export const useChat = (sessionId: string, personalityId: string) => {
       setLoading(true);
       setError(null);
 
+      // 获取当前消息列表
+      const currentMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', sessionId]) || [];
+
       // 构建消息列表
       const messageList = [
-        ...historyMessages.map((m) => ({
+        ...currentMessages.map((m: Message) => ({
           role: m.role,
           content: typeof m.content === 'string' ? m.content : (m.content as any).text || '',
         })),

@@ -40,6 +40,7 @@ cachetools==5.3.2
 # 工具
 pyyaml==6.0.1
 python-dotenv==1.2.1
+tavily-python==0.3.0
 
 # 日志
 structlog==25.5.0

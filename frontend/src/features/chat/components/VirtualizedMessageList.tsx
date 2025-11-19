@@ -4,7 +4,7 @@
  * 使用 react-window 实现虚拟滚动，优化大量消息的渲染性能。
  */
 
-import React, { useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { List, ListImperativeAPI, RowComponentProps } from 'react-window';
 import { MessageBubble } from './MessageBubble';
 import type { Message } from '@/types/chat';
@@ -40,8 +40,10 @@ interface VirtualizedMessageListProps {
 
 /**
  * 消息项组件（用于虚拟滚动）
+ * 
+ * react-window 会将 rowProps 中的属性展开到组件 props 中
  */
-const MessageItem: React.FC<RowComponentProps<{
+const MessageItem = React.memo((props: RowComponentProps<{
   messages: Message[];
   isVoiceCallActive: boolean;
   voiceCallMessages: Message[];
@@ -50,20 +52,22 @@ const MessageItem: React.FC<RowComponentProps<{
   autoPlayingMessageId: string | null;
   onStopAutoPlay: () => void;
   preferences?: UserPreferences;
-}>> = React.memo(({ index, style, rowProps: data }) => {
+}>) => {
+  const { index, style, messages, isVoiceCallActive, voiceCallMessages, onDeleteMessage, personalityId, autoPlayingMessageId, onStopAutoPlay, preferences } = props;
+  
   // 安全检查：确保消息存在
-  if (!data.messages || index >= data.messages.length) {
+  if (!messages || index >= messages.length) {
     return <div style={style} />;
   }
   
-  const msg = data.messages[index];
+  const msg = messages[index];
   if (!msg) {
     return <div style={style} />;
   }
   
   // 判断是否为语音通话消息
   const isVoiceCallMsg = 
-    (data.isVoiceCallActive && data.voiceCallMessages.some(vm => vm.id === msg.id)) ||
+    (isVoiceCallActive && voiceCallMessages.some((vm: Message) => vm.id === msg.id)) ||
     (msg.metadata?.is_voice_call === true);
   
   return (
@@ -78,12 +82,12 @@ const MessageItem: React.FC<RowComponentProps<{
             : (msg.content as any)?.text || ''
         }
         timestamp={msg.timestamp}
-        onDelete={data.onDeleteMessage}
-        personalityId={data.personalityId}
-        isAutoPlaying={data.autoPlayingMessageId === msg.id}
-        onStopAutoPlay={data.onStopAutoPlay}
+        onDelete={onDeleteMessage}
+        personalityId={personalityId}
+        isAutoPlaying={autoPlayingMessageId === msg.id}
+        onStopAutoPlay={onStopAutoPlay}
         isVoiceCall={isVoiceCallMsg}
-        preferences={data.preferences}
+        preferences={preferences}
       />
     </div>
   );
@@ -91,16 +95,16 @@ const MessageItem: React.FC<RowComponentProps<{
   // 自定义比较函数，优化重渲染
   // 安全检查：确保消息存在
   if (
-    !prevProps.rowProps.messages || 
-    !nextProps.rowProps.messages ||
-    prevProps.index >= prevProps.rowProps.messages.length ||
-    nextProps.index >= nextProps.rowProps.messages.length
+    !prevProps.messages || 
+    !nextProps.messages ||
+    prevProps.index >= prevProps.messages.length ||
+    nextProps.index >= nextProps.messages.length
   ) {
     return false; // 索引越界，需要重新渲染
   }
   
-  const prevMsg = prevProps.rowProps.messages[prevProps.index];
-  const nextMsg = nextProps.rowProps.messages[nextProps.index];
+  const prevMsg = prevProps.messages[prevProps.index];
+  const nextMsg = nextProps.messages[nextProps.index];
   
   // 如果消息不存在，需要重新渲染
   if (!prevMsg || !nextMsg) {
@@ -126,10 +130,10 @@ const MessageItem: React.FC<RowComponentProps<{
   
   // 检查语音通话状态是否变化
   const prevIsVoiceCall = 
-    (prevProps.rowProps.isVoiceCallActive && prevProps.rowProps.voiceCallMessages.some(vm => vm.id === prevMsg.id)) ||
+    (prevProps.isVoiceCallActive && prevProps.voiceCallMessages.some((vm: Message) => vm.id === prevMsg.id)) ||
     (prevMsg.metadata?.is_voice_call === true);
   const nextIsVoiceCall = 
-    (nextProps.rowProps.isVoiceCallActive && nextProps.rowProps.voiceCallMessages.some(vm => vm.id === nextMsg.id)) ||
+    (nextProps.isVoiceCallActive && nextProps.voiceCallMessages.some((vm: Message) => vm.id === nextMsg.id)) ||
     (nextMsg.metadata?.is_voice_call === true);
   
   if (prevIsVoiceCall !== nextIsVoiceCall) {
@@ -137,7 +141,7 @@ const MessageItem: React.FC<RowComponentProps<{
   }
   
   // 检查自动播放状态是否变化
-  if (prevProps.rowProps.autoPlayingMessageId !== nextProps.rowProps.autoPlayingMessageId) {
+  if (prevProps.autoPlayingMessageId !== nextProps.autoPlayingMessageId) {
     return false; // 自动播放状态变化，需要重新渲染
   }
   
@@ -161,7 +165,6 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
   preferences,
   height,
   estimateItemSize = () => 100, // 默认估算高度100px
-  itemSize, // 固定项高度（已废弃，react-window 2.x 使用动态高度）
 }) => {
   const listRef = useRef<ListImperativeAPI>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -244,7 +247,7 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
         listRef={listRef}
         rowCount={messages.length}
         rowHeight={estimateItemSize || (() => 100)}
-        rowComponent={MessageItem}
+        rowComponent={MessageItem as any}
         rowProps={rowProps}
         overscanCount={5} // 预渲染5个额外项目，提升滚动体验
         style={{ 

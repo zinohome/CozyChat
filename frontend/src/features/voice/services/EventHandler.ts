@@ -57,7 +57,10 @@ export class EventHandler {
   /**
    * 设置工具调用事件监听
    * 
-   * 监听 conversation.item.created 事件，检查是否为工具调用
+   * 监听多个事件以捕获工具调用：
+   * 1. conversation.item.created - 工具调用项创建时
+   * 2. history_added - 历史记录添加时（可能包含工具调用）
+   * 3. history_updated - 历史记录更新时（可能包含工具调用）
    */
   setupToolCallListeners(): void {
     if (!this.session) {
@@ -65,36 +68,117 @@ export class EventHandler {
       return;
     }
 
-    // 监听 conversation.item.created 事件
-    const handleItemCreated = (event: any) => {
-      log.debug('conversation.item.created:', event);
+    // 用于去重，避免重复处理同一个工具调用
+    const processedToolCallIds = new Set<string>();
 
-      const item = event.item;
+    // 检查并处理工具调用的辅助函数
+    const checkAndHandleToolCall = (item: any, eventName: string) => {
       if (!item) return;
+
+      // 详细日志：记录所有 item 的完整内容（仅对 assistant 消息）
+      if (item.role === 'assistant' || item.type === 'message') {
+        log.debug(`🔍 [工具调用检查] ${eventName} - item 详情:`, {
+          itemId: item.itemId || item.id,
+          type: item.type,
+          role: item.role,
+          status: item.status,
+          content: item.content,
+          hasContent: !!item.content,
+          contentLength: Array.isArray(item.content) ? item.content.length : 0,
+          contentTypes: Array.isArray(item.content)
+            ? item.content.map((c: any) => c.type)
+            : [],
+          fullItem: JSON.stringify(item, null, 2),
+        });
+      }
 
       // 检查是否为工具调用
       // 根据 OpenAI Realtime API 文档，工具调用可能有以下类型：
       // - item.type === 'function_call'
       // - item.type === 'tool_call'
       // - item.call?.type === 'function'
-      if (
+      // - item.type === 'message' && item.role === 'assistant' && item.content 包含 function_call
+      const isToolCall =
         item.type === 'function_call' ||
         item.type === 'tool_call' ||
-        item.call?.type === 'function'
-      ) {
-        this.handleToolCall(item);
+        item.call?.type === 'function' ||
+        (item.type === 'message' &&
+          item.role === 'assistant' &&
+          Array.isArray(item.content) &&
+          item.content.some((c: any) => c.type === 'function_call' || c.type === 'tool_call'));
+
+      if (isToolCall) {
+        const itemId = item.itemId || item.id || item.call_id;
+        if (itemId && !processedToolCallIds.has(itemId)) {
+          processedToolCallIds.add(itemId);
+          log.debug(`🔧 ✅ 检测到工具调用 (${eventName}):`, item);
+          this.handleToolCall(item);
+        }
+      }
+
+      // 检查 content 数组中是否包含工具调用
+      if (Array.isArray(item.content)) {
+        for (const contentItem of item.content) {
+          // 详细日志：记录所有 content 项
+          if (contentItem.type === 'function_call' || contentItem.type === 'tool_call' || contentItem.function_call) {
+            log.debug(`🔍 [工具调用检查] ${eventName} - content 项详情:`, {
+              type: contentItem.type,
+              fullContent: JSON.stringify(contentItem, null, 2),
+            });
+          }
+
+          if (
+            contentItem.type === 'function_call' ||
+            contentItem.type === 'tool_call' ||
+            contentItem.function_call
+          ) {
+            const callId = contentItem.id || contentItem.call_id || item.itemId || item.id;
+            if (callId && !processedToolCallIds.has(callId)) {
+              processedToolCallIds.add(callId);
+              log.debug(`🔧 ✅ 检测到工具调用 (${eventName}, content):`, contentItem);
+              this.handleToolCall(contentItem);
+            }
+          }
+        }
+      }
+    };
+
+    // 1. 监听 conversation.item.created 事件
+    const handleItemCreated = (event: any) => {
+      log.debug('conversation.item.created:', event);
+      checkAndHandleToolCall(event.item, 'conversation.item.created');
+    };
+
+    // 2. 监听 history_added 事件
+    const handleHistoryAdded = (item: any) => {
+      log.debug('🔧 history_added 事件（工具调用检查）:', item);
+      checkAndHandleToolCall(item, 'history_added');
+    };
+
+    // 3. 监听 history_updated 事件
+    const handleHistoryUpdated = (items: any) => {
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          checkAndHandleToolCall(item, 'history_updated');
+        }
+      } else if (items) {
+        checkAndHandleToolCall(items, 'history_updated');
       }
     };
 
     // 添加事件监听
     (this.session as any).on('conversation.item.created', handleItemCreated);
+    (this.session as any).on('history_added', handleHistoryAdded);
+    (this.session as any).on('history_updated', handleHistoryUpdated);
 
     // 保存清理函数
     this.cleanupFunctions.push(() => {
       (this.session as any).off('conversation.item.created', handleItemCreated);
+      (this.session as any).off('history_added', handleHistoryAdded);
+      (this.session as any).off('history_updated', handleHistoryUpdated);
     });
 
-    log.debug('工具调用事件监听已设置');
+    log.debug('工具调用事件监听已设置（监听 conversation.item.created, history_added, history_updated）');
   }
 
   /**
@@ -104,17 +188,25 @@ export class EventHandler {
    */
   private async handleToolCall(item: any): Promise<void> {
     try {
+      log.debug('🔧 处理工具调用，item:', JSON.stringify(item, null, 2));
+
       // 提取工具名称和参数
+      // 支持多种格式：
+      // 1. item.name / item.function?.name / item.call?.function?.name
+      // 2. item.function_call?.name
+      // 3. item.content[].function_call?.name (如果 item 是 message，工具调用在 content 中)
       const toolName =
         item.name ||
         item.function?.name ||
         item.call?.function?.name ||
+        item.function_call?.name ||
         item.tool_name;
 
       let parameters =
         item.arguments ||
         item.function?.arguments ||
         item.call?.function?.arguments ||
+        item.function_call?.arguments ||
         item.parameters ||
         {};
 
@@ -128,11 +220,11 @@ export class EventHandler {
       }
 
       if (!toolName) {
-        log.error('无法提取工具名称:', item);
+        log.error('❌ 无法提取工具名称，item:', JSON.stringify(item, null, 2));
         return;
       }
 
-      log.debug(`处理工具调用: ${toolName}`, parameters);
+      log.debug(`🔧 处理工具调用: ${toolName}`, parameters);
 
       // 触发回调
       if (this.callbacks.onToolCall) {
@@ -239,9 +331,35 @@ export class EventHandler {
     
     log.debug('🔍 设置用户转录监听，session:', this.session);
 
-    // 用于去重
+    // 用于去重（所有监听器共享，避免重复处理）
     const processedMessageIds = new Set<string>();
     const processedTexts = new Set<string>();
+    
+    // 辅助函数：检查并处理用户转录（统一去重逻辑）
+    const processUserTranscript = (messageId: string, transcript: string, source: string): boolean => {
+      if (!transcript || !transcript.trim()) {
+        return false;
+      }
+      
+      const key = `${messageId}:${transcript}`;
+      if (processedTexts.has(key)) {
+        log.debug(`⚠️ 转录已处理过，跳过 (${source}):`, key);
+        return false;
+      }
+      
+      processedMessageIds.add(messageId);
+      processedTexts.add(key);
+      log.debug(`✅ 从 ${source} 提取用户转录:`, transcript);
+      
+      if (this.callbacks.onUserTranscript) {
+        log.debug('✅ 调用用户转录回调');
+        this.callbacks.onUserTranscript(transcript);
+        return true;
+      } else {
+        log.debug('❌ 用户转录回调不存在！');
+        return false;
+      }
+    };
 
     // 提取用户转录文本的辅助函数
     const extractUserTranscript = (item: any): string | null => {
@@ -306,9 +424,19 @@ export class EventHandler {
     const handleUserTranscript = (event: any) => {
       log.debug('🔍 用户转录事件触发 (completed):', event);
       const transcript = event?.transcript;
-      if (transcript && typeof transcript === 'string' && transcript.trim() && this.callbacks.onUserTranscript) {
-        log.debug('✅ 触发用户转录回调:', transcript);
-        this.callbacks.onUserTranscript(transcript.trim());
+      const itemId = event?.item_id || event?.itemId || event?.id;
+      
+      if (transcript && typeof transcript === 'string' && transcript.trim()) {
+        // 使用统一的处理函数（如果 itemId 存在）
+        if (itemId) {
+          processUserTranscript(itemId, transcript.trim(), 'input_audio_transcription.completed');
+        } else {
+          // 如果没有 itemId，直接调用回调（但可能重复）
+          if (this.callbacks.onUserTranscript) {
+            log.debug('✅ 触发用户转录回调 (无ID):', transcript.trim());
+            this.callbacks.onUserTranscript(transcript.trim());
+          }
+        }
       } else {
         log.debug('❌ 用户转录回调未触发:', {
           hasTranscript: !!transcript,
@@ -336,26 +464,16 @@ export class EventHandler {
         return;
       }
 
-      // 去重检查
+      // 去重检查（提前检查，避免不必要的提取）
       if (processedMessageIds.has(messageId)) {
+        log.debug('⚠️ 消息已处理过，跳过 (history_added):', messageId);
         return;
       }
 
       if (item.role === 'user') {
         const transcript = extractUserTranscript(item);
         if (transcript) {
-          const key = `${messageId}:${transcript}`;
-          if (!processedTexts.has(key)) {
-            processedMessageIds.add(messageId);
-            processedTexts.add(key);
-            log.debug('✅ 从 history_added 提取用户转录:', transcript);
-            if (this.callbacks.onUserTranscript) {
-              log.debug('✅ 调用用户转录回调');
-              this.callbacks.onUserTranscript(transcript);
-            } else {
-              log.debug('❌ 用户转录回调不存在！');
-            }
-          }
+          processUserTranscript(messageId, transcript, 'history_added');
         }
       }
     };
@@ -432,22 +550,16 @@ export class EventHandler {
         // 处理用户消息
         if (item.role === 'user') {
           log.debug('🔍 处理用户消息:', messageId);
+          
+          // 去重检查（提前检查，避免不必要的提取）
+          if (processedMessageIds.has(messageId)) {
+            log.debug('⚠️ 消息已处理过，跳过 (history_updated):', messageId);
+            continue;
+          }
+          
           const transcript = extractUserTranscript(item);
           if (transcript) {
-            const key = `${messageId}:${transcript}`;
-            if (!processedTexts.has(key)) {
-              processedMessageIds.add(messageId);
-              processedTexts.add(key);
-              log.debug('✅ 从 history_updated 提取用户转录:', transcript);
-              if (this.callbacks.onUserTranscript) {
-                log.debug('✅ 调用用户转录回调');
-                this.callbacks.onUserTranscript(transcript);
-              } else {
-                log.debug('❌ 用户转录回调不存在！');
-              }
-            } else {
-              log.debug('⚠️ 转录已处理过，跳过:', key);
-            }
+            processUserTranscript(messageId, transcript, 'history_updated');
           } else {
             log.debug('❌ 未能提取用户转录，item:', JSON.stringify(item, null, 2));
           }

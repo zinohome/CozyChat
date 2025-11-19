@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '@/services/chat';
 import { useChatStore } from '@/store/slices/chatSlice';
 import { useAuthStore } from '@/store/slices/authSlice';
-import type { ChatRequest, Message, StreamChunk } from '@/types/chat';
+import type { ChatRequest, Message } from '@/types/chat';
 
 /**
  * 流式聊天Hook
@@ -29,6 +29,9 @@ export const useStreamChat = (
       setIsStreaming(true);
       setLoading(true);
       setError(null);
+
+      // 声明在 try 块外部，以便在 catch 块中也能访问
+      let pendingUpdate: NodeJS.Timeout | null = null;
 
       try {
         // 从 React Query 缓存获取历史消息
@@ -84,7 +87,6 @@ export const useStreamChat = (
         let toolCalls: any[] = [];
         let finishReason: string | null = null;
         let lastUpdateTime = 0;
-        let pendingUpdate: NodeJS.Timeout | null = null;
         let lastUpdateContent = ''; // 记录上次更新的内容
         const UPDATE_THROTTLE_MS = 150; // 节流：最多每150ms更新一次
         
@@ -151,7 +153,8 @@ export const useStreamChat = (
           if (delta?.tool_calls) {
             // 合并工具调用（OpenAI流式API会分多个chunk发送）
             for (const toolCall of delta.tool_calls) {
-              const index = toolCall.index || 0;
+              // 流式响应中的 tool_calls 可能包含 index 属性（增量数据）
+              const index = (toolCall as any).index ?? 0;
               if (!toolCalls[index]) {
                 toolCalls[index] = {
                   id: toolCall.id || '',

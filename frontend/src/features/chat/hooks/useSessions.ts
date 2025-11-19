@@ -18,7 +18,7 @@ export const useSessions = () => {
   const userId = user?.id || null;
 
   // 获取会话列表（按用户隔离）
-  const { data: sessions = [], isLoading, error: sessionsError } = useQuery({
+  const { data: sessions = [], isLoading } = useQuery({
     queryKey: ['sessions', userId],
     queryFn: async () => {
       try {
@@ -57,7 +57,7 @@ export const useSessions = () => {
       queryClient.removeQueries({ queryKey: ['chat', 'messages', sessionId] });
       
       // 更新当前会话ID
-      useChatStore.getState().setCurrentSessionId(sessionId);
+      useChatStore.getState().setCurrentSessionId(sessionId ?? null);
       
       // 显式触发消息查询（确保欢迎消息能够显示）
       // 使用 refetchQueries 而不是 invalidateQueries，因为 invalidateQueries 可能不会立即执行
@@ -110,7 +110,8 @@ export const useSessions = () => {
         );
         
         if (remainingSessions.length > 0) {
-          setCurrentSessionId(remainingSessions[0].id || remainingSessions[0].session_id);
+          const nextSessionId = remainingSessions[0].id || remainingSessions[0].session_id;
+          setCurrentSessionId(nextSessionId ?? null);
         } else {
           setCurrentSessionId(null);
         }

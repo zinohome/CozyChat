@@ -101,7 +101,11 @@ class User(UserBase):
             "auto_tts": False,
             "always_show_voice_input": False,  # 总是显示语音输入按钮（宽屏幕下也显示）
             "timezone": "Asia/Shanghai",  # 默认时区：上海
-            "show_reasoning": False
+            "show_reasoning": False,
+            "response_style": "chatgpt_like",
+            "style_preset": "chatgpt_like",
+            "output_format": "structured",
+            "prefer_list": False
         }
     )
     
@@ -180,7 +184,11 @@ class User(UserBase):
             "auto_tts": False,
             "always_show_voice_input": False,
             "timezone": "Asia/Shanghai",  # 默认时区：上海
-            "show_reasoning": False
+            "show_reasoning": False,
+            "response_style": "chatgpt_like",
+            "style_preset": "chatgpt_like",
+            "output_format": "structured",
+            "prefer_list": False
         }
         
         # 获取当前偏好设置
