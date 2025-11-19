@@ -209,7 +209,17 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
   // 如果消息数量较少（< 50），不使用虚拟滚动，直接渲染
   if (messages.length < 50) {
     return (
-      <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div 
+        style={{ 
+          height: '100%', 
+          overflowY: 'auto', 
+          overflowX: 'hidden',
+          // 隐藏滚动条但保持滚动功能
+          scrollbarWidth: 'none', // Firefox
+          msOverflowStyle: 'none', // IE/Edge
+        }}
+        className="hide-scrollbar"
+      >
         {messages.map((msg) => {
           const isVoiceCallMsg = 
             (isVoiceCallActive && voiceCallMessages.some(vm => vm.id === msg.id)) ||
@@ -242,7 +252,16 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
   // 使用虚拟滚动渲染大量消息
   // react-window 2.x 使用统一的 List 组件，支持动态高度
   return (
-    <div style={{ height: '100%', width: '100%' }}>
+    <div 
+      style={{ 
+        height: '100%', 
+        width: '100%',
+        // 隐藏滚动条但保持滚动功能
+        scrollbarWidth: 'none', // Firefox
+        msOverflowStyle: 'none', // IE/Edge
+      }}
+      className="hide-scrollbar"
+    >
       <List
         listRef={listRef}
         rowCount={messages.length}
@@ -255,6 +274,7 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
           width: '100%',
           padding: 0,
         }}
+        className="hide-scrollbar"
       />
     </div>
   );
