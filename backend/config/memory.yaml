@@ -31,7 +31,10 @@ memory:
   # Qdrant配置
   qdrant:
     engine: "qdrant"
-    url: "http://192.168.32.11:6333"
+    # url 从环境变量 QDRANT_URL 读取，如果未设置则使用默认值
+    # 默认值：http://qdrant:6333 (Docker Compose 服务名)
+    # 生产环境请通过环境变量 QDRANT_URL 配置
+    url: "http://qdrant:6333"  # 默认值，会被环境变量覆盖
     collection_prefix: "cozychat_"
     # 向量化配置
     embedding:

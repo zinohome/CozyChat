@@ -46,7 +46,22 @@ else \
     echo "提示: 请配置正确的Git仓库地址（公开仓库）或确保Dockerfile中已COPY代码"; \
     exit 1; \
 fi && \
+# 读取环境变量文件（如果存在），用于构建时注入环境变量
+# 注意：环境变量文件应该在容器启动时挂载到 /opt/cozychat/frontend/.env
+if [ -f "/opt/cozychat/frontend/.env" ]; then \
+    echo "✓ 找到 .env 文件，将在构建时使用"; \
+    # 导出环境变量供构建使用
+    export $(grep -v '^#' /opt/cozychat/frontend/.env | xargs); \
+elif [ -f "/data/cozychat/frontend/frontend.env" ]; then \
+    echo "✓ 找到 frontend.env 文件，将在构建时使用"; \
+    # 导出环境变量供构建使用
+    export $(grep -v '^#' /data/cozychat/frontend/frontend.env | grep -v '^$' | xargs); \
+else \
+    echo "⚠ 未找到 .env 文件，将使用默认值或构建参数"; \
+fi && \
 pnpm install && \
+# 构建时注入环境变量（通过 Docker build args 或环境变量）
+# 注意：Vite 的环境变量必须以 VITE_ 开头
 pnpm build && \
 # 配置Nginx服务静态文件
 mkdir -p /etc/nginx/sites-enabled && \

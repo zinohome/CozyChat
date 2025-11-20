@@ -165,7 +165,7 @@ export const useStreamChat = (
               accumulatedContent = deltaContent; // 直接使用第一个chunk的内容，而不是追加
               isFirstChunk = false;
             } else {
-              accumulatedContent += deltaContent;
+            accumulatedContent += deltaContent;
             }
             // 使用节流更新
             throttledUpdate(accumulatedContent);

@@ -102,7 +102,7 @@ if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
     # 如果vendor目录存在，安装SDK包
     if [ -d "vendor/tencentcloud-speech-sdk-python" ] && [ -f "vendor/tencentcloud-speech-sdk-python/common/__init__.py" ]; then \
         echo "✓ 安装腾讯语音SDK..."; \
-        pip install --no-cache-dir -e packages/tencent-speech-sdk; \
+    pip install --no-cache-dir -e packages/tencent-speech-sdk; \
     else \
         echo "⚠ 警告: Tencent Speech SDK vendor目录不存在，跳过安装"; \
         echo "   STT功能可能无法使用，请确保git submodule已正确初始化"; \

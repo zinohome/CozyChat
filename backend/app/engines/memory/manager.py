@@ -103,17 +103,37 @@ class MemoryManager:
                 if default_engine == "chromadb":
                     if ChromaDBMemoryEngine is None:
                         logger.warning("ChromaDB not installed, falling back to Qdrant")
-                        engine = QdrantMemoryEngine(config=memory_config.get("qdrant", {}))
+                        qdrant_config = memory_config.get("qdrant", {})
+                        # 优先使用环境变量，覆盖YAML中的硬编码值
+                        from app.config.config import settings
+                        if settings.qdrant_url:
+                            qdrant_config["url"] = settings.qdrant_url
+                        if settings.qdrant_api_key:
+                            qdrant_config["api_key"] = settings.qdrant_api_key
+                        engine = QdrantMemoryEngine(config=qdrant_config)
                     else:
                         # ChromaDBMemoryEngine 接受 config 字典，不是 persist_directory 关键字参数
                         engine = ChromaDBMemoryEngine(config=engine_config)
                 elif default_engine == "qdrant":
                     # Qdrant引擎
+                    # 优先使用环境变量，覆盖YAML中的硬编码值
+                    from app.config.config import settings
+                    if settings.qdrant_url:
+                        engine_config["url"] = settings.qdrant_url
+                    if settings.qdrant_api_key:
+                        engine_config["api_key"] = settings.qdrant_api_key
                     engine = QdrantMemoryEngine(config=engine_config)
                 else:
                     # 其他引擎待实现，回退到 Qdrant
                     logger.warning(f"Engine {default_engine} not implemented, using Qdrant")
-                    engine = QdrantMemoryEngine(config=memory_config.get("qdrant", {}))
+                    qdrant_config = memory_config.get("qdrant", {})
+                    # 优先使用环境变量，覆盖YAML中的硬编码值
+                    from app.config.config import settings
+                    if settings.qdrant_url:
+                        qdrant_config["url"] = settings.qdrant_url
+                    if settings.qdrant_api_key:
+                        qdrant_config["api_key"] = settings.qdrant_api_key
+                    engine = QdrantMemoryEngine(config=qdrant_config)
             
         except Exception as e:
             # 如果YAML配置加载失败，使用默认值

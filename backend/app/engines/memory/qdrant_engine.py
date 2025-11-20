@@ -56,9 +56,9 @@ class QdrantMemoryEngine(MemoryEngineBase):
             config=config or {}
         )
         
-        # 获取配置
-        url = self.config.get("url") or settings.qdrant_url
-        api_key = self.config.get("api_key") or settings.qdrant_api_key
+        # 获取配置（优先使用环境变量，YAML配置作为后备）
+        url = settings.qdrant_url or self.config.get("url")
+        api_key = settings.qdrant_api_key or self.config.get("api_key")
         
         if not url:
             raise ValueError("Qdrant URL is required")

@@ -59,9 +59,9 @@ yyhelper.naivehero.top {
          reverse_proxy 192.168.240.101:8000
 }
 chat.naivehero.top {
-    tls ibmzhangjun@139.com
-    encode gzip
-    
+         tls ibmzhangjun@139.com
+         encode gzip
+         
     # 处理 CORS 预检请求（必须在其他处理之前）
     @cors_preflight {
         method OPTIONS
@@ -87,7 +87,7 @@ chat.naivehero.top {
         header Access-Control-Allow-Origin "*"
         header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK, Sec-WebSocket-Protocol"
-        reverse_proxy 192.210.183.125:9800 {
+             reverse_proxy 192.210.183.125:9800 {
             # 转发 WebSocket 相关头
             header_up Sec-WebSocket-Protocol {http.request.header.Sec-WebSocket-Protocol}
             header_up Connection {http.request.header.Connection}
@@ -102,14 +102,14 @@ chat.naivehero.top {
             header_up X-Forwarded-Proto {scheme}
             
             # WebSocket 支持配置
-            transport http {
-                versions 1.1 2
-            }
+                 transport http {
+                     versions 1.1 2
+                 }
             
             # 流式响应设置
-            flush_interval -1
-        }
-    }
+                 flush_interval -1
+             }
+         }
     
     # 匹配所有后端 API 请求（/v1/* 路径）
     @backend_api {

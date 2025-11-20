@@ -17,22 +17,22 @@ export const authApi = {
    */
   async login(request: LoginRequest): Promise<AuthResponse> {
     try {
-      const response = await apiClient.post<AuthResponse>(
-        '/v1/users/login',
-        request
-      );
+    const response = await apiClient.post<AuthResponse>(
+      '/v1/users/login',
+      request
+    );
       
       // 检查响应是否有效（必须有user和access_token）
       if (!response || !response.user || !response.access_token) {
         throw new Error('登录失败：响应数据无效');
       }
       
-      // 保存token
+    // 保存token
       localStorage.setItem('access_token', response.access_token);
       if (response.refresh_token) {
         localStorage.setItem('refresh_token', response.refresh_token);
       }
-      return response;
+    return response;
     } catch (error: any) {
       // 清除可能已保存的token
       localStorage.removeItem('access_token');

@@ -317,8 +317,23 @@ class TencentSTTEngine(STTEngineBase):
             audio_data
         )
         
+        # 检查响应是否为空或无效
+        if not result_json or not result_json.strip():
+            logger.error("Tencent STT returned empty response")
+            raise Exception("Tencent STT returned empty response")
+        
         # 解析结果
-        resp = json.loads(result_json)
+        try:
+            resp = json.loads(result_json)
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Failed to parse Tencent STT response as JSON: {e}",
+                extra={
+                    "response_preview": result_json[:200] if result_json else "empty",
+                    "response_length": len(result_json) if result_json else 0
+                }
+            )
+            raise Exception(f"Tencent STT returned invalid JSON: {str(e)}")
         
         # 检查错误
         code = resp.get("code")
