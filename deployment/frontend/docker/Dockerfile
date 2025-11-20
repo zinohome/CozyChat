@@ -6,7 +6,7 @@ COPY deployment/frontend/docker/bd_build/* /bd_build/
 
 # 复制项目代码（如果使用本地代码构建）
 # 注意：如果使用Git克隆方式，可以注释掉下面的COPY，让install.sh从Git克隆
-COPY frontend /opt/cozychat/frontend
+#COPY frontend /opt/cozychat/frontend
 
 # Sys ENV
 ENV DEBIAN_FRONTEND noninteractive

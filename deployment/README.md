@@ -96,14 +96,29 @@ Dockerfile 默认会复制本地代码到镜像中。确保在项目根目录执
 
 ### 步骤 3: 构建镜像
 
-#### 方式一：使用 docker-compose 构建（推荐）
+#### 方式一：使用一键构建脚本（推荐）
+
+```bash
+cd deployment
+./build-images.sh
+```
+
+**脚本选项**：
+- `./build-images.sh` - 构建所有镜像（使用缓存）
+- `./build-images.sh --no-cache` - 完全重新构建所有镜像
+- `./build-images.sh --backend-only` - 只构建后端镜像
+- `./build-images.sh --frontend-only` - 只构建前端镜像
+- `./build-images.sh --version v0.2.0` - 构建指定版本的镜像
+- `./build-images.sh --help` - 显示帮助信息
+
+#### 方式二：使用 docker-compose 构建
 
 ```bash
 cd deployment
 docker-compose build
 ```
 
-#### 方式二：使用 build.sh 脚本构建
+#### 方式三：使用单独的 build.sh 脚本
 
 ```bash
 # 构建后端镜像
