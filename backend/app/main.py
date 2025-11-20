@@ -188,10 +188,19 @@ async def lifespan(app: FastAPI):
                     db.commit()
                     db.refresh(demo_user)
                     
-                    # 创建用户画像
-                    profile = UserProfile(user_id=demo_user.id)
-                    db.add(profile)
-                    db.commit()
+                    # 创建用户画像（如果表存在）
+                    try:
+                        # 检查 user_profiles 表是否存在
+                        from sqlalchemy import inspect
+                        inspector = inspect(db.bind)
+                        if 'user_profiles' in inspector.get_table_names():
+                            profile = UserProfile(user_id=demo_user.id)
+                            db.add(profile)
+                            db.commit()
+                        else:
+                            logger.warning("user_profiles table does not exist, skipping profile creation")
+                    except Exception as profile_error:
+                        logger.warning(f"Failed to create user profile: {profile_error}", exc_info=False)
                     
                     logger.info(
                         f"Demo user created: {settings.demo_username}",

@@ -151,6 +151,7 @@ async def create_chat_completion(
     request: Request,
     data: ChatCompletionRequest,
     response: Response,
+    current_user: User = Depends(get_current_active_user),  # 添加认证要求
     db: Session = Depends(get_sync_session),
     personality_registry: PersonalityRegistry = Depends(get_personality_registry),
     tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
@@ -160,8 +161,8 @@ async def create_chat_completion(
 ):
     """创建聊天补全(OpenAI兼容接口)"""
     try:
-        # 1. 确定personality_id和user_id
-        personality_id, user_id, session = _get_ids_from_request(data, db)
+        # 1. 确定personality_id和user_id（验证用户权限）
+        personality_id, user_id, session = _get_ids_from_request(data, db, current_user)
         
         # 2. 加载用户和人格配置
         user_obj = _load_user(user_id, db)
@@ -260,23 +261,52 @@ async def create_chat_completion(
 
 # 辅助函数
 
-def _get_ids_from_request(data, db):
-    """从请求中获取personality_id和user_id"""
+def _get_ids_from_request(data, db, current_user: User):
+    """从请求中获取personality_id和user_id，并验证用户权限"""
     personality_id = data.personality_id
     user_id = data.user_id
     session = None
     
+    # 如果请求中指定了user_id，必须与当前用户匹配（除非是管理员）
+    if user_id:
+        user_uuid = uuid.UUID(str(user_id))
+        if user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权访问其他用户的数据"
+            )
+        user_id = str(current_user.id)  # 使用当前用户的ID
+    else:
+        # 如果没有指定user_id，使用当前用户的ID
+        user_id = str(current_user.id)
+    
     if data.session_id:
         try:
             session_uuid = uuid.UUID(data.session_id)
-            session = db.query(SessionModel).filter(SessionModel.id == session_uuid).first()
+            session = db.query(SessionModel).filter(
+                and_(
+                    SessionModel.id == session_uuid,
+                    SessionModel.user_id == current_user.id,  # 确保只能访问自己的会话
+                    SessionModel.deleted_at.is_(None)
+                )
+            ).first()
             if session:
                 if not personality_id:
                     personality_id = str(session.personality_id)  # type: ignore[arg-type]
-                if not user_id:
-                    user_id = str(session.user_id)  # type: ignore[arg-type]
+                user_id = str(current_user.id)  # 使用当前用户的ID
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="会话不存在或无权访问"
+                )
+        except HTTPException:
+            raise
         except Exception as e:
             logger.warning(f"Failed to get session info: {e}", exc_info=False)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的会话ID: {str(e)}"
+            )
     
     return personality_id, user_id, session
 
@@ -378,7 +408,9 @@ async def _build_context(
 
 
 @router.get("/engines", response_model=EngineListResponse)
-async def list_engines() -> EngineListResponse:
+async def list_engines(
+    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+) -> EngineListResponse:
     """列出所有可用的AI引擎"""
     try:
         from app.engines.ai.factory import AIEngineFactory

@@ -44,8 +44,14 @@ fi && \
 # 尝试克隆（支持公开仓库，无需认证）
 REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
 echo "正在克隆仓库: $REPO_URL"; \
-if git clone "$REPO_URL" . 2>&1; then \
-    echo "✓ Git克隆成功"; \
+# 使用 --recurse-submodules 参数克隆，自动初始化submodule
+if git clone --recurse-submodules "$REPO_URL" . 2>&1; then \
+    echo "✓ Git克隆成功（包含submodule）"; \
+    # 确保所有submodule都已初始化（双重保险）
+    if [ -f ".gitmodules" ]; then \
+        echo "验证 Git Submodule..."; \
+        git submodule update --init --recursive || echo "⚠ Submodule验证失败，继续..."; \
+    fi; \
     # 立即删除 Git 历史记录（在切换目录前）
     if [ -d ".git" ]; then \
         echo "清理 Git 历史记录..."; \
@@ -80,7 +86,27 @@ pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cp
 pip install --no-cache-dir -r requirements/base.txt && \
 # 安装腾讯语音SDK（如果存在）
 if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
-    pip install --no-cache-dir -e packages/tencent-speech-sdk; \
+    # 验证vendor目录中的SDK是否存在
+    if [ ! -d "vendor/tencentcloud-speech-sdk-python" ] || [ ! -f "vendor/tencentcloud-speech-sdk-python/common/__init__.py" ]; then \
+        echo "⚠ 警告: Tencent Speech SDK vendor目录不存在或不完整"; \
+        # 如果.git目录还存在，尝试初始化submodule
+        if [ -d "../.git" ]; then \
+            echo "   尝试从Git初始化submodule..."; \
+            cd .. && git submodule update --init --recursive backend/vendor/tencentcloud-speech-sdk-python 2>/dev/null || true; \
+            cd backend; \
+        else \
+            echo "   .git目录已删除，无法自动初始化submodule"; \
+            echo "   请确保在git clone时使用了 --recurse-submodules 参数"; \
+        fi; \
+    fi; \
+    # 如果vendor目录存在，安装SDK包
+    if [ -d "vendor/tencentcloud-speech-sdk-python" ] && [ -f "vendor/tencentcloud-speech-sdk-python/common/__init__.py" ]; then \
+        echo "✓ 安装腾讯语音SDK..."; \
+        pip install --no-cache-dir -e packages/tencent-speech-sdk; \
+    else \
+        echo "⚠ 警告: Tencent Speech SDK vendor目录不存在，跳过安装"; \
+        echo "   STT功能可能无法使用，请确保git submodule已正确初始化"; \
+    fi; \
 fi && \
 # 清理：删除构建工具和开发依赖（生产环境不需要）
 apt-get remove -y --purge build-essential python3.11-dev libpython3.11-dev git && \

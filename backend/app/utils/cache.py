@@ -44,7 +44,9 @@ class CacheManager:
             has_password_in_url = "@" in redis_url.split("://")[1] if "://" in redis_url else False
             
             # 如果URL中没有密码，但配置了密码，则在URL中添加密码
-            if not has_password_in_url and redis_password:
+            # 注意：如果 Redis 服务器没有设置密码，即使配置了 redis_password 也不应该添加
+            # 这里只处理 URL 中明确包含密码的情况，或者通过环境变量明确配置的情况
+            if not has_password_in_url and redis_password and redis_password.strip():
                 # 解析URL并添加密码
                 if redis_url.startswith("redis://"):
                     # redis://host:port/db -> redis://:password@host:port/db
@@ -53,17 +55,19 @@ class CacheManager:
                         host_part = url_parts[1]
                         redis_url = f"redis://:{redis_password}@{host_part}"
             
-            # 创建连接池
+            # 创建连接池（不自动认证，让Redis客户端根据URL处理）
             self.pool = ConnectionPool.from_url(
                 redis_url,
                 max_connections=settings.redis_max_connections,
-                decode_responses=True
+                decode_responses=True,
+                # 如果URL中没有密码，不强制认证
+                # Redis客户端会根据URL自动处理认证
             )
             
             # 创建Redis客户端
             self.client = redis.Redis(connection_pool=self.pool)
             
-            # 测试连接
+            # 测试连接（捕获认证错误并处理）
             try:
                 self.client.ping()
                 logger.info(
@@ -73,6 +77,40 @@ class CacheManager:
                         "max_connections": settings.redis_max_connections
                     }
                 )
+            except redis.exceptions.AuthenticationError as auth_error:
+                # Redis认证错误：可能是配置了密码但服务器没有密码
+                # 尝试不使用密码连接
+                if redis_password and not has_password_in_url:
+                    logger.warning(
+                        "Redis authentication failed, trying without password",
+                        exc_info=False
+                    )
+                    # 重新创建连接池（不使用密码）
+                    original_url = settings.redis_url
+                    self.pool = ConnectionPool.from_url(
+                        original_url,
+                        max_connections=settings.redis_max_connections,
+                        decode_responses=True
+                    )
+                    self.client = redis.Redis(connection_pool=self.pool)
+                    try:
+                        self.client.ping()
+                        logger.info(
+                            "Redis cache connected (without password)",
+                            extra={"redis_url": original_url}
+                        )
+                    except Exception as retry_error:
+                        logger.warning(
+                            f"Redis cache connection failed (cache will be disabled): {retry_error}",
+                            exc_info=False
+                        )
+                        self.client = None
+                else:
+                    logger.warning(
+                        f"Redis cache connection failed (cache will be disabled): {auth_error}",
+                        exc_info=False
+                    )
+                    self.client = None
             except Exception as ping_error:
                 # Redis连接失败不影响应用启动，只记录警告
                 logger.warning(
