@@ -22,6 +22,7 @@ from app.core.personality import PersonalityRegistry
 from app.engines.voice.stt.factory import STTEngineFactory
 from app.engines.voice.tts.factory import TTSEngineFactory
 from app.models.user import User
+from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -105,13 +106,18 @@ async def create_transcription(
         
         # 获取STT配置
         stt_config = {}
+        # 从配置文件加载默认STT提供商
+        config_loader = get_config_loader()
+        stt_config_from_file = config_loader.load_voice_config("stt")
+        default_provider = stt_config_from_file.get("default", "openai")
+        
         if personality_id:
             personality_registry = get_personality_registry()
             personality = personality_registry.get_personality(personality_id)
             if personality and personality.voice and personality.voice.stt:
                 # VoiceConfig 是 dataclass，使用属性访问
                 stt_config = personality.voice.stt.copy()  # 复制字典避免修改原配置
-                provider = stt_config.get("provider", "openai")
+                provider = stt_config.get("provider", default_provider)
                 # 使用人格配置的model和language，但允许请求参数覆盖
                 if model:
                     stt_config["model"] = model
@@ -122,11 +128,25 @@ async def create_transcription(
                 elif "language" not in stt_config:
                     stt_config["language"] = None
             else:
-                provider = "openai"
-                stt_config = {"model": model, "language": language}
+                # 人格没有STT配置，使用配置文件中的默认提供商
+                provider = default_provider
+                # 从配置文件加载对应提供商的配置
+                provider_config = stt_config_from_file.get(provider, {})
+                stt_config = {
+                    "model": model or provider_config.get("model", "whisper-1"),
+                    "language": language or provider_config.get("language"),
+                    **provider_config  # 合并提供商的默认配置
+                }
         else:
-            provider = "openai"
-            stt_config = {"model": model, "language": language}
+            # 没有指定人格，使用配置文件中的默认提供商
+            provider = default_provider
+            # 从配置文件加载对应提供商的配置
+            provider_config = stt_config_from_file.get(provider, {})
+            stt_config = {
+                "model": model or provider_config.get("model", "whisper-1"),
+                "language": language or provider_config.get("language"),
+                **provider_config  # 合并提供商的默认配置
+            }
         
         # 创建STT引擎
         try:

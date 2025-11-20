@@ -222,7 +222,7 @@ personality:
   # 语音配置
   voice:
     stt:
-      provider: "tencent"    # openai / tencent / custom
+      provider: "openai"    # openai / tencent / custom
       model: "16k_zh"        # 16k_zh: 中文，16k_en: 英语
       language: "zh-CN"
       # 识别模式

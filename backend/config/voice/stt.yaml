@@ -2,7 +2,7 @@ engines:
   # STT引擎配置
   stt:
     # 默认引擎
-    default: "openai"
+    default: "tencent"
     
     # OpenAI Whisper配置
     openai:
