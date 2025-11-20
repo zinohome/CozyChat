@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/slices/authSlice';
 import { authApi } from '@/services/auth';
@@ -10,21 +11,28 @@ import type { LoginRequest, RegisterRequest } from '@/types/user';
  */
 export const useAuth = () => {
   const queryClient = useQueryClient();
-  const { setUser, setLoading, setError, logout: logoutStore } = useAuthStore();
+  const { setUser, setError, logout: logoutStore } = useAuthStore();
 
   // 获取当前用户
-  const { data: user, isLoading } = useQuery({
+  const { data: user, isLoading, error } = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: () => authApi.getCurrentUser(),
     enabled: !!localStorage.getItem('access_token'),
     retry: false,
-    onSuccess: (data) => {
-      setUser(data);
-    },
-    onError: () => {
-      setUser(null);
-    },
   });
+
+  // React Query v5: 使用 useEffect 替代 onSuccess/onError
+  useEffect(() => {
+    if (user) {
+      setUser(user);
+    }
+  }, [user, setUser]);
+
+  useEffect(() => {
+    if (error) {
+      setUser(null);
+    }
+  }, [error, setUser]);
 
   // 登录
   const loginMutation = useMutation({

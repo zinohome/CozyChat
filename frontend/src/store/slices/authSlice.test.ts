@@ -26,6 +26,9 @@ describe('authSlice', () => {
       id: 'user-1',
       username: 'testuser',
       email: 'test@example.com',
+      role: 'user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     useAuthStore.getState().setUser(user);
@@ -50,6 +53,9 @@ describe('authSlice', () => {
       id: 'user-1',
       username: 'testuser',
       email: 'test@example.com',
+      role: 'user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     useAuthStore.getState().setUser(user);

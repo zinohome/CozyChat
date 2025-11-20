@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { chatApi } from './chat';
 import { apiClient } from './api';
+import type { MessageRole } from '@/types/chat';
 
 // Mock dependencies
 vi.mock('./api', () => ({
@@ -43,7 +44,7 @@ describe('chatApi', () => {
   describe('send', () => {
     it('应该发送聊天消息', async () => {
       const request = {
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user' as MessageRole, content: 'Hello' }],
         personality_id: 'personality-1',
         stream: false,
       };
@@ -76,7 +77,7 @@ describe('chatApi', () => {
   describe('streamChat', () => {
     it('应该处理流式响应', async () => {
       const request = {
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user' as MessageRole, content: 'Hello' }],
         personality_id: 'personality-1',
         stream: true,
       };
@@ -119,7 +120,7 @@ describe('chatApi', () => {
 
     it('应该处理流式响应结束标记', async () => {
       const request = {
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user' as MessageRole, content: 'Hello' }],
         personality_id: 'personality-1',
         stream: true,
       };
@@ -157,7 +158,7 @@ describe('chatApi', () => {
 
     it('应该处理HTTP错误', async () => {
       const request = {
-        messages: [{ role: 'user', content: 'Hello' }],
+        messages: [{ role: 'user' as MessageRole, content: 'Hello' }],
         personality_id: 'personality-1',
         stream: true,
       };
@@ -170,7 +171,7 @@ describe('chatApi', () => {
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       await expect(async () => {
-        for await (const chunk of chatApi.streamChat(request)) {
+        for await (const _chunk of chatApi.streamChat(request)) {
           // Should not reach here
         }
       }).rejects.toThrow();
@@ -185,8 +186,8 @@ describe('chatApi', () => {
       const sessionDetail = {
         id: sessionId,
         messages: [
-          { id: '1', role: 'user', content: 'Hello', created_at: now, metadata: {} },
-          { id: '2', role: 'assistant', content: 'Hi', created_at: now, metadata: {} },
+          { id: '1', role: 'user' as MessageRole, content: 'Hello', created_at: now, metadata: {} },
+          { id: '2', role: 'assistant' as MessageRole, content: 'Hi', created_at: now, metadata: {} },
         ],
       };
 
@@ -198,8 +199,8 @@ describe('chatApi', () => {
       expect(mockGetSession).toHaveBeenCalledWith(sessionId);
       // getHistory会将MessageInfo转换为Message格式
       expect(result).toEqual([
-        { id: '1', role: 'user', content: 'Hello', timestamp: now, session_id: sessionId, metadata: {} },
-        { id: '2', role: 'assistant', content: 'Hi', timestamp: now, session_id: sessionId, metadata: {} },
+        { id: '1', role: 'user' as MessageRole, content: 'Hello', timestamp: now, session_id: sessionId, metadata: {} },
+        { id: '2', role: 'assistant' as MessageRole, content: 'Hi', timestamp: now, session_id: sessionId, metadata: {} },
       ]);
     });
 

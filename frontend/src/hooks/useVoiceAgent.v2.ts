@@ -175,7 +175,7 @@ export const useVoiceAgent = (
   /**
    * 结束通话
    */
-  const endCall = useCallback(() => {
+  const endCall = useCallback(async () => {
     if (!isCalling || !serviceRef.current) {
       console.warn('[useVoiceAgent] 未在通话中');
       return;

@@ -227,7 +227,6 @@ async function playTTSSegmented(
  * @param onProgress 进度回调（可选）
  * @returns Audio对象，可用于控制播放
  */
-// @ts-expect-error - 此函数保留用于未来可能的流式播放需求
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function playTTSStream(
   text: string,

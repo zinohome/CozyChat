@@ -63,7 +63,7 @@ describe('useFileUpload', () => {
       0: file,
       length: 1,
       item: (index: number) => (index === 0 ? file : null),
-    } as FileList;
+    } as unknown as FileList;
 
     // Mock文件选择
     const mockInput = {
@@ -95,7 +95,7 @@ describe('useFileUpload', () => {
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = {
       files: [file],
-    } as DataTransfer;
+    } as unknown as DataTransfer;
 
     const event = {
       preventDefault: vi.fn(),
@@ -132,7 +132,7 @@ describe('useFileUpload', () => {
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = {
       files: [file],
-    } as DataTransfer;
+    } as unknown as DataTransfer;
 
     const event = {
       preventDefault: vi.fn(),
@@ -154,7 +154,7 @@ describe('useFileUpload', () => {
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = {
       files: [file],
-    } as DataTransfer;
+    } as unknown as DataTransfer;
 
     const event = {
       preventDefault: vi.fn(),
@@ -216,7 +216,7 @@ describe('useFileUpload', () => {
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = {
       files: [file],
-    } as DataTransfer;
+    } as unknown as DataTransfer;
 
     const event = {
       preventDefault: vi.fn(),

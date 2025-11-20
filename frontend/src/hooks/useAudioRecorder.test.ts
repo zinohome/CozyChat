@@ -33,9 +33,13 @@ const mockStream = {
   ]),
 };
 
-global.navigator.mediaDevices = {
-  getUserMedia: vi.fn(() => Promise.resolve(mockStream)),
-} as any;
+Object.defineProperty(global.navigator, 'mediaDevices', {
+  value: {
+    getUserMedia: vi.fn(() => Promise.resolve(mockStream)),
+  },
+  writable: true,
+  configurable: true,
+});
 
 describe('useAudioRecorder', () => {
   beforeEach(() => {
@@ -124,11 +128,10 @@ describe('useAudioRecorder', () => {
     });
 
     // 模拟生成audioBlob
-    const blob = new Blob(['test'], { type: 'audio/webm' });
     act(() => {
       // 手动触发onstop
-      if (mockMediaRecorder.onstop) {
-        mockMediaRecorder.onstop();
+      if (mockMediaRecorder.onstop && typeof mockMediaRecorder.onstop === 'function') {
+        (mockMediaRecorder.onstop as () => void)();
       }
     });
 

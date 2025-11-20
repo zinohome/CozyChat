@@ -29,9 +29,9 @@ export class WebSocketStrategy implements ITransportStrategy {
   private source: MediaStreamAudioSourceNode | null = null;
   private audioVisualizer: AudioVisualizer;
   // 保留用于将来可能的扩展（回调函数已通过audioVisualizer处理）
-  // @ts-expect-error - 保留用于接口兼容性
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private onUserFrequencyData: ((data: Uint8Array) => void) | null = null;
-  // @ts-expect-error - 保留用于接口兼容性
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private onAssistantFrequencyData: ((data: Uint8Array) => void) | null = null;
   private isCalling: boolean = false;
   
@@ -501,7 +501,7 @@ export class WebSocketStrategy implements ITransportStrategy {
    * @deprecated 已改用缓冲机制，此方法保留用于兼容性
    * 注意：此方法在 playAudioQueue 内部被调用，但linter可能无法检测到
    */
-  // @ts-expect-error - 保留用于兼容性，在条件分支中被调用
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async playAudioQueue(): Promise<void> {
     if (this.isPlayingAudio || this.audioQueue.length === 0) {
       return;
@@ -587,7 +587,7 @@ export class WebSocketStrategy implements ITransportStrategy {
    * 将 PCM16 数据转换为 WAV 格式（保留用于兼容性，但不再使用）
    * @deprecated 已改用 AudioBuffer 直接播放，此方法保留用于兼容性
    */
-  // @ts-expect-error - 保留用于兼容性，可能在未来需要时使用
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private pcm16ToWav(pcm16Data: ArrayBuffer, sampleRate: number, channels: number): Blob {
     const length = pcm16Data.byteLength;
     const buffer = new ArrayBuffer(44 + length);

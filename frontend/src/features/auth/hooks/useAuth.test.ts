@@ -4,7 +4,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { authApi } from '@/services/auth';
-import * as authStoreModule from '@/store/slices/authSlice';
+// authStoreModule 未使用，已移除
 
 // Mock authApi
 vi.mock('@/services/auth', () => ({
@@ -69,6 +69,9 @@ describe('useAuth', () => {
       id: 'user-1',
       username: 'testuser',
       email: 'test@example.com',
+      role: 'user' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     // Mock localStorage to have access_token (required by enabled condition)
@@ -104,11 +107,15 @@ describe('useAuth', () => {
     const loginResponse = {
       access_token: 'token',
       refresh_token: 'refresh',
+      token_type: 'Bearer',
       expires_in: 3600,
       user: {
         id: 'user-1',
         username: 'testuser',
         email: 'test@example.com',
+        role: 'user' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
     };
 
@@ -134,11 +141,15 @@ describe('useAuth', () => {
     const registerResponse = {
       access_token: 'token',
       refresh_token: 'refresh',
+      token_type: 'Bearer',
       expires_in: 3600,
       user: {
         id: 'user-2',
         username: 'newuser',
         email: 'new@example.com',
+        role: 'user' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
     };
 

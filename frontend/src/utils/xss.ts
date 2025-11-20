@@ -15,14 +15,14 @@ import DOMPurify from 'dompurify';
  */
 export const sanitizeHtml = (
   html: string,
-  options?: DOMPurify.Config
+  options?: import('dompurify').Config
 ): string => {
   if (!html) {
     return '';
   }
 
   // 默认配置：只允许安全的HTML标签和属性
-  const defaultOptions: DOMPurify.Config = {
+  const defaultOptions: import('dompurify').Config = {
     ALLOWED_TAGS: [
       'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre',
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -40,7 +40,7 @@ export const sanitizeHtml = (
     ...options, // 允许覆盖默认配置
   };
 
-  return DOMPurify.sanitize(html, defaultOptions);
+  return DOMPurify.sanitize(html, defaultOptions) as string;
 };
 
 /**

@@ -64,7 +64,7 @@ global.AudioContext = vi.fn().mockImplementation(() => ({
 }));
 
 // Mock MediaRecorder
-global.MediaRecorder = vi.fn().mockImplementation(() => ({
+const MediaRecorderMock = vi.fn().mockImplementation(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   pause: vi.fn(),
@@ -73,7 +73,12 @@ global.MediaRecorder = vi.fn().mockImplementation(() => ({
   onerror: null,
   onstop: null,
   state: 'inactive',
-}));
+})) as any;
+
+// 添加静态方法 isTypeSupported
+MediaRecorderMock.isTypeSupported = vi.fn(() => true);
+
+global.MediaRecorder = MediaRecorderMock;
 
 // Mock navigator.mediaDevices
 Object.defineProperty(navigator, 'mediaDevices', {

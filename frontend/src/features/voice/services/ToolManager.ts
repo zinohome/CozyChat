@@ -98,12 +98,13 @@ export class ToolManager {
       return tool({
         name: toolDef.name,
         description: toolDef.description,
-        parameters: toolDef.parameters,
+        parameters: toolDef.parameters as any, // tool() 函数接受灵活的参数格式
         // 执行函数：调用 executeFrontendTool
-        execute: async (args: Record<string, any>) => {
-          log.debug(`工具执行被调用: ${toolDef.name}`, args);
+        execute: async (args: unknown) => {
+          const typedArgs = args as Record<string, any>;
+          log.debug(`工具执行被调用: ${toolDef.name}`, typedArgs);
           try {
-            const result = await executeFrontendTool(toolDef.name, args);
+            const result = await executeFrontendTool(toolDef.name, typedArgs);
             // 确保返回字符串（Realtime API 可能需要字符串结果）
             return typeof result === 'string' ? result : JSON.stringify(result);
           } catch (error) {
@@ -129,12 +130,13 @@ export class ToolManager {
         return tool({
           name: toolInfo.name,
           description: toolInfo.description,
-          parameters: this.convertParameters(toolInfo.parameters),
+          parameters: this.convertParameters(toolInfo.parameters) as any, // tool() 函数接受灵活的参数格式
           // 执行函数：调用 toolManager.executeTool
-          execute: async (args: Record<string, any>) => {
-            log.debug(`工具执行被调用: ${toolInfo.name}`, args);
+          execute: async (args: unknown) => {
+            const typedArgs = args as Record<string, any>;
+            log.debug(`工具执行被调用: ${toolInfo.name}`, typedArgs);
             try {
-              const result = await this.executeTool(toolInfo.name, args);
+              const result = await this.executeTool(toolInfo.name, typedArgs);
               // 确保返回字符串（Realtime API 可能需要字符串结果）
               return typeof result === 'string' ? result : JSON.stringify(result);
             } catch (error) {
@@ -156,9 +158,12 @@ export class ToolManager {
    * @returns JSON Schema 格式的参数
    */
   private convertParameters(parameters: Record<string, any>): Record<string, any> {
-    // 如果已经是标准的 JSON Schema 格式，直接返回
+    // 如果已经是标准的 JSON Schema 格式，直接返回（确保有 additionalProperties）
     if (parameters.type && parameters.properties) {
-      return parameters;
+      return {
+        ...parameters,
+        additionalProperties: parameters.additionalProperties ?? false,
+      };
     }
 
     // 否则，包装成标准格式
@@ -168,6 +173,7 @@ export class ToolManager {
       required: Object.keys(parameters).filter(
         (key) => parameters[key].required === true
       ),
+      additionalProperties: false,
     };
   }
 

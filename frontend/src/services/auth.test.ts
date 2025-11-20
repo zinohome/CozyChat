@@ -145,7 +145,7 @@ describe('authApi', () => {
       const mockPost = vi.fn().mockResolvedValue({ data: refreshResponse });
       (axiosModule.default as any).post = mockPost;
 
-      const result = await authApi.refreshToken('refresh-token');
+      const result = await authApi.refreshToken();
 
       expect(mockPost).toHaveBeenCalled();
       expect(result).toEqual(refreshResponse);

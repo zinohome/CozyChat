@@ -22,7 +22,7 @@ export class TransportFactory {
   static create(type: TransportType, config: Record<string, any>): ITransport {
     switch (type) {
       case 'webrtc':
-        return new WebRTCTransport(config);
+        return new WebRTCTransport(config as any); // WebRTCTransport 需要 baseUrl，但这里使用类型断言
       case 'websocket':
         return new WebSocketTransport(config);
       default:

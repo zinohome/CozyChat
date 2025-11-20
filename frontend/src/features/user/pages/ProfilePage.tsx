@@ -54,7 +54,7 @@ export const ProfilePage: React.FC = () => {
       form.setFieldsValue({
         display_name: profile.display_name || '',
         bio: profile.bio || '',
-        interests: profile.interests?.join(', ') || '',
+        interests: (profile.interests?.join(', ') || '') as any, // Form expects string, but we'll convert back to array
       });
       setAvatarUrl(profile.avatar_url);
     }

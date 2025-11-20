@@ -67,6 +67,7 @@ export const sessionApi = {
       total,
       page,
       page_size: pageSize,
+      total_pages: Math.ceil(total / pageSize),
       has_next: page * pageSize < total,
       has_prev: page > 1,
     };
@@ -214,7 +215,8 @@ export const sessionApi = {
       id: msg.id,
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
-      created_at: msg.created_at,
+      timestamp: msg.created_at, // Message 类型需要 timestamp
+      session_id: sessionId,
       metadata: msg.metadata,
     }));
     
@@ -224,6 +226,7 @@ export const sessionApi = {
       total,
       page,
       page_size: pageSize,
+      total_pages: Math.ceil(total / pageSize),
       has_next: false, // 后端详情接口返回所有消息，不支持分页
       has_prev: false,
     };

@@ -8,7 +8,7 @@
  * - 处理用户/助手转录事件
  */
 
-import type { RealtimeSession } from '@openai/agents';
+import type { RealtimeSession } from '@openai/agents/realtime';
 import { toolManager } from './ToolManager';
 import { logger } from '@/utils/logger';
 

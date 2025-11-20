@@ -35,8 +35,8 @@ describe('uiSlice', () => {
   });
 
   it('应该设置主题', () => {
-    useUIStore.getState().setTheme('dark');
-    expect(useUIStore.getState().theme).toBe('dark');
+    useUIStore.getState().setTheme('green');
+    expect(useUIStore.getState().theme).toBe('green');
   });
 
   it('应该设置语言', () => {

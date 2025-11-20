@@ -49,3 +49,24 @@ export interface UpdateSessionRequest {
   is_archived?: boolean;
 }
 
+/**
+ * 分页参数
+ */
+export interface PaginationParams {
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * 分页响应
+ */
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next?: boolean; // 是否有下一页（可选，用于兼容不同API）
+  has_prev?: boolean; // 是否有上一页（可选，用于兼容不同API）
+}
+
