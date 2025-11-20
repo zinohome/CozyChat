@@ -17,10 +17,22 @@ echo "尝试从Git克隆代码..."; \
 # 配置Git（禁用交互式认证提示）
 export GIT_TERMINAL_PROMPT=0 && \
 export GIT_ASKPASS=/bin/echo && \
+# 清理目录（如果存在旧文件）
+if [ "$(ls -A . 2>/dev/null)" ]; then \
+    echo "⚠ 目录不为空，清理中..."; \
+    rm -rf * .* 2>/dev/null || true; \
+fi && \
 # 尝试克隆（支持公开仓库，无需认证）
-if git clone ${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git} . 2>/dev/null; then \
+REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
+echo "正在克隆仓库: $REPO_URL"; \
+if git clone "$REPO_URL" . 2>&1; then \
     echo "✓ Git克隆成功"; \
-    cd backend; \
+    if [ -d "backend" ] && [ -f "backend/app/main.py" ]; then \
+        cd backend; \
+    else \
+        echo "✗ 错误: 克隆成功但未找到 backend 目录"; \
+        exit 1; \
+    fi; \
 elif [ -d "backend" ] && [ -f "backend/app/main.py" ]; then \
     echo "⚠ Git克隆失败，使用已复制的代码（备选方案）"; \
     cd backend; \

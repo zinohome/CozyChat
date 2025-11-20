@@ -8,8 +8,12 @@ apt install -y --no-install-recommends curl wget procps git && \
 # 安装 Node.js 20.x
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 apt install -y nodejs && \
-# 安装 pnpm
-npm install -g pnpm && \
+# 安装 pnpm（如果不存在）
+if ! command -v pnpm &> /dev/null; then \
+    npm install -g pnpm; \
+else \
+    echo "✓ pnpm 已安装，跳过"; \
+fi && \
 cd /opt && \
 mkdir -p cozychat && \
 cd /opt/cozychat && \
@@ -18,10 +22,22 @@ echo "尝试从Git克隆代码..."; \
 # 配置Git（禁用交互式认证提示）
 export GIT_TERMINAL_PROMPT=0 && \
 export GIT_ASKPASS=/bin/echo && \
+# 清理目录（如果存在旧文件）
+if [ "$(ls -A . 2>/dev/null)" ]; then \
+    echo "⚠ 目录不为空，清理中..."; \
+    rm -rf * .* 2>/dev/null || true; \
+fi && \
 # 尝试克隆（支持公开仓库，无需认证）
-if git clone ${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git} . 2>/dev/null; then \
+REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
+echo "正在克隆仓库: $REPO_URL"; \
+if git clone "$REPO_URL" . 2>&1; then \
     echo "✓ Git克隆成功"; \
-    cd frontend; \
+    if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then \
+        cd frontend; \
+    else \
+        echo "✗ 错误: 克隆成功但未找到 frontend 目录"; \
+        exit 1; \
+    fi; \
 elif [ -d "frontend" ] && [ -f "frontend/package.json" ]; then \
     echo "⚠ Git克隆失败，使用已复制的代码（备选方案）"; \
     cd frontend; \
