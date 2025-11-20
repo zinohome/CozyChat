@@ -19,7 +19,7 @@ hiredis==2.3.2
 # 认证
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
+bcrypt==3.2.2  # 使用3.x版本以兼容passlib 1.7.4（4.x版本移除了__about__属性）
 
 # AI/LLM
 openai==2.7.1
