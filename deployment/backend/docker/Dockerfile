@@ -21,6 +21,12 @@ ENV EXT_HOSTS=''
 # ...put your own build instructions here...
 RUN mkdir -p /data && chmod 755 /bd_build/install.sh && /bd_build/install.sh
 
+# 最终清理：删除不必要的文件
+RUN rm -rf /tmp/* /var/tmp/* && \
+    rm -rf /root/.cache && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
 # Clean up APT when done.
 WORKDIR /opt/cozychat/backend
 

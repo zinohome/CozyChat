@@ -4,11 +4,30 @@ set -x
 apt clean && rm -rf /var/lib/apt/lists/* && \
 rm /etc/apt/sources.list.d/passenger.list  && \
 apt-get update && DEBIAN_FRONTEND=noninteractive && \
-apt install -y --no-install-recommends build-essential ffmpeg libssl-dev libffi-dev portaudio19-dev net-tools libsasl2-dev curl wget procps git libnss3-tools python3-pip && \
-apt install -y software-properties-common  && add-apt-repository -y ppa:deadsnakes/ppa && apt install -y python3.11 && \
-apt install -y python3.11-dev libpython3.11-dev && \
-rm /usr/bin/python && ln -s /usr/bin/python3.11 /usr/bin/python && \
-python -m pip install virtualenv && \
+# 安装运行时依赖（最小化）
+apt install -y --no-install-recommends \
+    ffmpeg \
+    libssl3 \
+    libffi8 \
+    portaudio19-dev \
+    net-tools \
+    libsasl2-2 \
+    curl \
+    wget \
+    procps \
+    git \
+    python3-pip && \
+# 安装 Python 3.11（如果不存在）
+if ! command -v python3.11 &> /dev/null; then \
+    apt install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt install -y --no-install-recommends python3.11 python3.11-venv; \
+fi && \
+# 安装构建工具（仅用于编译 Python 包，后续会删除）
+apt install -y --no-install-recommends build-essential python3.11-dev libpython3.11-dev && \
+rm -f /usr/bin/python && ln -s /usr/bin/python3.11 /usr/bin/python && \
+python -m pip install --no-cache-dir virtualenv && \
 cd /opt && \
 mkdir -p cozychat && \
 cd /opt/cozychat && \
@@ -44,11 +63,29 @@ fi && \
 virtualenv .venv && \
 . .venv/bin/activate && \
 pip install --upgrade pip && \
-pip install -r requirements/base.txt && \
+pip install --no-cache-dir -r requirements/base.txt && \
 # 安装腾讯语音SDK（如果存在）
 if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
-    pip install -e packages/tencent-speech-sdk; \
+    pip install --no-cache-dir -e packages/tencent-speech-sdk; \
 fi && \
+# 清理：删除 Git 历史记录（只保留代码）
+if [ -d ".git" ]; then \
+    echo "清理 Git 历史记录..."; \
+    rm -rf .git; \
+fi && \
+# 清理：删除构建工具和开发依赖（生产环境不需要）
+apt-get remove -y --purge build-essential python3.11-dev libpython3.11-dev git && \
+apt-get autoremove -y && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/* && \
+rm -rf /tmp/* /var/tmp/* && \
+# 清理：删除 pip 缓存
+rm -rf ~/.cache/pip && \
+rm -rf /root/.cache/pip && \
+# 清理：删除 Python 字节码缓存
+find . -type d -name __pycache__ -exec rm -r {} + 2>/dev/null || true && \
+find . -type f -name "*.pyc" -delete 2>/dev/null || true && \
+find . -type f -name "*.pyo" -delete 2>/dev/null || true && \
 cp /bd_build/50_start_h.sh /etc/my_init.d/50_start_h.sh && \
 chmod 755 /etc/my_init.d/50_start_h.sh
 
