@@ -38,7 +38,7 @@ export interface UseVoiceAgentReturn {
  * Voice Agent Hook
  *
  * 使用 OpenAI Agents SDK 的 Realtime API 实现语音通话功能。
- * 由于 oneapi.naivehero.top 是 api.openai.com 的完整镜像，可以直接使用 OpenAI SDK。
+ * 支持 OpenAI 兼容的 API 服务，可以直接使用 OpenAI SDK。
  *
  * @param sessionId - 会话ID
  * @param personalityId - 人格ID
@@ -446,7 +446,7 @@ export const useVoiceAgent = (
       const webrtcEndpoint = `${baseUrl}/v1/realtime/calls`;
       
       const transport = new OpenAIRealtimeWebRTC({
-        baseUrl: webrtcEndpoint, // 使用完整的端点 URL（例如：https://oneapi.naivehero.top/v1/realtime/calls）
+        baseUrl: webrtcEndpoint, // 使用完整的端点 URL（例如：https://api.example.com/v1/realtime/calls）
         // 不使用 useInsecureApiKey，因为我们现在有 ephemeral key
         mediaStream: userMediaStream, // 使用我们自己创建的音频流
         audioElement: assistantAudioElement, // 使用我们自己创建的音频元素

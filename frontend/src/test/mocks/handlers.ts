@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// 测试环境：使用环境变量或空字符串（相对路径）
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Mock API handlers for MSW

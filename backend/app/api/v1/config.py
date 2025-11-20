@@ -388,7 +388,12 @@ async def get_realtime_token(
                         extra={"user_id": str(user.id), "voice": voice}
                     )
             
-            client_secrets_url = "https://api.openai.com/v1/realtime/client_secrets"
+            # 使用配置的 base_url 构建 client_secrets URL
+            # 确保 base_url 不以 /v1 结尾（如果以 /v1 结尾，需要移除）
+            client_secrets_base = base_url.rstrip('/')
+            if client_secrets_base.endswith('/v1'):
+                client_secrets_base = client_secrets_base[:-3]
+            client_secrets_url = f"{client_secrets_base}/v1/realtime/client_secrets"
             
             async with httpx.AsyncClient(timeout=10.0) as client:
                 http_response = await client.post(
@@ -441,15 +446,13 @@ async def get_realtime_token(
                     )
         
         # 构建 WebSocket URL（用于 WebSocket 传输层，WebRTC 不需要）
-        if is_new_api:
-            ws_base_url = base_url.replace('https://', 'wss://').replace('http://', 'ws://')
-            if ws_base_url.endswith('/v1'):
-                ws_base_url = ws_base_url[:-3]
-            elif ws_base_url.endswith('/v1/'):
-                ws_base_url = ws_base_url[:-4]
-            ws_url = f"{ws_base_url.rstrip('/')}/v1/realtime?model={settings.openai_realtime_model}"
-        else:
-            ws_url = f"wss://api.openai.com/v1/realtime?model={settings.openai_realtime_model}"
+        # 统一使用配置的 base_url，不再硬编码 OpenAI 官方地址
+        ws_base_url = base_url.replace('https://', 'wss://').replace('http://', 'ws://')
+        if ws_base_url.endswith('/v1'):
+            ws_base_url = ws_base_url[:-3]
+        elif ws_base_url.endswith('/v1/'):
+            ws_base_url = ws_base_url[:-4]
+        ws_url = f"{ws_base_url.rstrip('/')}/v1/realtime?model={settings.openai_realtime_model}"
         
         logger.info(
             "Generated realtime token successfully",

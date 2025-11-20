@@ -46,7 +46,7 @@ export const voiceApi = {
    */
   async synthesize(request: SpeechRequest): Promise<Blob> {
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/v1/audio/speech`,
+      `${import.meta.env.VITE_API_BASE_URL || ''}/v1/audio/speech`,
       {
         method: 'POST',
         headers: {
@@ -70,7 +70,7 @@ export const voiceApi = {
    */
   async *synthesizeStream(request: SpeechRequest): AsyncGenerator<Blob> {
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/v1/audio/speech/stream`,
+      `${import.meta.env.VITE_API_BASE_URL || ''}/v1/audio/speech/stream`,
       {
         method: 'POST',
         headers: {

@@ -5,7 +5,7 @@
 /**
  * 测试 WebRTC 端点是否可用
  * 
- * @param baseUrl - 基础 URL（例如：https://oneapi.naivehero.top）
+ * @param baseUrl - 基础 URL（例如：https://api.example.com）
  * @param apiKey - API 密钥
  * @returns 测试结果
  */
@@ -67,7 +67,7 @@ export async function testWebRTCEndpoint(
 /**
  * 测试 WebSocket 端点是否可用
  * 
- * @param baseUrl - 基础 URL（例如：https://oneapi.naivehero.top）
+ * @param baseUrl - 基础 URL（例如：https://api.example.com）
  * @param apiKey - API 密钥
  * @returns 测试结果
  */
@@ -79,7 +79,7 @@ export async function testWebSocketEndpoint(
   endpoint: string;
   error?: string;
 }> {
-  // WebSocket 端点：wss://oneapi.naivehero.top/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01
+  // WebSocket 端点格式：wss://{baseUrl}/v1/realtime?model={model}
   const wsBaseUrl = baseUrl.replace(/^https?:\/\//, 'wss://');
   const endpoint = `${wsBaseUrl}/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01`;
   

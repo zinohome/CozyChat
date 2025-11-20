@@ -61,7 +61,7 @@ export const authApi = {
     }
     // 使用原始axios，避免拦截器循环
     const axios = (await import('axios')).default;
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const response = await axios.post<{
       access_token: string;
       expires_in: number;

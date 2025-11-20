@@ -29,7 +29,7 @@ export const chatApi = {
     request: ChatRequest
   ): AsyncGenerator<StreamChunk, void, unknown> {
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/v1/chat/completions`,
+      `${import.meta.env.VITE_API_BASE_URL || ''}/v1/chat/completions`,
       {
         method: 'POST',
         headers: {
