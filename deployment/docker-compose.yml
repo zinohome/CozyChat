@@ -1,18 +1,14 @@
 services:
   backend:
-    build:
-      context: ..
-      dockerfile: deployment/backend/docker/Dockerfile
-      args:
-        - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}
+    image: cozychat/backend:v0.1.0  
     container_name: cozychat-backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "9800:8000"
     volumes:
       - /data/cozychat/backend/logs:/opt/cozychat/backend/logs
       - /data/cozychat/backend/data:/opt/cozychat/backend/data
-      - /data/cozychat/frontend/backend.env:/opt/cozychat/backend/.env:ro
+      - /data/cozychat/backend/backend.env:/opt/cozychat/.env:ro
     networks:
       - 1panel-network
     depends_on:
@@ -21,15 +17,11 @@ services:
       createdBy: "Apps"
 
   frontend:
-    build:
-      context: ..
-      dockerfile: deployment/frontend/docker/Dockerfile
-      args:
-        - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}
+    image: cozychat/frontend:v0.1.0  
     container_name: cozychat-frontend
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "8000:5173"
     volumes:
       - /data/cozychat/frontend/dist:/opt/cozychat/frontend/dist
       - /data/cozychat/frontend/frontend.env:/opt/cozychat/frontend/.env:ro
