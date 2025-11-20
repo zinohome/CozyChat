@@ -46,6 +46,11 @@ REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
 echo "正在克隆仓库: $REPO_URL"; \
 if git clone "$REPO_URL" . 2>&1; then \
     echo "✓ Git克隆成功"; \
+    # 立即删除 Git 历史记录（在切换目录前）
+    if [ -d ".git" ]; then \
+        echo "清理 Git 历史记录..."; \
+        rm -rf .git; \
+    fi; \
     if [ -d "backend" ] && [ -f "backend/app/main.py" ]; then \
         cd backend; \
     else \
@@ -67,11 +72,6 @@ pip install --no-cache-dir -r requirements/base.txt && \
 # 安装腾讯语音SDK（如果存在）
 if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
     pip install --no-cache-dir -e packages/tencent-speech-sdk; \
-fi && \
-# 清理：删除 Git 历史记录（只保留代码）
-if [ -d ".git" ]; then \
-    echo "清理 Git 历史记录..."; \
-    rm -rf .git; \
 fi && \
 # 清理：删除构建工具和开发依赖（生产环境不需要）
 apt-get remove -y --purge build-essential python3.11-dev libpython3.11-dev git && \
