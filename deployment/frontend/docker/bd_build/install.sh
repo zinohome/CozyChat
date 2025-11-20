@@ -13,15 +13,22 @@ npm install -g pnpm && \
 cd /opt && \
 mkdir -p cozychat && \
 cd /opt/cozychat && \
-# 如果代码已通过COPY复制，直接使用；否则从Git克隆
-if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then \
-    echo "使用已复制的代码"; \
+# 优先从Git克隆代码（避免复制本地node_modules等文件）
+echo "尝试从Git克隆代码..."; \
+# 配置Git（禁用交互式认证提示）
+export GIT_TERMINAL_PROMPT=0 && \
+export GIT_ASKPASS=/bin/echo && \
+# 尝试克隆（支持公开仓库，无需认证）
+if git clone ${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git} . 2>/dev/null; then \
+    echo "✓ Git克隆成功"; \
     cd frontend; \
-elif [ -d "frontend" ]; then \
-    cd frontend && git pull; \
+elif [ -d "frontend" ] && [ -f "frontend/package.json" ]; then \
+    echo "⚠ Git克隆失败，使用已复制的代码（备选方案）"; \
+    cd frontend; \
 else \
-    git clone https://github.com/your-repo/CozyChat.git . && \
-    cd frontend; \
+    echo "✗ 错误: 无法从Git克隆且没有已复制的代码"; \
+    echo "提示: 请配置正确的Git仓库地址（公开仓库）或确保Dockerfile中已COPY代码"; \
+    exit 1; \
 fi && \
 pnpm install && \
 pnpm build && \

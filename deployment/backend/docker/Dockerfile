@@ -1,13 +1,17 @@
 FROM phusion/passenger-full:latest
 MAINTAINER CozyChat <cozychat@example.com>
 
+# 构建参数：Git仓库URL
+ARG GIT_REPO_URL=https://github.com/zinohome/CozyChat.git
+ENV GIT_REPO_URL=${GIT_REPO_URL}
+
 # 复制构建脚本
 COPY deployment/backend/docker/bd_build/* /bd_build/
 
-# 复制项目代码（如果使用本地代码构建）
-# 注意：如果使用Git克隆方式，可以注释掉下面的COPY，让install.sh从Git克隆
+# 复制项目代码（作为备选，优先使用Git克隆）
+# 注意：install.sh 会优先从Git克隆代码，如果Git克隆失败才使用COPY的代码
+# 这样可以避免复制本地的 venv 等不需要的文件
 #COPY backend /opt/cozychat/backend
-#COPY packages /opt/cozychat/packages
 
 # Sys ENV
 ENV DEBIAN_FRONTEND noninteractive
