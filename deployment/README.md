@@ -46,6 +46,10 @@ cp backend.env.example backend.env
 cp frontend.env.example frontend.env
 ```
 
+**注意**：`.env` 文件会通过 Docker volume 映射到容器内的项目目录：
+- `backend.env` → `/opt/cozychat/backend/.env`
+- `frontend.env` → `/opt/cozychat/frontend/.env`
+
 #### 1.2 配置后端环境变量
 
 编辑 `backend.env`，至少配置以下必需项：

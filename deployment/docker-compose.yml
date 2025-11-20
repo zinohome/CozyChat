@@ -7,11 +7,10 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend.env
     volumes:
       - /data/cozychat/backend/logs:/opt/cozychat/backend/logs
       - /data/cozychat/backend/data:/opt/cozychat/backend/data
+      - ./backend.env:/opt/cozychat/backend/.env:ro
     networks:
       - 1panel-network
     depends_on:
@@ -27,10 +26,9 @@ services:
     restart: unless-stopped
     ports:
       - "5173:5173"
-    env_file:
-      - ./frontend.env
     volumes:
       - /data/cozychat/frontend/dist:/opt/cozychat/frontend/dist
+      - ./frontend.env:/opt/cozychat/frontend/.env:ro
     networks:
       - 1panel-network
     depends_on:
