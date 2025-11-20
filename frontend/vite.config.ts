@@ -10,7 +10,8 @@ import { fileURLToPath } from 'url';
 // warn: 只显示警告和错误
 // error: 只显示错误
 // none: 不显示任何日志
-const LOG_LEVEL = 'debug'; // 修改这里来控制日志级别
+// 从环境变量读取，如果没有设置则使用默认值（开发环境：debug，生产环境：info）
+const LOG_LEVEL = process.env.VITE_LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 
 // ES module 中获取 __dirname 的替代方案
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

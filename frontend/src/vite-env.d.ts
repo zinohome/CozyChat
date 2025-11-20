@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly VITE_DEMO_USERNAME?: string;
   /** Demo密码 */
   readonly VITE_DEMO_PASSWORD?: string;
+  /** 日志级别（debug | info | warn | error | none） */
+  readonly VITE_LOG_LEVEL?: string;
   // 可以在这里添加其他环境变量
   // readonly VITE_APP_TITLE: string;
 }
