@@ -1,0 +1,60 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/backend/docker/Dockerfile
+    container_name: cozychat-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend.env
+    volumes:
+      - /data/cozychat/backend/logs:/opt/cozychat/backend/logs
+      - /data/cozychat/backend/data:/opt/cozychat/backend/data
+    networks:
+      - 1panel-network
+    depends_on:
+      - qdrant
+    labels:
+      createdBy: "Apps"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/frontend/docker/Dockerfile
+    container_name: cozychat-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend.env
+    volumes:
+      - /data/cozychat/frontend/dist:/opt/cozychat/frontend/dist
+    networks:
+      - 1panel-network
+    depends_on:
+      - backend
+    labels:
+      createdBy: "Apps"
+
+  qdrant:
+    image: qdrant/qdrant:v1.15
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    environment:
+      QDRANT__GPU__INDEXING: 1
+    volumes:
+      - /data/qdrant/data:/qdrant/storage
+    networks:
+      - 1panel-network
+    labels:
+      createdBy: "Apps"
+
+networks:
+  1panel-network:
+    external: true
+
