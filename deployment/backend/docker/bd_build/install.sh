@@ -68,6 +68,15 @@ fi && \
 virtualenv .venv && \
 . .venv/bin/activate && \
 pip install --upgrade pip && \
+# 设置环境变量，防止自动下载模型
+export SENTENCE_TRANSFORMERS_HOME=/tmp && \
+export TRANSFORMERS_CACHE=/tmp && \
+export HF_HOME=/tmp && \
+export TORCH_HOME=/tmp && \
+# 先安装CPU版本的PyTorch（避免下载CUDA版本，减少~700MB）
+echo "安装CPU版本的PyTorch（避免CUDA依赖）..."; \
+pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+# 安装其他依赖（不缓存，不自动下载模型）
 pip install --no-cache-dir -r requirements/base.txt && \
 # 安装腾讯语音SDK（如果存在）
 if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
@@ -78,14 +87,31 @@ apt-get remove -y --purge build-essential python3.11-dev libpython3.11-dev git &
 apt-get autoremove -y && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/* && \
+# 清理：删除所有临时文件和缓存（包括模型缓存）
 rm -rf /tmp/* /var/tmp/* && \
+rm -rf /tmp/.cache && \
+rm -rf /tmp/huggingface && \
+rm -rf /tmp/transformers && \
+rm -rf /tmp/torch && \
 # 清理：删除 pip 缓存
 rm -rf ~/.cache/pip && \
 rm -rf /root/.cache/pip && \
+# 清理：删除 Hugging Face 模型缓存（sentence-transformers 可能下载的模型）
+rm -rf ~/.cache/huggingface && \
+rm -rf /root/.cache/huggingface && \
+# 清理：删除 PyTorch 缓存
+rm -rf ~/.cache/torch && \
+rm -rf /root/.cache/torch && \
+# 清理：删除所有缓存目录
+rm -rf ~/.cache/* && \
+rm -rf /root/.cache/* && \
 # 清理：删除 Python 字节码缓存
 find . -type d -name __pycache__ -exec rm -r {} + 2>/dev/null || true && \
 find . -type f -name "*.pyc" -delete 2>/dev/null || true && \
 find . -type f -name "*.pyo" -delete 2>/dev/null || true && \
+# 清理：删除可能的模型下载目录（chromadb 等）
+find . -type d -name "models" -path "*/cache/*" -exec rm -r {} + 2>/dev/null || true && \
+find . -type d -name ".models" -exec rm -r {} + 2>/dev/null || true && \
 cp /bd_build/50_start_h.sh /etc/my_init.d/50_start_h.sh && \
 chmod 755 /etc/my_init.d/50_start_h.sh
 
