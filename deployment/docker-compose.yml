@@ -12,7 +12,7 @@ services:
     volumes:
       - /data/cozychat/backend/logs:/opt/cozychat/backend/logs
       - /data/cozychat/backend/data:/opt/cozychat/backend/data
-      - ./backend.env:/opt/cozychat/backend/.env:ro
+      - /data/cozychat/frontend/backend.env:/opt/cozychat/backend/.env:ro
     networks:
       - 1panel-network
     depends_on:
@@ -32,7 +32,7 @@ services:
       - "5173:5173"
     volumes:
       - /data/cozychat/frontend/dist:/opt/cozychat/frontend/dist
-      - ./frontend.env:/opt/cozychat/frontend/.env:ro
+      - /data/cozychat/frontend/frontend.env:/opt/cozychat/frontend/.env:ro
     networks:
       - 1panel-network
     depends_on:
