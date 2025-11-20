@@ -19,6 +19,23 @@ vi.mock('@/services/session', () => ({
   },
 }));
 
+// Mock useAuthStore to provide user
+vi.mock('@/store/slices/authSlice', () => ({
+  useAuthStore: vi.fn(() => ({
+    user: { id: 'test-user-id', username: 'testuser' },
+  })),
+}));
+
+// Mock useChatStore
+vi.mock('@/store/slices/chatSlice', () => ({
+  useChatStore: {
+    getState: vi.fn(() => ({
+      setCurrentSessionId: vi.fn(),
+      currentSessionId: null,
+    })),
+  },
+}));
+
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: {

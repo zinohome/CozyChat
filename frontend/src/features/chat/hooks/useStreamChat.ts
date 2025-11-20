@@ -26,6 +26,11 @@ export const useStreamChat = (
    */
   const sendStreamMessage = useCallback(
     async (content: string) => {
+      // 验证内容不为空
+      if (!content || !content.trim()) {
+        return;
+      }
+      
       setIsStreaming(true);
       setLoading(true);
       setError(null);

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useStreamChat } from './useStreamChat';
 import { chatApi } from '@/services/chat';
@@ -82,21 +82,27 @@ describe('useStreamChat', () => {
   });
 
   it('should handle stream error', async () => {
-    const error = new Error('Stream failed');
-    (chatApi.streamChat as any).mockRejectedValue(error);
+    // Mock一个抛出错误的异步生成器（而不是rejected promise）
+    const mockErrorStream = async function* () {
+      throw new Error('Stream failed');
+    };
+
+    (chatApi.streamChat as any).mockReturnValue(mockErrorStream());
 
     const { result } = renderHook(
       () => useStreamChat('session-1', 'personality-1'),
       { wrapper: createWrapper() }
     );
 
-    try {
+    // sendStreamMessage会在内部捕获错误并设置error state
+    await act(async () => {
     await result.current.sendStreamMessage('Test message');
-    } catch (e) {
-      // Expected error
-    }
+    });
 
-      expect(mockSetError).toHaveBeenCalled();
+    // 验证错误被设置
+    await waitFor(() => {
+      expect(mockSetError).toHaveBeenCalledWith('Stream failed');
+    });
     });
 
   it('should handle empty content', async () => {

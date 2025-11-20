@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, and_, func
 
 # 本地库
@@ -347,8 +347,10 @@ async def get_session(
                 detail=f"Invalid session ID format: {str(e)}"
             )
         
-        # 查询会话
-        session = db.query(SessionModel).filter(
+        # 查询会话（使用joinedload优化，避免N+1查询）
+        session = db.query(SessionModel).options(
+            joinedload(SessionModel.messages)
+        ).filter(
             and_(
                 SessionModel.id == session_uuid,
                 SessionModel.user_id == user.id,
@@ -362,10 +364,9 @@ async def get_session(
                 detail="Session not found"
             )
         
-        # 查询消息
-        messages = db.query(MessageModel).filter(
-            MessageModel.session_id == session_uuid
-        ).order_by(MessageModel.created_at).all()
+        # 消息已通过joinedload加载，直接使用关系属性
+        # 按创建时间排序
+        messages = sorted(session.messages, key=lambda m: m.created_at)
         
         # 构建响应
         message_items = []

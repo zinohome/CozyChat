@@ -9,11 +9,12 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 # 本地库
+from app.engines.base import BaseEngine, EngineType
 from app.utils.logger import logger
 from .models import Memory, MemorySearchResult, MemoryType
 
 
-class MemoryEngineBase(ABC):
+class MemoryEngineBase(BaseEngine):
     """记忆引擎基类
     
     所有记忆引擎实现必须继承此类并实现抽象方法
@@ -30,13 +31,38 @@ class MemoryEngineBase(ABC):
             engine_name: 引擎名称
             config: 配置信息
         """
-        self.engine_name = engine_name
+        # 调用父类初始化
+        super().__init__(engine_name=engine_name, engine_type=EngineType.MEMORY)
+        
+        # 记忆引擎特定属性
         self.config = config
         
         logger.info(
-            f"Initializing {engine_name} memory engine",
+            f"Initializing memory engine: {engine_name}",
             extra={"engine": engine_name, "config": config}
         )
+    
+    async def initialize(self) -> bool:
+        """初始化记忆引擎
+        
+        子类可以覆盖此方法以执行特定的初始化逻辑
+        
+        Returns:
+            bool: 初始化是否成功
+        """
+        logger.info(f"Memory engine {self.engine_name} initialized successfully")
+        return True
+    
+    async def health_check(self) -> bool:
+        """健康检查
+        
+        子类应该覆盖此方法以执行实际的健康检查
+        
+        Returns:
+            bool: 引擎是否健康
+        """
+        # 默认实现：简单检查配置是否存在
+        return self.config is not None
     
     @abstractmethod
     async def add_memory(self, memory: Memory) -> str:

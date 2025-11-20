@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { authApi } from '@/services/auth';
@@ -44,16 +45,18 @@ vi.mock('@/store/slices/authSlice', () => ({
 }));
 
 const createWrapper = () => {
-  const queryClient = new QueryClient({
+  const testQueryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  const Wrapper = ({ children }: { children: React.ReactNode }) => {
+    return React.createElement(QueryClientProvider, { client: testQueryClient }, children);
+  };
+  
+  return Wrapper;
 };
 
 describe('useAuth', () => {
@@ -68,17 +71,28 @@ describe('useAuth', () => {
       email: 'test@example.com',
     };
 
+    // Mock localStorage to have access_token (required by enabled condition)
+    Storage.prototype.getItem = vi.fn((key) => {
+      if (key === 'access_token') return 'test-token';
+      return null;
+    });
+
     vi.mocked(authApi.getCurrentUser).mockResolvedValue(mockUser);
 
     const { result } = renderHook(() => useAuth(), {
       wrapper: createWrapper(),
     });
 
+    // 等待加载完成
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(mockSetUser).toHaveBeenCalledWith(mockUser);
+    // 验证用户数据可用（不依赖onSuccess回调，因为React Query v5已废弃）
+    await waitFor(() => {
+      expect(result.current.user).toEqual(mockUser);
+      expect(result.current.isAuthenticated).toBe(true);
+    });
   });
 
   it('应该登录用户', async () => {

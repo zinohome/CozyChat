@@ -3,6 +3,7 @@ import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import { MemoryRouter } from 'react-router-dom';
 
 /**
  * 创建测试用的QueryClient
@@ -33,9 +34,11 @@ const TestWrapper: React.FC<TestWrapperProps> = ({
   queryClient = createTestQueryClient(),
 }) => {
   return (
+    <MemoryRouter>
     <QueryClientProvider client={queryClient as any}>
       <ConfigProvider locale={zhCN}>{children}</ConfigProvider>
     </QueryClientProvider>
+    </MemoryRouter>
   );
 };
 

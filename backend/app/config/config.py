@@ -86,6 +86,28 @@ class Settings(BaseSettings):
         description="是否允许开放注册（true=允许，false=禁止）"
     )
     
+    # ===== Demo模式配置 =====
+    demo_mode: bool = Field(
+        default=False,
+        alias="DEMO_MODE",
+        description="是否启用Demo模式（true=启用，自动创建DemoUser）"
+    )
+    demo_username: str = Field(
+        default="demo",
+        alias="DEMO_USERNAME",
+        description="Demo用户用户名"
+    )
+    demo_password: str = Field(
+        default="demo123",
+        alias="DEMO_PASSWORD",
+        description="Demo用户密码"
+    )
+    demo_email: str = Field(
+        default="demo@cozychat.ai",
+        alias="DEMO_EMAIL",
+        description="Demo用户邮箱"
+    )
+    
     # ===== CORS配置 =====
     # 使用 List[str] 类型，通过 field_validator 处理各种输入格式
     # 注意：pydantic_settings 会自动尝试将 List 类型解析为 JSON
@@ -284,6 +306,53 @@ class Settings(BaseSettings):
         default=0.5,
         alias="PERFORMANCE_SLOW_DELETE_THRESHOLD",
         description="DELETE操作的慢请求阈值（秒），通常需要更长时间"
+    )
+    
+    # ===== Sentry监控配置 =====
+    sentry_dsn: Optional[str] = Field(
+        default=None,
+        alias="SENTRY_DSN",
+        description="Sentry DSN (Data Source Name)，用于错误追踪和性能监控"
+    )
+    sentry_environment: str = Field(
+        default="development",
+        alias="SENTRY_ENVIRONMENT",
+        description="Sentry环境标识（development/staging/production）"
+    )
+    sentry_traces_sample_rate: float = Field(
+        default=0.1,
+        alias="SENTRY_TRACES_SAMPLE_RATE",
+        description="Sentry性能追踪采样率（0.0-1.0），生产环境建议0.1-0.2"
+    )
+    sentry_profiles_sample_rate: float = Field(
+        default=0.1,
+        alias="SENTRY_PROFILES_SAMPLE_RATE",
+        description="Sentry性能分析采样率（0.0-1.0）"
+    )
+    sentry_send_default_pii: bool = Field(
+        default=False,
+        alias="SENTRY_SEND_DEFAULT_PII",
+        description="是否发送个人身份信息（PII）到Sentry，生产环境建议False"
+    )
+    sentry_attach_stacktrace: bool = Field(
+        default=True,
+        alias="SENTRY_ATTACH_STACKTRACE",
+        description="是否附加完整堆栈跟踪"
+    )
+    sentry_enable: bool = Field(
+        default=False,
+        alias="SENTRY_ENABLE",
+        description="是否启用Sentry监控（只有配置了DSN且此项为True才会生效）"
+    )
+    sentry_max_breadcrumbs: int = Field(
+        default=100,
+        alias="SENTRY_MAX_BREADCRUMBS",
+        description="最大面包屑数量（用于追踪事件发生前的操作序列）"
+    )
+    sentry_debug: bool = Field(
+        default=False,
+        alias="SENTRY_DEBUG",
+        description="Sentry调试模式（开启后会输出详细日志）"
     )
     
     # ===== 日志配置 =====

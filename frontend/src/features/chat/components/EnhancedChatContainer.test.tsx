@@ -17,7 +17,7 @@ vi.mock('@/services/chat', () => ({
     streamChat: vi.fn(),
   },
 }));
-const mockRefetch = vi.fn();
+const mockRefetch = vi.fn().mockResolvedValue({ data: [] });
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
@@ -26,9 +26,16 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
       data: [],
       isLoading: false,
       refetch: mockRefetch,
+      isRefetching: false,
+      isError: false,
+      error: null,
     })),
     useQueryClient: vi.fn(() => ({
       setQueryData: vi.fn(),
+      getQueryData: vi.fn(() => []),
+      invalidateQueries: vi.fn(),
+      refetchQueries: vi.fn(),
+      removeQueries: vi.fn(),
     })),
   };
 });
@@ -105,7 +112,8 @@ describe('EnhancedChatContainer', () => {
     );
 
     const input = screen.getByPlaceholderText(/输入消息/i);
-    const sendButton = screen.getByRole('button', { name: /发送/i });
+    // 使用title属性查找发送按钮（按钮内容是图标，没有accessible name）
+    const sendButton = screen.getByTitle('发送');
 
     expect(input).toBeInTheDocument();
     expect(sendButton).toBeInTheDocument();
@@ -113,6 +121,13 @@ describe('EnhancedChatContainer', () => {
 
   it('应该在输入消息后可以发送', async () => {
     const user = userEvent.setup();
+    
+    // Mock sessions包含测试会话，避免触发创建会话逻辑
+    (useSessions as any).mockReturnValue({
+      sessions: [{ id: 'test-session', title: '测试会话' }],
+      createSession: mockCreateSession,
+      isCreating: false,
+    });
     
     render(
       <EnhancedChatContainer
@@ -122,7 +137,7 @@ describe('EnhancedChatContainer', () => {
     );
 
     const input = screen.getByPlaceholderText(/输入消息/i);
-    const sendButton = screen.getByRole('button', { name: /发送/i });
+    const sendButton = screen.getByTitle('发送');
 
     await user.type(input, 'Hello, AI!');
     await user.click(sendButton);

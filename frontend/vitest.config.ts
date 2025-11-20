@@ -11,14 +11,21 @@ export default defineConfig({
     css: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json-summary', 'html'],
       exclude: [
         'node_modules/',
         'src/test/',
         '**/*.d.ts',
         '**/*.config.*',
+        '**/*.test.{ts,tsx}',
+        '**/*.spec.{ts,tsx}',
         '**/mockData',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/App.tsx',
       ],
+      // 只统计被测试导入的文件，不扫描全部文件
+      all: false,
     },
   },
   resolve: {

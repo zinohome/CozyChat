@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 # 本地库
+from app.engines.base import BaseEngine, EngineType
 from app.utils.logger import logger
 
 
@@ -20,7 +21,7 @@ class TTSProvider(str, Enum):
     CUSTOM = "custom"
 
 
-class TTSEngineBase(ABC):
+class TTSEngineBase(BaseEngine):
     """TTS引擎基类
     
     所有TTS引擎实现必须继承此类并实现抽象方法
@@ -38,8 +39,17 @@ class TTSEngineBase(ABC):
         Args:
             config: 配置字典
         """
+        # 先获取provider以确定engine_name
         self.config = config
         self.provider = self._get_provider()
+        
+        # 调用父类初始化
+        super().__init__(
+            engine_name=f"{self.provider.value}_tts",
+            engine_type=EngineType.TTS
+        )
+        
+        # TTS引擎特定属性
         self.voice = config.get("voice", "shimmer")
         self.speed = config.get("speed", 1.0)
         
@@ -47,6 +57,28 @@ class TTSEngineBase(ABC):
             f"Initializing TTS engine: {self.provider.value}",
             extra={"provider": self.provider.value, "voice": self.voice}
         )
+    
+    async def initialize(self) -> bool:
+        """初始化TTS引擎
+        
+        子类可以覆盖此方法以执行特定的初始化逻辑
+        
+        Returns:
+            bool: 初始化是否成功
+        """
+        logger.info(f"TTS engine {self.engine_name} initialized successfully")
+        return True
+    
+    async def health_check(self) -> bool:
+        """健康检查
+        
+        子类应该覆盖此方法以执行实际的健康检查
+        
+        Returns:
+            bool: 引擎是否健康
+        """
+        # 默认实现：检查配置是否存在
+        return self.config is not None and self.voice is not None
     
     @abstractmethod
     def _get_provider(self) -> TTSProvider:

@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useChat } from './useChat';
 import { chatApi } from '@/services/chat';
@@ -14,16 +15,18 @@ vi.mock('@/services/chat');
 vi.mock('@/store/slices/chatSlice');
 
 const createWrapper = () => {
-  const queryClient = new QueryClient({
+  const testQueryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  const Wrapper = ({ children }: { children: React.ReactNode }) => {
+    return React.createElement(QueryClientProvider, { client: testQueryClient }, children);
+  };
+  
+  return Wrapper;
 };
 
 describe('useChat', () => {
@@ -33,12 +36,21 @@ describe('useChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    // Mock useChatStore as hook
     (useChatStore as any).mockReturnValue({
       isLoading: false,
       setLoading: mockSetLoading,
       setError: mockSetError,
       error: null,
     });
+    
+    // Mock useChatStore.getState() method
+    (useChatStore as any).getState = vi.fn(() => ({
+      isLoading: false,
+      setLoading: mockSetLoading,
+      setError: mockSetError,
+      error: null,
+    }));
   });
 
   it('should load message history', async () => {

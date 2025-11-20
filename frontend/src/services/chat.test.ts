@@ -179,12 +179,14 @@ describe('chatApi', () => {
 
   describe('getHistory', () => {
     it('应该获取历史消息', async () => {
-      const sessionId = 'session-1';
+      // 使用有效的UUID格式
+      const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+      const now = new Date();
       const sessionDetail = {
         id: sessionId,
         messages: [
-          { id: '1', role: 'user', content: 'Hello', timestamp: new Date() },
-          { id: '2', role: 'assistant', content: 'Hi', timestamp: new Date() },
+          { id: '1', role: 'user', content: 'Hello', created_at: now, metadata: {} },
+          { id: '2', role: 'assistant', content: 'Hi', created_at: now, metadata: {} },
         ],
       };
 
@@ -194,7 +196,11 @@ describe('chatApi', () => {
       const result = await chatApi.getHistory(sessionId);
 
       expect(mockGetSession).toHaveBeenCalledWith(sessionId);
-      expect(result).toEqual(sessionDetail.messages || []);
+      // getHistory会将MessageInfo转换为Message格式
+      expect(result).toEqual([
+        { id: '1', role: 'user', content: 'Hello', timestamp: now, session_id: sessionId, metadata: {} },
+        { id: '2', role: 'assistant', content: 'Hi', timestamp: now, session_id: sessionId, metadata: {} },
+      ]);
     });
 
     it('应该处理空sessionId', async () => {

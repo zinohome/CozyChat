@@ -39,6 +39,18 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{__version__}")
     logger.info(f"Environment: {settings.app_env}")
     
+    # 初始化Sentry监控（Phase 3: Monitoring Integration）
+    try:
+        from app.utils.monitoring import init_sentry
+        sentry_initialized = init_sentry()
+        if sentry_initialized:
+            logger.info("Sentry monitoring enabled and initialized")
+        else:
+            logger.info("Sentry monitoring is disabled or not configured")
+    except Exception as e:
+        # Sentry初始化失败不影响应用启动
+        logger.warning(f"Failed to initialize Sentry: {e}", exc_info=False)
+    
     # 初始化数据库（仅开发环境，生产环境使用Alembic迁移）
     # 注意：生产环境应该使用Alembic迁移，而不是自动创建表
     # 如果表已存在，init_db会跳过创建，不会报错
@@ -140,6 +152,63 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to start memory worker: {e}", exc_info=True)
     
     logger.info("All global components initialized successfully")
+    
+    # 6. Demo模式：自动创建DemoUser（如果启用）
+    if settings.demo_mode:
+        try:
+            from app.models.base import get_sync_db
+            from app.models.user import User
+            from app.models.user_profile import UserProfile
+            from app.utils.security import hash_password
+            from sqlalchemy import or_
+            
+            # 使用同步数据库会话
+            db = next(get_sync_db())
+            try:
+                # 检查DemoUser是否已存在
+                existing_user = db.query(User).filter(
+                    or_(
+                        User.username == settings.demo_username,
+                        User.email == settings.demo_email
+                    )
+                ).first()
+                
+                if not existing_user:
+                    # 创建DemoUser
+                    password_hash = hash_password(settings.demo_password)
+                    demo_user = User(
+                        username=settings.demo_username,
+                        email=settings.demo_email,
+                        password_hash=password_hash,
+                        role="user",
+                        display_name="Demo用户",
+                        status="active"
+                    )
+                    db.add(demo_user)
+                    db.commit()
+                    db.refresh(demo_user)
+                    
+                    # 创建用户画像
+                    profile = UserProfile(user_id=demo_user.id)
+                    db.add(profile)
+                    db.commit()
+                    
+                    logger.info(
+                        f"Demo user created: {settings.demo_username}",
+                        extra={"user_id": str(demo_user.id)}
+                    )
+                else:
+                    logger.debug(
+                        f"Demo user already exists: {settings.demo_username}",
+                        extra={"user_id": str(existing_user.id)}
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(
+                f"Failed to create demo user: {e}",
+                exc_info=False
+            )
     
     yield
     

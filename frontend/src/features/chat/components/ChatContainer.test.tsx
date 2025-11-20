@@ -17,8 +17,8 @@ vi.mock('@/services/chat');
 vi.mock('@/utils/errorHandler', () => ({
   showError: vi.fn(),
 }));
-vi.mock('@chatui/core', () => ({
-  Chat: ({ children, onSend, messages, navbar }: any) => {
+vi.mock('@chatui/core', () => {
+  const MockChat = ({ children, onSend, messages, navbar }: any) => {
     return (
       <div data-testid="chat-container">
         <div data-testid="chat-navbar">{navbar?.title || 'Chat'}</div>
@@ -33,8 +33,13 @@ vi.mock('@chatui/core', () => ({
         {children}
       </div>
     );
-  },
-}));
+  };
+  
+  return {
+    default: MockChat,
+    Chat: MockChat,
+  };
+});
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {

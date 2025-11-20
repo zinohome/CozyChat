@@ -82,6 +82,27 @@ async def create_transcription(
         if not audio_data:
             raise HTTPException(status_code=400, detail="音频文件为空")
         
+        # 检查文件大小（OpenAI限制25MB）
+        file_size_mb = len(audio_data) / (1024 * 1024)
+        if file_size_mb > 25:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"音频文件过大: {file_size_mb:.2f}MB，最大支持25MB"
+            )
+        
+        logger.debug(
+            "STT transcription request",
+            extra={
+                "user_id": str(user.id),
+                "personality_id": personality_id,
+                "file_size_bytes": len(audio_data),
+                "file_size_mb": round(file_size_mb, 2),
+                "file_content_type": file.content_type,
+                "model": model,
+                "language": language
+            }
+        )
+        
         # 获取STT配置
         stt_config = {}
         if personality_id:
@@ -108,7 +129,22 @@ async def create_transcription(
             stt_config = {"model": model, "language": language}
         
         # 创建STT引擎
-        stt_engine = STTEngineFactory.create_engine(provider, stt_config)
+        try:
+            stt_engine = STTEngineFactory.create_engine(provider, stt_config)
+        except Exception as e:
+            logger.error(
+                f"Failed to create STT engine: {e}",
+                exc_info=True,
+                extra={
+                    "user_id": str(user.id),
+                    "provider": provider,
+                    "config_keys": list(stt_config.keys())
+                }
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"创建STT引擎失败: {str(e)}"
+            )
         
         # 执行转录（只传递实际需要的参数，排除引擎配置项）
         transcribe_kwargs = {}
@@ -117,7 +153,39 @@ async def create_transcription(
         # 移除不应该传递给 transcribe 的配置项
         # model、provider、api_key、base_url 等是引擎配置，不是 transcribe 参数
         
-        text = await stt_engine.transcribe(audio_data, **transcribe_kwargs)
+        try:
+            text = await stt_engine.transcribe(audio_data, **transcribe_kwargs)
+        except ValueError as e:
+            # 音频格式错误
+            logger.error(
+                f"STT audio format error: {e}",
+                extra={
+                    "user_id": str(user.id),
+                    "file_size": len(audio_data),
+                    "content_type": file.content_type
+                }
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"音频格式错误: {str(e)}"
+            )
+        except Exception as e:
+            # API调用错误
+            error_msg = str(e)
+            logger.error(
+                f"STT API call failed: {e}",
+                exc_info=True,
+                extra={
+                    "user_id": str(user.id),
+                    "provider": provider,
+                    "model": model,
+                    "error_type": type(e).__name__
+                }
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"STT API调用失败: {error_msg}"
+            )
         
         logger.info(
             "STT transcription completed",
@@ -125,19 +193,30 @@ async def create_transcription(
                 "user_id": str(user.id),
                 "personality_id": personality_id,
                 "model": model,
-                "text_length": len(text)
+                "text_length": len(text),
+                "file_size_mb": round(file_size_mb, 2)
             }
         )
         
         return TranscriptionResponse(text=text)
         
+    except HTTPException:
+        # 重新抛出HTTP异常
+        raise
     except Exception as e:
         logger.error(
             f"STT transcription failed: {e}",
             exc_info=True,
-            extra={"user_id": str(user.id), "personality_id": personality_id}
+            extra={
+                "user_id": str(user.id),
+                "personality_id": personality_id,
+                "error_type": type(e).__name__
+            }
         )
-        raise HTTPException(status_code=500, detail=f"转录失败: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"转录失败: {str(e)}"
+        )
 
 
 # ==================== TTS API ====================

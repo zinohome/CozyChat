@@ -249,8 +249,16 @@ class TencentSTTEngine(STTEngineBase):
             elif self.recognition_mode == "realtime" or force_realtime:
                 use_realtime = True
             else:  # auto
-                # 根据音频大小自动选择
-                use_realtime = len(audio_data) > self.realtime_threshold
+                # 自动选择逻辑：
+                # - 对于已完成的音频文件（API调用），使用Flash模式（一句话识别）
+                # - 实时模式适合流式音频输入，不适合一次性发送整个文件
+                # - 实时模式有速率限制：1秒内最多发送3秒音频数据
+                # 因此，对于API调用，默认使用Flash模式
+                # 只有明确指定realtime=True时才使用实时模式
+                use_realtime = False
+                
+                # 如果文件很小（<100KB），可以考虑实时模式，但API调用场景下仍使用Flash
+                # 实时模式主要用于流式输入场景，不是API调用场景
             
             logger.info(
                 f"Transcribing audio",

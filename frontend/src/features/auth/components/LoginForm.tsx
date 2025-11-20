@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Form, Input, Button } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
@@ -11,6 +11,19 @@ import type { LoginRequest } from '@/types/user';
 export const LoginForm: React.FC = () => {
   const { login, isLoggingIn } = useAuth();
   const [form] = Form.useForm<LoginRequest>();
+
+  // Demo模式：自动填入用户名和密码
+  useEffect(() => {
+    const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+    if (demoMode) {
+      const demoUsername = import.meta.env.VITE_DEMO_USERNAME || 'demo';
+      const demoPassword = import.meta.env.VITE_DEMO_PASSWORD || 'demo123';
+      form.setFieldsValue({
+        username: demoUsername,
+        password: demoPassword,
+      });
+    }
+  }, [form]);
 
   const onSubmit = async (values: LoginRequest) => {
     try {

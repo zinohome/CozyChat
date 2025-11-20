@@ -1,24 +1,25 @@
 """
-聊天API接口
+聊天API接口(重构版)
 
-提供OpenAI兼容的Chat Completions API
+提供OpenAI兼容的Chat Completions API,使用服务层架构
 """
 
 # 标准库
-import json
 import uuid
 from dataclasses import asdict
-from typing import AsyncIterator, TYPE_CHECKING, Any, Dict, Optional, Tuple
-from datetime import timezone
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from datetime import timezone, datetime
 
 if TYPE_CHECKING:
     from app.engines.memory.manager import MemoryManager
-    from app.schemas.context import ContextBundle
     from app.core.personality.models import Personality
+    from app.schemas.context import ContextBundle
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 # 本地库
 from app.api.deps import (
@@ -28,17 +29,23 @@ from app.api.deps import (
     get_tool_manager_factory,
     get_llm_engine_pool,
     get_memory_manager,
-    get_context_builder,  # 新增：智能上下文构建器
+    get_context_builder,
 )
 from app.core.personality import PersonalityRegistry
-from app.core.context.builder import ContextBuilder  # 新增：上下文构建器
+from app.core.context.builder import ContextBuilder
 from app.engines.ai import ChatMessage as EngineChatMessage
 from app.engines.ai.engine_pool import LLMEnginePool
-from app.config.config import settings  # 新增：用于配置
-from app.engines.tools import builtin  # 导入以注册工具
+from app.config.config import settings
 from app.engines.tools.factory import ToolManagerFactory
 from app.middleware.rate_limit import rate_limit
 from app.models.session import Session as SessionModel
+from app.utils.message_utils import (
+    detect_message_hints as _detect_message_hints,
+    merge_user_preferences as _merge_user_preferences,
+    build_user_message_with_preferences as _build_user_message_with_preferences,
+    DEFAULT_INSTRUCTION_PREFS,
+    PREFERENCE_KEYS,
+)
 from app.models.message import Message as MessageModel
 from app.models.user import User
 from app.schemas.chat import (
@@ -51,229 +58,17 @@ from app.schemas.chat import (
     SaveVoiceCallMessagesResponse,
 )
 from app.utils.logger import logger
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from app.services.chat import (
+    MessageSaver,
+    ToolCallHandler,
+    ChatService,
+    StreamChatService
+)
 
 router = APIRouter()
 
-PREFERENCE_KEYS = [
-    "default_language",
-    "response_style",
-    "style_preset",
-    "output_format",
-    "prefer_list",
-    "show_reasoning",
-]
 
-DEFAULT_INSTRUCTION_PREFS: Dict[str, Any] = {
-    "default_language": "zh-CN",
-    "response_style": "chatgpt_like",
-    "style_preset": "chatgpt_like",
-    "output_format": "structured",
-    "prefer_list": False,
-    "show_reasoning": False,
-}
-
-
-def _detect_message_hints(content: str) -> Dict[str, Any]:
-    """通过简单的关键词识别消息偏好"""
-    hints: Dict[str, Any] = {}
-    if not content:
-        return hints
-    
-    lowered = content.lower()
-    
-    list_keywords = ["列出", "有哪些", "清单", "步骤", "几个", "列表", "有哪些方法", "有哪些措施", "list", "bullet"]
-    if any(keyword in content for keyword in list_keywords):
-        hints["prefer_list"] = True
-    
-    reason_keywords = ["为什么", "原因", "怎么回事", "为何", "reason"]
-    if any(keyword in content for keyword in reason_keywords):
-        hints["response_style"] = "detailed"
-    
-    action_keywords = ["怎么办", "怎么做", "处理", "建议", "方案", "缓解", "should I", "need to"]
-    if any(keyword in content for keyword in action_keywords):
-        hints["needs_action"] = True
-    
-    return hints
-
-
-def _merge_user_preferences(
-    personality_config: Optional["Personality"],
-    user: Optional[User]
-) -> Dict[str, Any]:
-    """合并人格和用户层的偏好设置"""
-    merged = DEFAULT_INSTRUCTION_PREFS.copy()
-    
-    if personality_config and getattr(personality_config, "user_preferences", None):
-        try:
-            merged.update({
-                key: value
-                for key, value in asdict(personality_config.user_preferences).items()
-                if key in PREFERENCE_KEYS
-            })
-        except TypeError:
-            logger.debug("Failed to convert personality user preferences via asdict", exc_info=True)
-    
-    if user:
-        user_prefs = user.get_preferences()
-        for key in PREFERENCE_KEYS:
-            value = user_prefs.get(key)
-            if value is not None:
-                merged[key] = value
-    
-    return merged
-
-
-def _build_user_message_with_preferences(
-    content: str,
-    preferences: Optional[Dict[str, Any]]
-) -> Tuple[str, Optional[str]]:
-    """根据偏好构建最终的用户消息"""
-    if not content:
-        return content, None
-    
-    prefs = DEFAULT_INSTRUCTION_PREFS.copy()
-    if preferences:
-        prefs.update({k: v for k, v in preferences.items() if v is not None})
-    
-    hints = _detect_message_hints(content)
-    instructions: list[str] = []
-    
-    # 首要原则：避免生硬的开场白
-    instructions.append("直接回答问题，避免'以下是...'、'针对您的...'等生硬开场白。")
-    
-    response_style = hints.get("response_style") or prefs.get("response_style", "chatgpt_like")
-    style_preset = prefs.get("style_preset", "chatgpt_like")
-    output_format = prefs.get("output_format", "structured")
-    prefer_list = hints.get("prefer_list") or prefs.get("prefer_list")
-    language = prefs.get("default_language", "zh-CN")
-    
-    if response_style == "brief":
-        instructions.append("""简洁回答（120-150字），直接给出核心信息：
-
-🔍 **最可能的原因**：[说明原因和机理，1-2句话]
-
-📋 **建议**：
-1. [具体措施1，包含频率/剂量]
-2. [具体措施2，包含注意事项]
-
-⚠️ **提醒**：[什么情况需要就医，1句话]""")
-    elif response_style == "detailed":
-        instructions.append("""详细专业回答（400-600字），完全模仿ChatGPT医疗回答风格，严格按以下结构：
-
-🔍 **原因分析（按概率排序）**
-- 列出3-5个可能原因
-- 每个原因包含：
-  * 医学名称 + 通俗解释（如"UACS（上气道咳嗽综合征）——俗称'鼻后滴漏'"）
-  * 典型特征（列举2-3个）
-  * 病理机制（为什么会这样）
-  * 符合度判断（"与你的情况非常吻合"/"需要进一步确认"）
-
-📌 **综合判断**
-- 总结用户症状
-- 明确说明"最符合：[疾病X] + [疾病Y]"
-- 说明"次要可能：[疾病Z]"
-- 给出判断理由
-
-🧪 **建议做的检查**（按优先级排序）
-- 每个检查说明：为什么要做 + 检查什么 + 预期发现
-
-💊 **分层处理方案**
-1. 家庭缓解措施：每条包含方法+频率+原理+预期效果
-2. 药物建议（分情况）："如果有[症状A] → 更可能是[疾病X]，可用：[药物1（通用名/商品名）] + 剂量 + 用法 + 注意事项"
-3. 就医指征：明确列出需要立即就医的情况 + 说明风险
-
-🔔 **补充信息询问**（必须包含，分组询问）
-- 伴随症状：[问题1] [问题2]
-- 时间特征：[问题3]
-- 诱发因素：[问题4]
-- 既往病史：[问题5]
-- 最后说明："告诉我这些，我能给你最精确的诊断建议和处理方案。"
-
-格式要求：每个列表项格式为 粗体要点名 + 详细说明（1-2句）+ 具体数值/标准""")
-    else:  # chatgpt_like（标准模式，默认）
-        instructions.append("""标准回答（250-350字），严格模仿ChatGPT风格，按以下结构：
-
-🔍 **最可能的原因（按概率排序）**
-- 列出2-3个最可能的原因
-- 每个原因包含：
-  * 原因名称
-  * 典型特征（列举2-3个）
-  * 机理说明（为什么会出现这些症状）
-  * 用"最符合"、"次要可能"等词表示概率
-
-📋 **建议做的检查**
-- 列出推荐检查
-- 每个检查说明为什么要做
-
-💊 **可以尝试的措施**
-✔ 家庭措施
-- 每条包含：具体方法 + 频率 + 预期效果
-
-✔ 药物选择（如症状明显）
-- 分情况给出："如果[情况A]，可用：[药物A]"
-- "如果[情况B]，可用：[药物B]"
-
-⚠️ **就医指征**
-- 明确说明什么情况必须看医生
-
-🔔 **帮我确认几点，我能更准确判断**（如信息不足，必须包含）
-- 列出2-3个具体问题（如"是否有鼻塞？""夜间是否烧心？"）
-- 说明"告诉我这些，我能给你最精确的方案。"
-
-格式要求：用粗体小标题+列表组织，每个列表项：粗体要点名 + 详细说明（1-2句）+ 具体数值/标准""")
-    
-    if style_preset == "elder_friendly":
-        instructions.append("语气温和亲切，使用通俗易懂的词语和短句，避免生僻医学术语。但内容要充实，不能因为通俗而减少信息量。")
-    elif style_preset == "medical_detail":
-        instructions.append("""保持专业权威的医学风格：
-- 使用医学术语并注释（如"UACS（上气道咳嗽综合征）——俗称'鼻后滴漏'"）
-- 引用权威指南（如《中国高血压防治指南》《慢性阻塞性肺疾病诊治指南》等）
-- 给出具体数值和范围（如"血压<140/90mmHg"、"每日盐摄入<6g"）
-- 说明病理生理机制（如"钠盐摄入过多→血容量增加→血压升高"）
-- 内容要全面深入，体现医学专业性""")
-    
-    if output_format == "list":
-        instructions.append("用列表形式组织要点，每条要点要详细说明，不要只写标题。")
-    elif output_format == "paragraph":
-        instructions.append("用段落形式叙述，每段内容要充实，包含具体细节和解释。")
-    else:
-        instructions.append("用Markdown小标题和列表组织内容。每个小标题下要有3-5条具体内容，每条都要详细说明。")
-    
-    if prefer_list:
-        instructions.append("具体措施、原因等用列表呈现，每条列表项要包含：要点+详细说明+具体数值/标准（如适用）。")
-    
-    if hints.get("needs_action"):
-        instructions.append("提供可执行的家庭护理建议（包含具体方法、频率、注意事项）和就医指征（明确何时需要就医）。")
-    
-    if prefs.get("show_reasoning"):
-        instructions.append("末尾简述判断依据（2-3句）。")
-    
-    if isinstance(language, str):
-        if language.startswith("zh"):
-            instructions.append("请使用简体中文回答。")
-        elif language.startswith("en"):
-            instructions.append("Please respond in English.")
-    
-    instruction_text = " ".join(instructions).strip()
-    if not instruction_text:
-        return content, None
-    
-    # 不在用户消息中显示指令，而是通过返回值让调用方处理
-    return content, instruction_text
-
-
-def _override_last_user_message(
-    messages: list[EngineChatMessage],
-    new_content: str
-) -> bool:
-    """替换消息列表中最后一条用户消息的内容"""
-    for msg in reversed(messages):
-        if msg.role == "user":
-            msg.content = new_content
-            return True
-    return False
+# 消息处理辅助函数已移至 app.utils.message_utils
 
 
 def _convert_context_bundle_to_messages(
@@ -281,23 +76,14 @@ def _convert_context_bundle_to_messages(
     current_message_content: str,
     user_preferences: Optional[Dict[str, Any]] = None
 ) -> list[EngineChatMessage]:
-    """
-    将ContextBundle转换为LLM消息列表
-    
-    Args:
-        context_bundle: ContextBundle对象，包含分层上下文
-        current_message_content: 当前用户消息内容
-        
-    Returns:
-        list[EngineChatMessage]: LLM消息列表
-    """
+    """将ContextBundle转换为LLM消息列表"""
     messages = []
     
-    # 1. 系统提示词（人格、策略等）
+    # 1. 系统提示词
     for prompt in context_bundle.system_prompts:
         messages.append(EngineChatMessage(role="system", content=prompt))
     
-    # 2. 用户画像（如果有）
+    # 2. 用户画像
     if context_bundle.user_profile:
         profile_text = "## 用户信息\n"
         if isinstance(context_bundle.user_profile, dict):
@@ -307,96 +93,54 @@ def _convert_context_bundle_to_messages(
             profile_text += str(context_bundle.user_profile)
         messages.append(EngineChatMessage(role="system", content=profile_text))
     
-    # 3. 历史摘要（压缩的对话历史）
+    # 3. 历史摘要
     if context_bundle.summarized_history:
         summary_text = "## 对话历史摘要\n\n"
-        # summarized_history 是 List[str]，直接使用字符串
         for i, summary in enumerate(context_bundle.summarized_history, 1):
-            summary_text += f"**摘要 {i}**:\n"
-            summary_text += f"{summary}\n\n"
+            summary_text += f"**摘要 {i}**:\n{summary}\n\n"
         messages.append(EngineChatMessage(role="system", content=summary_text))
-        
-        logger.info(
-            "Added historical summaries to context",
-            extra={
-                "summary_count": len(context_bundle.summarized_history)
-            }
-        )
     
-    # 4. 检索到的长期记忆
+    # 4. 检索到的记忆
     if context_bundle.retrieved_memories:
-        memory_text = "## 相关记忆\n\n"
-        
-        # 按类型分组（retrieved_memories 现在是 Memory 对象列表）
         from app.engines.memory.models import MemoryType
         
-        user_memories = [
-            m for m in context_bundle.retrieved_memories 
-            if m.memory_type == MemoryType.USER
-        ]
-        assistant_memories = [
-            m for m in context_bundle.retrieved_memories 
-            if m.memory_type == MemoryType.ASSISTANT
-        ]
+        user_memories = [m for m in context_bundle.retrieved_memories if m.memory_type == MemoryType.USER]
+        assistant_memories = [m for m in context_bundle.retrieved_memories if m.memory_type == MemoryType.ASSISTANT]
         
+        memory_text = "## 相关记忆\n\n"
         if user_memories:
             memory_text += "### 用户相关记忆\n"
-            for mem in user_memories[:5]:  # 限制数量
+            for mem in user_memories[:5]:
                 memory_text += f"- {mem.content}\n"
             memory_text += "\n"
         
         if assistant_memories:
             memory_text += "### 对话历史记忆\n"
-            for mem in assistant_memories[:5]:  # 限制数量
+            for mem in assistant_memories[:5]:
                 memory_text += f"- {mem.content}\n"
             memory_text += "\n"
         
         messages.append(EngineChatMessage(role="system", content=memory_text))
-        
-        logger.info(
-            "Added retrieved memories to context",
-            extra={
-                "user_memories": len(user_memories),
-                "assistant_memories": len(assistant_memories),
-                "total_memories": len(context_bundle.retrieved_memories)
-            }
-        )
     
-    # 5. 最近的原始消息（保持对话的连贯性）
+    # 5. 最近消息
     if context_bundle.recent_messages:
         for msg in context_bundle.recent_messages:
-            messages.append(EngineChatMessage(
-                role=msg.role,
-                content=msg.content
-            ))
-        
-        logger.debug(
-            "Added recent messages to context",
-            extra={"recent_count": len(context_bundle.recent_messages)}
-        )
+            messages.append(EngineChatMessage(role=msg.role, content=msg.content))
     
-    # 6. 用户偏好指令（作为 system 消息）
+    # 6. 用户偏好指令
     final_message, instruction_text = _build_user_message_with_preferences(
         current_message_content,
         user_preferences
     )
     
     if instruction_text:
-        # 将指令作为 system 消息添加，而不是附加在用户消息前面
         messages.append(EngineChatMessage(
             role="system",
             content=f"## 回答要求\n{instruction_text}"
         ))
-        logger.debug(
-            "Applied user prompt instructions as system message",
-            extra={"instructions": instruction_text}
-        )
     
     # 7. 当前用户消息
-    messages.append(EngineChatMessage(
-        role="user",
-        content=final_message  # 现在是纯净的用户消息，不包含指令
-    ))
+    messages.append(EngineChatMessage(role="user", content=final_message))
     
     return messages
 
@@ -411,880 +155,60 @@ async def create_chat_completion(
     personality_registry: PersonalityRegistry = Depends(get_personality_registry),
     tool_factory: ToolManagerFactory = Depends(get_tool_manager_factory),
     engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
-    context_builder: ContextBuilder = Depends(get_context_builder),  # 新增：智能上下文构建
-    memory_manager: "MemoryManager" = Depends(get_memory_manager),  # 新增：记忆管理器
+    context_builder: ContextBuilder = Depends(get_context_builder),
+    memory_manager: "MemoryManager" = Depends(get_memory_manager),
 ):
-    """创建聊天补全（OpenAI兼容接口）
-    
-    支持流式和非流式两种模式
-    
-    Args:
-        request: 聊天请求
-        db: 数据库会话（用于从session_id获取personality_id）
-        
-    Returns:
-        ChatCompletionResponse: 聊天响应（非流式）
-        StreamingResponse: SSE流（流式）
-        
-    Raises:
-        HTTPException: 引擎创建失败或API调用失败
-    """
+    """创建聊天补全(OpenAI兼容接口)"""
     try:
-        # 确定personality_id和user_id：优先使用请求中的，否则从session_id获取
-        personality_id = data.personality_id
-        user_id = data.user_id  # 默认使用请求中的 user_id
-        session = None
+        # 1. 确定personality_id和user_id
+        personality_id, user_id, session = _get_ids_from_request(data, db)
         
-        if data.session_id:
-            try:
-                session_uuid = uuid.UUID(data.session_id)
-                session = db.query(SessionModel).filter(
-                    SessionModel.id == session_uuid
-                ).first()
-                if session:
-                    # 如果请求中没有 personality_id，从 session 获取
-                    if not personality_id:
-                        personality_id = str(session.personality_id)  # type: ignore[arg-type]
-                        logger.debug(
-                            f"Got personality_id from session: {personality_id}",
-                            extra={"session_id": data.session_id}
-                        )
-                    
-                    # 如果请求中没有 user_id，从 session 获取
-                    if not user_id:
-                        user_id = str(session.user_id)  # type: ignore[arg-type]
-                        logger.debug(
-                            f"Got user_id from session: {user_id}",
-                            extra={"session_id": data.session_id}
-                        )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to get session info: {e}",
-                    exc_info=False
-                )
+        # 2. 加载用户和人格配置
+        user_obj = _load_user(user_id, db)
+        personality = _load_personality(personality_id, personality_registry)
         
-        user_obj: Optional[User] = None
-        if user_id:
-            try:
-                user_uuid = uuid.UUID(str(user_id))
-                user_obj = db.query(User).filter(User.id == user_uuid).first()
-            except Exception as e:
-                logger.warning(
-                    f"Failed to load user for preferences: {e}",
-                    exc_info=False,
-                    extra={"user_id": user_id}
-                )
+        # 3. 确定模型和引擎参数
+        actual_model, actual_engine_type, actual_max_tokens = _determine_engine_params(
+            data, personality
+        )
         
-        personality: Optional["Personality"] = None
+        # 4. 加载工具
+        tools = _load_tools(personality, tool_factory, data)
         
-        # 确定使用的模型和引擎类型：优先使用personality配置，否则使用请求中的或默认值
-        actual_model = data.model
-        actual_engine_type = data.engine_type or "openai"
-        actual_max_tokens = data.max_tokens  # 默认使用请求中的 max_tokens
-        
-        # 准备工具列表
-        tools = data.tools  # 默认使用请求中的工具
-        
-        # 如果确定了personality_id，从人格配置加载工具和模型
-        if personality_id:
-            try:
-                personality = personality_registry.get_personality(personality_id)
-                
-                if personality:
-                    # 使用personality配置的模型和引擎类型
-                    actual_model = personality.ai.model
-                    actual_engine_type = personality.ai.provider
-                    
-                    # 如果请求中没有指定 max_tokens，使用 personality 配置的 max_tokens
-                    if actual_max_tokens is None:
-                        actual_max_tokens = personality.ai.max_tokens
-                        logger.debug(
-                            f"Using max_tokens from personality: {actual_max_tokens}",
-                            extra={
-                                "personality_id": personality_id,
-                                "max_tokens": actual_max_tokens
-                            }
-                        )
-                    
-                    logger.debug(
-                        f"Using model from personality: {actual_model}",
-                        extra={
-                            "personality_id": personality_id,
-                            "model": actual_model,
-                            "engine_type": actual_engine_type,
-                            "max_tokens": actual_max_tokens
-                        }
-                    )
-                    
-                    # 加载工具
-                    if personality.tools.enabled and (tools is None or len(tools) == 0):
-                        tool_manager = tool_factory.get_tool_manager(allowed_tools=personality.tools.allowed_tools)
-                        allowed_tools = personality.tools.allowed_tools
-                        tools = tool_manager.get_tools_for_openai(tool_names=allowed_tools)
-                        
-                        logger.info(
-                            f"Loaded tools from personality: {personality_id}",
-                            extra={
-                                "personality_id": personality_id,
-                                "tools_count": len(tools),
-                                "allowed_tools": allowed_tools,
-                                "tool_names": [t.get("function", {}).get("name") for t in tools] if tools else []
-                            }
-                        )
-                    elif tools:
-                        logger.info(
-                            f"Using tools from request",
-                            extra={
-                                "tools_count": len(tools),
-                                "tool_names": [t.get("function", {}).get("name") for t in tools] if tools else []
-                            }
-                        )
-                    else:
-                        logger.warning(
-                            f"No tools available for personality: {personality_id}",
-                            extra={
-                                "personality_id": personality_id,
-                                "tools_enabled": personality.tools.enabled,
-                                "allowed_tools": personality.tools.allowed_tools if personality.tools.enabled else []
-                            }
-                        )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to load personality config: {e}",
-                    exc_info=True
-                )
-                # 如果加载失败，继续使用请求中的配置
-        
+        # 5. 合并用户偏好
         user_prompt_preferences = _merge_user_preferences(personality, user_obj)
         
-        # 如果没有模型，使用默认值
-        if not actual_model:
-            # 从引擎配置获取默认模型
-            try:
-                from app.utils.config_loader import get_config_loader
-                config_loader = get_config_loader()
-                engine_config = config_loader.load_engine_config(actual_engine_type)
-                actual_model = engine_config.get("default", {}).get("model", "gpt-3.5-turbo")
-                logger.debug(
-                    f"Using default model from engine config: {actual_model}",
-                    extra={"engine_type": actual_engine_type, "model": actual_model}
-                )
-            except Exception as e:
-                logger.warning(f"Failed to load default model from config: {e}", exc_info=False)
-                actual_model = "gpt-3.5-turbo"  # 最后的默认值
+        # 6. 创建AI引擎
+        engine = engine_pool.get_engine(provider=actual_engine_type, model=actual_model)
         
-        # 如果 max_tokens 仍然为 None，设置一个合理的默认值
-        # 根据模型类型设置不同的默认值
-        if actual_max_tokens is None:
-            # 根据模型名称判断，GPT-4 系列使用更大的值
-            if actual_model and ("gpt-4" in actual_model.lower() or "gpt-4o" in actual_model.lower()):
-                actual_max_tokens = 8192  # GPT-4 系列默认 8192
-            else:
-                actual_max_tokens = 4096  # 其他模型默认 4096
-            
-            logger.debug(
-                f"Using default max_tokens for model: {actual_max_tokens}",
-                extra={
-                    "model": actual_model,
-                    "max_tokens": actual_max_tokens
-                }
-            )
-        
-        # 创建AI引擎（使用personality配置的模型或默认模型）
-        engine = engine_pool.get_engine(
-            provider=actual_engine_type,
-            model=actual_model
+        # 7. 构建上下文
+        full_messages = await _build_context(
+            data, user_id, personality_id, personality, user_prompt_preferences,
+            context_builder, memory_manager, personality_registry, engine_pool
         )
         
-        # ============================================
-        # 智能上下文构建（Phase 4优化）
-        # ============================================
-        # 检查是否启用智能上下文管理
-        use_intelligent_context = (
-            getattr(settings, 'context_intelligent_enabled', True) and  # 配置开关
-            user_id is not None and  # 需要user_id
-            data.session_id is not None and  # 需要session_id
-            personality_id is not None and  # 需要personality_id
-            len(data.messages) > 0  # 至少有一条消息
-        )
+        # 8. 初始化服务
+        message_saver = MessageSaver(db)
+        tool_handler = ToolCallHandler(tool_factory)
         
-        full_messages = []
-        
-        if use_intelligent_context:
-            try:
-                logger.info(
-                    "Using intelligent context building",
-                    extra={
-                        "user_id": user_id,
-                        "session_id": data.session_id,
-                        "personality_id": personality_id,
-                        "message_count": len(data.messages)
-                    }
-                )
-                
-                # 提取当前用户消息（假设最后一条是当前消息）
-                current_message_data = data.messages[-1]
-                current_message_content = current_message_data.content or ""
-                
-                # 获取personality配置
-                if personality_id is None:
-                    use_intelligent_context = False
-                else:
-                    personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                    if not personality:
-                        logger.warning(f"Personality {personality_id} not found, falling back to simple mode")
-                        use_intelligent_context = False
-                    else:
-                        # 使用ContextBuilder构建智能上下文
-                        if user_id is None or data.session_id is None or not current_message_content:
-                            use_intelligent_context = False
-                        else:
-                            context_bundle = await context_builder.build_context(
-                                user_id=user_id,
-                                session_id=data.session_id,
-                                current_message=current_message_content,
-                                personality_config=personality,
-                                max_tokens=actual_max_tokens or settings.context_max_tokens
-                            )
-                            
-                            # 转换ContextBundle为LLM消息格式
-                            full_messages = _convert_context_bundle_to_messages(
-                                context_bundle,
-                                current_message_content,
-                                user_prompt_preferences
-                            )
-                    
-                    logger.info(
-                        "Intelligent context built successfully",
-                        extra={
-                            "total_messages": len(full_messages),
-                            "has_summaries": len(context_bundle.summarized_history) > 0,
-                            "has_memories": len(context_bundle.retrieved_memories) > 0,
-                            "recent_messages": len(context_bundle.recent_messages)
-                        }
-                    )
-                
-            except Exception as e:
-                logger.warning(
-                    f"Failed to build intelligent context, falling back to simple mode: {e}",
-                    exc_info=True
-                )
-                use_intelligent_context = False  # 回退到简单模式
-        
-        # 如果未启用智能上下文或智能上下文构建失败，使用简单模式
-        if not use_intelligent_context:
-            logger.debug("Using simple context building (legacy mode)")
-            
-            # 如果确定了personality_id，添加系统提示词
-            if personality_id is not None:
-                try:
-                    personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                    
-                    if personality and personality.ai.system_prompt:
-                        # 添加系统提示词
-                        system_prompt = personality.ai.system_prompt
-                        full_messages.append(
-                            EngineChatMessage(
-                                role="system",
-                                content=system_prompt
-                            )
-                        )
-                        logger.debug(
-                            f"Added system prompt from personality",
-                            extra={
-                                "personality_id": personality_id,
-                                "prompt_length": len(system_prompt)
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to add system prompt: {e}",
-                        exc_info=False
-                    )
-        
-            # 转换并添加用户消息
-            for msg in data.messages:
-                full_messages.append(
-                    EngineChatMessage(
-                        role=msg.role,
-                        content=msg.content,
-                        name=msg.name,
-                        function_call=msg.function_call,
-                        tool_calls=msg.tool_calls
-                    )
-                )
-            
-            if current_message_content:
-                updated_content, instruction_text = _build_user_message_with_preferences(
-                    current_message_content,
-                    user_prompt_preferences
-                )
-                if instruction_text:
-                    logger.debug(
-                        "Applied user prompt instructions",
-                        extra={"instructions": instruction_text}
-                    )
-                if not _override_last_user_message(full_messages, updated_content):
-                    logger.debug("No user message found to override with preferences")
-            
-            # 如果确定了personality_id，根据 token_budget 截断消息历史
-            # 同时检索相关记忆，避免丢失上下文
-            if personality_id is not None:
-                try:
-                    personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                    
-                    if personality:
-                        # 1. 如果启用了记忆系统，先检索相关记忆
-                        retrieved_memories = None
-                        if personality.memory.enabled and data.use_memory and user_id and data.session_id:
-                            try:
-                                # 使用依赖注入的MemoryManager实例
-                                
-                                # 获取最后一条用户消息作为查询
-                                last_user_message = None
-                                for msg in reversed(data.messages):
-                                    if msg.role == "user" and msg.content:
-                                        last_user_message = msg.content
-                                        break
-                                
-                                if last_user_message is not None:
-                                    memory_config = personality.memory
-                                    include_user = memory_config.save_mode in ["both", "user_only"]
-                                    include_ai = memory_config.save_mode in ["both", "assistant_only"]
-                                    
-                                    # 获取similarity_threshold并记录（用于调试）
-                                    similarity_threshold = memory_config.retrieval.similarity_threshold
-                                    logger.warning(
-                                        f"chat.py: Calling retrieve_memories with similarity_threshold",
-                                        extra={
-                                            "personality_id": personality_id,
-                                            "similarity_threshold": similarity_threshold,
-                                            "similarity_threshold_type": type(similarity_threshold).__name__,
-                                            "memory_config_retrieval": {
-                                                "max_results": memory_config.retrieval.max_results,
-                                                "similarity_threshold": memory_config.retrieval.similarity_threshold,
-                                                "timeout_seconds": memory_config.retrieval.timeout_seconds
-                                            },
-                                            "personality_memory_retrieval_type": type(memory_config.retrieval).__name__
-                                        }
-                                    )
-                                    
-                                    retrieved_memories = await memory_manager.retrieve_memories(
-                                        user_id=user_id,
-                                        session_id=data.session_id,
-                                        query=last_user_message,
-                                        max_results=memory_config.retrieval.max_results,
-                                        include_user_memory=include_user,
-                                        include_ai_memory=include_ai,
-                                        timeout=memory_config.retrieval.timeout_seconds,
-                                        similarity_threshold=similarity_threshold
-                                    )
-                                else:
-                                    retrieved_memories = None
-                                
-                                # 如果有检索到的记忆，添加到系统提示中
-                                if retrieved_memories:
-                                    user_memories = retrieved_memories.get("user_memories", [])
-                                    ai_memories = retrieved_memories.get("ai_memories", [])
-                                    
-                                    # 记录传入系统提示的记忆（用于调试）
-                                    logger.warning(
-                                        f"chat.py: Building memory context for system prompt",
-                                        extra={
-                                            "personality_id": personality_id,
-                                            "user_memories_count": len(user_memories),
-                                            "ai_memories_count": len(ai_memories),
-                                            "user_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in user_memories[:5]] if user_memories else [],
-                                            "ai_memories": [f"{mem.memory.content[:30]} (相似度: {mem.similarity:.2f})" for mem in ai_memories[:5]] if ai_memories else []
-                                        }
-                                    )
-                                    
-                                    if user_memories or ai_memories:
-                                        # 使用配置中的max_results，而不是硬编码
-                                        max_results = memory_config.retrieval.max_results
-                                        
-                                        memory_context = "\n\n## 相关记忆\n\n"
-                                        
-                                        if user_memories:
-                                            memory_context += "### 用户记忆\n"
-                                            # 使用配置的max_results
-                                            for mem in user_memories[:max_results]:
-                                                # MemorySearchResult 对象，通过 .memory.content 访问
-                                                if hasattr(mem, 'memory') and hasattr(mem.memory, 'content'):
-                                                    memory_context += f"- {mem.memory.content}\n"
-                                                elif isinstance(mem, dict):
-                                                    memory_context += f"- {mem.get('content', '')}\n"
-                                        
-                                        if ai_memories:
-                                            memory_context += "\n### AI记忆\n"
-                                            # 使用配置的max_results
-                                            for mem in ai_memories[:max_results]:
-                                                # MemorySearchResult 对象，通过 .memory.content 访问
-                                                if hasattr(mem, 'memory') and hasattr(mem.memory, 'content'):
-                                                    memory_context += f"- {mem.memory.content}\n"
-                                                elif isinstance(mem, dict):
-                                                    memory_context += f"- {mem.get('content', '')}\n"
-                                        
-                                        # 将记忆添加到第一个系统消息中
-                                        if full_messages and full_messages[0].role == "system" and full_messages[0].content:
-                                            full_messages[0].content = (full_messages[0].content or "") + memory_context
-                                        else:
-                                            # 如果没有系统消息，创建一个
-                                            full_messages.insert(0, EngineChatMessage(
-                                                role="system",
-                                                content=memory_context
-                                            ))
-                                        
-                                        logger.debug(
-                                            f"Added memories to context",
-                                            extra={
-                                                "personality_id": personality_id,
-                                                "user_memories_count": len(user_memories),
-                                                "ai_memories_count": len(ai_memories)
-                                            }
-                                        )
-                            except Exception as e:
-                                logger.warning(
-                                    f"Failed to retrieve memories: {e}",
-                                    exc_info=False
-                                )
-                    
-                    # 2. 根据 token_budget 截断消息历史（包含摘要功能）
-                    if personality and personality.ai.token_budget:
-                        max_history_tokens = personality.ai.token_budget.max_history_tokens
-                        if max_history_tokens > 0:
-                            from app.utils.token_utils import truncate_messages
-                            full_messages = truncate_messages(
-                                full_messages,
-                                max_history_tokens=max_history_tokens,
-                                keep_system=True,
-                                min_messages=2,  # 至少保留最近一轮对话（用户+助手）
-                                enable_summary=True,  # 启用摘要功能
-                                max_summary_tokens=200  # 摘要最多200 tokens
-                            )
-                            logger.debug(
-                                f"Truncated messages based on token budget",
-                                extra={
-                                    "personality_id": personality_id,
-                                    "max_history_tokens": max_history_tokens,
-                                    "final_message_count": len(full_messages),
-                                    "has_memories": retrieved_memories is not None
-                                }
-                            )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to process token budget and memories: {e}",
-                        exc_info=False
-                    )
-        
-        messages = full_messages
-        
-        # 流式输出
+        # 9. 生成响应
         if data.stream:
-            async def generate_stream() -> AsyncIterator[str]:
-                """生成SSE流，支持工具调用"""
-                try:
-                    current_messages = messages.copy()
-                    max_iterations = 10  # 防止无限循环
-                    iteration = 0
-                    accumulated_content = ""  # 收集AI回复内容，用于保存记忆
-                    stream_actual_model = actual_model  # 保存actual_model到闭包中
-                    
-                    while iteration < max_iterations:
-                        iteration += 1
-                        
-                        # 重置状态
-                        tool_call_chunks = []
-                        finish_reason = None
-                        has_content = False
-                        
-                        # 第一轮：收集AI响应和工具调用
-                        logger.debug(
-                            f"Starting chat stream iteration {iteration}",
-                            extra={
-                                "messages_count": len(current_messages),
-                                "has_tools": bool(tools),
-                                "tools_count": len(tools) if tools else 0,
-                                "first_message": current_messages[0].role if current_messages else None
-                            }
-                        )
-                        
-                        async for chunk in engine.chat_stream(  # type: ignore[misc]
-                            messages=current_messages,
-                            temperature=data.temperature,
-                            max_tokens=actual_max_tokens,
-                            tools=tools
-                        ):
-                            chunk_dict = chunk.to_dict()
-                            
-                            # 检查是否有工具调用和内容
-                            delta = chunk_dict.get("choices", [{}])[0].get("delta", {})
-                            if delta.get("content"):
-                                has_content = True
-                                # 收集AI回复内容，用于保存记忆
-                                accumulated_content += delta.get("content", "")
-                            if delta.get("tool_calls"):
-                                # 收集工具调用增量
-                                for tc in delta["tool_calls"]:
-                                    idx = tc.get("index", 0)
-                                    if idx >= len(tool_call_chunks):
-                                        tool_call_chunks.extend([None] * (idx + 1 - len(tool_call_chunks)))
-                                    
-                                    if tool_call_chunks[idx] is None:
-                                        tool_call_chunks[idx] = {
-                                            "id": tc.get("id", ""),
-                                            "type": tc.get("type", "function"),
-                                            "function": {
-                                                "name": tc.get("function", {}).get("name", ""),
-                                                "arguments": tc.get("function", {}).get("arguments", "")
-                                            }
-                                        }
-                                    else:
-                                        # 合并增量
-                                        if tc.get("id"):
-                                            tool_call_chunks[idx]["id"] = tc.get("id")
-                                        if tc.get("function", {}).get("name"):
-                                            tool_call_chunks[idx]["function"]["name"] = tc.get("function", {}).get("name")
-                                        if tc.get("function", {}).get("arguments"):
-                                            tool_call_chunks[idx]["function"]["arguments"] += tc.get("function", {}).get("arguments", "")
-                            
-                            # 检查完成原因（只在最后一个chunk中设置）
-                            chunk_finish_reason = chunk_dict.get("choices", [{}])[0].get("finish_reason")
-                            if chunk_finish_reason:
-                                finish_reason = chunk_finish_reason
-                            
-                            # 转发所有chunk到前端
-                            yield f"data: {json.dumps(chunk_dict, ensure_ascii=False)}\n\n"
-
-                        # 检查是否需要继续工具调用循环
-                        # 只有在 finish_reason 是 "tool_calls" 且没有内容且确实有工具调用时才继续
-                        should_continue_tool_calls = (
-                            finish_reason == "tool_calls" 
-                            and tool_call_chunks 
-                            and len([tc for tc in tool_call_chunks if tc and tc.get("function", {}).get("name")]) > 0
-                            and not has_content
-                        )
-                        
-                        if should_continue_tool_calls:
-                            # 执行工具
-                            tool_manager = tool_factory.get_tool_manager()
-                            tool_results = []
-                            
-                            for tc in tool_call_chunks:
-                                if not tc or not tc.get("function", {}).get("name"):
-                                    continue
-                                
-                                tool_name = tc["function"]["name"]
-                                try:
-                                    # 解析参数
-                                    import json as json_lib
-                                    args = json_lib.loads(tc["function"].get("arguments", "{}"))
-                                    
-                                    # 执行工具
-                                    result = await tool_manager.execute_tool(
-                                        tool_name=tool_name,
-                                        parameters=args
-                                    )
-                                    
-                                    # 格式化结果（content应该是字符串，不是JSON字符串）
-                                    if result.get("success"):
-                                        result_content = result.get("result", "")
-                                        # 如果结果是字典或列表，转换为JSON字符串；否则直接使用字符串
-                                        if isinstance(result_content, (dict, list)):
-                                            result_content = json_lib.dumps(result_content, ensure_ascii=False)
-                                        else:
-                                            result_content = str(result_content)
-                                        
-                                        # 截断过长的工具结果，避免超过token限制
-                                        # 根据 max_tokens 和当前消息长度，计算工具结果的最大长度
-                                        from app.utils.token_utils import estimate_tokens
-                                        
-                                        # 估算当前消息的token数
-                                        current_tokens = sum(
-                                            estimate_tokens(msg.content or "") + 
-                                            (len(msg.tool_calls) * 50 if msg.tool_calls else 0)
-                                            for msg in current_messages
-                                        )
-                                        
-                                        # 预留一些token给AI回复（假设AI回复最多占max_tokens的80%）
-                                        available_for_tool_result = int(actual_max_tokens * 0.2) if actual_max_tokens else 500
-                                        
-                                        # 如果工具结果太长，截断它
-                                        result_tokens = estimate_tokens(result_content)
-                                        if result_tokens > available_for_tool_result:
-                                            # 计算可以保留的字符数（大约2字符/token）
-                                            max_chars = available_for_tool_result * 2
-                                            if len(result_content) > max_chars:
-                                                truncated_content = result_content[:max_chars] + f"\n\n[结果已截断，原始长度: {len(result_content)} 字符]"
-                                                logger.warning(
-                                                    f"Tool result too long, truncated: {len(result_content)} -> {len(truncated_content)} chars",
-                                                    extra={
-                                                        "tool_name": tool_name,
-                                                        "original_length": len(result_content),
-                                                        "truncated_length": len(truncated_content),
-                                                        "original_tokens": result_tokens,
-                                                        "truncated_tokens": estimate_tokens(truncated_content)
-                                                    }
-                                                )
-                                                result_content = truncated_content
-                                        
-                                        tool_results.append({
-                                            "role": "tool",
-                                            "tool_call_id": tc.get("id", ""),
-                                            "content": result_content
-                                        })
-                                    else:
-                                        tool_results.append({
-                                            "role": "tool",
-                                            "tool_call_id": tc.get("id", ""),
-                                            "content": f"工具执行失败: {result.get('error', 'Unknown error')}"
-                                        })
-                                    
-                                    logger.info(
-                                        f"Tool executed: {tool_name}",
-                                        extra={"tool_name": tool_name, "success": result.get("success")}
-                                    )
-                                except Exception as e:
-                                    logger.error(f"Tool execution error: {e}", exc_info=True)
-                                    tool_results.append({
-                                        "role": "tool",
-                                        "tool_call_id": tc.get("id", ""),
-                                        "content": f"工具执行出错: {str(e)}"
-                                    })
-                            
-                            # 将工具结果添加到消息列表，继续对话
-                            if tool_results:
-                                # 添加assistant消息（包含tool_calls）
-                                assistant_tool_calls = []
-                                for tc in tool_call_chunks:
-                                    if tc and tc.get("function", {}).get("name"):
-                                        assistant_tool_calls.append({
-                                            "id": tc.get("id", ""),
-                                            "type": tc.get("type", "function"),
-                                            "function": tc.get("function", {})
-                                        })
-                                
-                                if assistant_tool_calls:
-                                    current_messages.append(
-                                        EngineChatMessage(
-                                            role="assistant",
-                                            content="",
-                                            tool_calls=assistant_tool_calls
-                                        )
-                                    )
-                                
-                                # 添加tool消息（工具执行结果）
-                                for tr in tool_results:
-                                    current_messages.append(
-                                        EngineChatMessage(
-                                            role="tool",
-                                            content=tr.get("content", ""),
-                                            name=tr.get("tool_call_id", "")  # 使用tool_call_id作为name
-                                        )
-                                    )
-                                
-                                # 在继续循环前，检查消息总长度，如果超过限制，截断历史消息
-                                if personality_id is not None:
-                                    try:
-                                        personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                                        
-                                        if personality and personality.ai.token_budget:
-                                            max_history_tokens = personality.ai.token_budget.max_history_tokens
-                                            if max_history_tokens > 0:
-                                                from app.utils.token_utils import truncate_messages, estimate_message_tokens
-                                                
-                                                # 计算当前消息的总token数
-                                                total_tokens = sum(estimate_message_tokens(msg) for msg in current_messages)
-                                                
-                                                # 如果超过限制，截断历史消息（保留系统消息、工具调用和工具结果）
-                                                if total_tokens > max_history_tokens:
-                                                    logger.debug(
-                                                        f"Messages exceed token limit before next iteration, truncating: {total_tokens}/{max_history_tokens}",
-                                                        extra={
-                                                            "total_tokens": total_tokens,
-                                                            "max_history_tokens": max_history_tokens,
-                                                            "message_count": len(current_messages)
-                                                        }
-                                                    )
-                                                    
-                                                    # 截断消息，但至少保留最近的工具调用和结果
-                                                    # 保留：系统消息 + 最后一条用户消息 + 工具调用 + 工具结果
-                                                    current_messages = truncate_messages(
-                                                        current_messages,
-                                                        max_history_tokens=max_history_tokens,
-                                                        keep_system=True,
-                                                        min_messages=4,  # 至少保留：用户消息 + assistant工具调用 + tool结果 + 可能的assistant回复
-                                                        enable_summary=True,
-                                                        max_summary_tokens=200
-                                                    )
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Failed to truncate messages in tool loop: {e}",
-                                            exc_info=False
-                                        )
-                                
-                                # 继续下一轮对话（不发送结束标记）
-                                logger.debug(
-                                    f"Continuing tool call loop after iteration {iteration}",
-                                    extra={
-                                        "iteration": iteration,
-                                        "tools_executed": len(tool_results),
-                                        "messages_count": len(current_messages)
-                                    }
-                                )
-                                continue
-                        
-                        # 正常完成（finish_reason 不是 tool_calls，或者有内容，或者没有工具调用）
-                        # 先发送结束标记，然后再保存记忆（不阻塞响应）
-                        logger.debug(
-                            f"Stream completed normally after iteration {iteration}",
-                            extra={
-                                "iteration": iteration,
-                                "finish_reason": finish_reason,
-                                "has_content": has_content,
-                                "has_tool_calls": bool(tool_call_chunks)
-                            }
-                        )
-                        yield "data: [DONE]\n\n"
-                        
-                        # 保存记忆（如果启用了记忆系统）- 完全异步执行，不阻塞响应
-                        if personality_id is not None and user_id is not None and data.session_id is not None:
-                            # 获取最后一条用户消息和AI回复（在异步任务外获取，避免闭包问题）
-                            last_user_message = None
-                            for msg in reversed(current_messages):
-                                if msg.role == "user" and msg.content:
-                                    last_user_message = msg.content
-                                    break
-                            
-                            assistant_content = accumulated_content
-                            
-                            # 创建异步任务保存记忆和更新标题，不等待结果
-                            if last_user_message and assistant_content:
-                                import asyncio
-                                from app.engines.memory.manager import MemoryManager
-                                from app.core.session import SessionTitleGenerator
-                                
-                                async def save_memory_and_update_title_async():
-                                    """异步保存消息、记忆和更新标题，不阻塞主流程"""
-                                    try:
-                                        # 需要创建新的数据库会话，因为原会话可能在异步任务中已关闭
-                                        from app.models.base import get_sync_db
-                                        import uuid
-                                        
-                                        async_db = next(get_sync_db())  # type: ignore[arg-type]
-                                        try:
-                                            session_uuid = uuid.UUID(data.session_id)
-                                            user_uuid = uuid.UUID(user_id)
-                                            
-                                            # 保存用户消息到数据库
-                                            try:
-                                                user_message = MessageModel(
-                                                    session_id=session_uuid,
-                                                    user_id=user_uuid,
-                                                    role="user",
-                                                    content=last_user_message
-                                                )
-                                                async_db.add(user_message)
-                                                
-                                                # 保存助手消息到数据库
-                                                # 获取实际使用的模型（使用闭包中的stream_actual_model）
-                                                assistant_model = stream_actual_model
-                                                
-                                                assistant_message = MessageModel(
-                                                    session_id=session_uuid,
-                                                    user_id=user_uuid,
-                                                    role="assistant",
-                                                    content=assistant_content,
-                                                    model=assistant_model
-                                                )
-                                                async_db.add(assistant_message)
-                                                
-                                                # 更新会话的message_count和last_message_at
-                                                session = async_db.query(SessionModel).filter(
-                                                    SessionModel.id == session_uuid
-                                                ).first()
-                                                if session:
-                                                    session.message_count = (session.message_count or 0) + 2  # type: ignore[assignment]
-                                                    from datetime import datetime
-                                                    session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
-                                                
-                                                async_db.commit()
-                                                
-                                                logger.debug(
-                                                    f"Saved messages to database (stream)",
-                                                    extra={
-                                                        "user_id": user_id,
-                                                        "session_id": data.session_id,
-                                                        "user_message_length": len(last_user_message),
-                                                        "assistant_message_length": len(assistant_content)
-                                                    }
-                                                )
-                                            except Exception as msg_error:
-                                                logger.warning(
-                                                    f"Failed to save messages to database: {msg_error}",
-                                                    exc_info=False
-                                                )
-                                                async_db.rollback()
-                                            
-                                            # 保存记忆（如果启用了记忆系统）
-                                            if personality_id is not None:
-                                                personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                                                
-                                                if personality and personality.memory.enabled and data.use_memory and user_id is not None and data.session_id is not None:
-                                                    # 使用依赖注入的MemoryManager实例
-                                                    
-                                                    # 使用 async_save=True 异步保存，不阻塞
-                                                    # 不传入importance参数，让系统自动计算重要性分数
-                                                    await memory_manager.add_conversation_turn(
-                                                        user_id=user_id,
-                                                        session_id=data.session_id,
-                                                    user_message=last_user_message,
-                                                    assistant_message=assistant_content,
-                                                    async_save=True
-                                                )
-                                                
-                                                logger.debug(
-                                                    f"Saved conversation to memory (stream)",
-                                                    extra={
-                                                        "user_id": user_id,
-                                                        "session_id": data.session_id,
-                                                        "user_message_length": len(last_user_message),
-                                                        "assistant_message_length": len(assistant_content)
-                                                    }
-                                                )
-                                            
-                                            # 标题生成已移至独立API（/v1/sessions/{id}/title）
-                                            # 由前端在消息数达到阈值时主动调用
-                                            # 不再在对话流中同步生成标题，避免阻塞响应
-                                        finally:
-                                            async_db.close()
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Failed to save memory (stream): {e}",
-                                            exc_info=False
-                                        )
-                                
-                                # 创建后台任务，不等待完成
-                                asyncio.create_task(save_memory_and_update_title_async())
-                        
-                        break
-                    
-                    if iteration >= max_iterations:
-                        logger.warning("Max iterations reached in tool calling loop")
-                    yield "data: [DONE]\n\n"
-                    
-                except Exception as e:
-                    logger.error(f"Stream generation error: {e}", exc_info=True)
-                    error_data = {
-                        "error": {
-                            "message": str(e),
-                            "type": "stream_error"
-                        }
-                    }
-                    yield f"data: {json.dumps(error_data)}\n\n"
-            
+            stream_service = StreamChatService(tool_handler, message_saver, personality_registry)
             return StreamingResponse(
-                generate_stream(),
+                stream_service.generate_stream(
+                    engine=engine,
+                    messages=full_messages,
+                    tools=tools,
+                    actual_max_tokens=actual_max_tokens,
+                    actual_model=actual_model,
+                    temperature=data.temperature,
+                    personality_id=personality_id,
+                    personality=personality,
+                    user_id=user_id,
+                    session_id=data.session_id,
+                    use_memory=data.use_memory,
+                    memory_manager=memory_manager
+                ),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
@@ -1292,139 +216,21 @@ async def create_chat_completion(
                     "X-Accel-Buffering": "no"
                 }
             )
-        
-        # 非流式输出
         else:
-            chat_response = await engine.chat(
-                messages=messages,
+            chat_service = ChatService(message_saver)
+            chat_response = await chat_service.generate_response(
+                engine=engine,
+                messages=full_messages,
+                tools=tools,
+                actual_max_tokens=actual_max_tokens,
                 temperature=data.temperature,
-                max_tokens=actual_max_tokens,
-                tools=tools
+                personality=personality,
+                user_id=user_id,
+                session_id=data.session_id,
+                use_memory=data.use_memory,
+                memory_manager=memory_manager
             )
             
-            # 保存记忆（如果启用了记忆系统）- 完全异步执行，不阻塞响应
-            if personality_id is not None and user_id is not None and data.session_id is not None:
-                # 获取最后一条用户消息和AI回复（在异步任务外获取，避免闭包问题）
-                last_user_message = None
-                for msg in reversed(data.messages):
-                    if msg.role == "user" and msg.content:
-                        last_user_message = msg.content
-                        break
-                
-                assistant_content = ""
-                if chat_response.message:
-                    if hasattr(chat_response.message, 'content'):
-                        assistant_content = chat_response.message.content or ""
-                    elif isinstance(chat_response.message, dict):
-                        assistant_content = chat_response.message.get("content", "")
-                
-                # 创建异步任务保存记忆和更新标题，不等待结果
-                if last_user_message and assistant_content:
-                    import asyncio
-                    from app.engines.memory.manager import MemoryManager
-                    from app.core.session import SessionTitleGenerator
-                    
-                    async def save_memory_and_update_title_async():
-                        """异步保存消息、记忆和更新标题，不阻塞主流程"""
-                        try:
-                            # 需要创建新的数据库会话，因为原会话可能在异步任务中已关闭
-                            from app.models.base import get_sync_db
-                            import uuid
-                            
-                            async_db = next(get_sync_db())  # type: ignore[arg-type]
-                            try:
-                                session_uuid = uuid.UUID(data.session_id)
-                                user_uuid = uuid.UUID(user_id)
-                                
-                                # 保存用户消息到数据库
-                                try:
-                                    user_message = MessageModel(
-                                        session_id=session_uuid,
-                                        user_id=user_uuid,
-                                        role="user",
-                                        content=last_user_message
-                                    )
-                                    async_db.add(user_message)
-                                    
-                                    # 保存助手消息到数据库
-                                    assistant_message = MessageModel(
-                                        session_id=session_uuid,
-                                        user_id=user_uuid,
-                                        role="assistant",
-                                        content=assistant_content,
-                                        model=chat_response.model
-                                    )
-                                    async_db.add(assistant_message)
-                                    
-                                    # 更新会话的message_count和last_message_at
-                                    session = async_db.query(SessionModel).filter(
-                                        SessionModel.id == session_uuid
-                                    ).first()
-                                    if session:
-                                        session.message_count = (session.message_count or 0) + 2  # type: ignore[assignment]
-                                        from datetime import datetime
-                                        session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
-                                    
-                                    async_db.commit()
-                                    
-                                    logger.debug(
-                                        f"Saved messages to database (non-stream)",
-                                        extra={
-                                            "user_id": user_id,
-                                            "session_id": data.session_id,
-                                            "user_message_length": len(last_user_message),
-                                            "assistant_message_length": len(assistant_content)
-                                        }
-                                    )
-                                except Exception as msg_error:
-                                    logger.warning(
-                                        f"Failed to save messages to database: {msg_error}",
-                                        exc_info=False
-                                    )
-                                    async_db.rollback()
-                                
-                                # 保存记忆（如果启用了记忆系统）
-                                if personality_id is not None:
-                                    personality = personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
-                                    
-                                    if personality and personality.memory.enabled and data.use_memory and user_id is not None and data.session_id is not None:
-                                        # 使用依赖注入的MemoryManager实例
-                                        
-                                        # 使用 async_save=True 异步保存，不阻塞
-                                        # 不传入importance参数，让系统自动计算重要性分数
-                                        await memory_manager.add_conversation_turn(
-                                            user_id=user_id,
-                                            session_id=data.session_id,
-                                        user_message=last_user_message,
-                                        assistant_message=assistant_content,
-                                        async_save=True
-                                    )
-                                    
-                                    logger.debug(
-                                        f"Saved conversation to memory (non-stream)",
-                                        extra={
-                                            "user_id": user_id,
-                                            "session_id": data.session_id,
-                                            "user_message_length": len(last_user_message),
-                                            "assistant_message_length": len(assistant_content)
-                                        }
-                                    )
-                                
-                                # 标题生成已移至独立API（/v1/sessions/{id}/title）
-                                # 由前端在消息数达到阈值时主动调用
-                                # 不再在对话流中同步生成标题，避免阻塞响应
-                            finally:
-                                async_db.close()
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to save memory (non-stream): {e}",
-                                exc_info=False
-                            )
-                    
-                    # 创建后台任务，不等待完成
-                    asyncio.create_task(save_memory_and_update_title_async())
-            
-            # 转换为API响应格式
             return ChatCompletionResponse(
                 id=chat_response.id,
                 created=chat_response.created,
@@ -1437,18 +243,13 @@ async def create_chat_completion(
                     )
                 ],
                 usage=ChatCompletionUsage(**chat_response.usage) if chat_response.usage else ChatCompletionUsage(
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    total_tokens=0
+                    prompt_tokens=0, completion_tokens=0, total_tokens=0
                 )
             )
     
     except ValueError as e:
         logger.error(f"Invalid request: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Chat completion failed: {e}", exc_info=True)
         raise HTTPException(
@@ -1457,13 +258,128 @@ async def create_chat_completion(
         )
 
 
+# 辅助函数
+
+def _get_ids_from_request(data, db):
+    """从请求中获取personality_id和user_id"""
+    personality_id = data.personality_id
+    user_id = data.user_id
+    session = None
+    
+    if data.session_id:
+        try:
+            session_uuid = uuid.UUID(data.session_id)
+            session = db.query(SessionModel).filter(SessionModel.id == session_uuid).first()
+            if session:
+                if not personality_id:
+                    personality_id = str(session.personality_id)  # type: ignore[arg-type]
+                if not user_id:
+                    user_id = str(session.user_id)  # type: ignore[arg-type]
+        except Exception as e:
+            logger.warning(f"Failed to get session info: {e}", exc_info=False)
+    
+    return personality_id, user_id, session
+
+
+def _load_user(user_id, db):
+    """加载用户对象"""
+    if user_id:
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+            return db.query(User).filter(User.id == user_uuid).first()
+        except Exception as e:
+            logger.warning(f"Failed to load user: {e}", exc_info=False)
+    return None
+
+
+def _load_personality(personality_id, personality_registry):
+    """加载人格配置"""
+    if personality_id:
+        try:
+            return personality_registry.get_personality(personality_id)
+        except Exception as e:
+            logger.warning(f"Failed to load personality: {e}", exc_info=True)
+    return None
+
+
+def _determine_engine_params(data, personality):
+    """确定引擎参数"""
+    actual_model = data.model
+    actual_engine_type = data.engine_type or "openai"
+    actual_max_tokens = data.max_tokens
+    
+    if personality:
+        actual_model = personality.ai.model
+        actual_engine_type = personality.ai.provider
+        if actual_max_tokens is None:
+            actual_max_tokens = personality.ai.max_tokens
+    
+    if not actual_model:
+        actual_model = "gpt-3.5-turbo"
+    
+    if actual_max_tokens is None:
+        actual_max_tokens = 8192 if "gpt-4" in actual_model.lower() else 4096
+    
+    return actual_model, actual_engine_type, actual_max_tokens
+
+
+def _load_tools(personality, tool_factory, data):
+    """加载工具列表"""
+    tools = data.tools
+    
+    if personality and personality.tools.enabled and (tools is None or len(tools) == 0):
+        tool_manager = tool_factory.get_tool_manager(allowed_tools=personality.tools.allowed_tools)
+        tools = tool_manager.get_tools_for_openai(tool_names=personality.tools.allowed_tools)
+    
+    return tools
+
+
+async def _build_context(
+    data, user_id, personality_id, personality, user_prompt_preferences,
+    context_builder, memory_manager, personality_registry, engine_pool
+):
+    """构建上下文"""
+    use_intelligent_context = (
+        getattr(settings, 'context_intelligent_enabled', True) and
+        user_id and data.session_id and personality_id and len(data.messages) > 0
+    )
+    
+    if use_intelligent_context:
+        try:
+            current_message_content = data.messages[-1].content or ""
+            context_bundle = await context_builder.build_context(
+                user_id=user_id,
+                session_id=data.session_id,
+                current_message=current_message_content,
+                personality_config=personality,
+                max_tokens=getattr(settings, 'context_max_tokens', 4096)
+            )
+            return _convert_context_bundle_to_messages(
+                context_bundle, current_message_content, user_prompt_preferences
+            )
+        except Exception as e:
+            logger.warning(f"Failed to build intelligent context: {e}", exc_info=True)
+    
+    # 降级:简单模式
+    full_messages = []
+    if personality and personality.ai.system_prompt:
+        full_messages.append(EngineChatMessage(role="system", content=personality.ai.system_prompt))
+    
+    for msg in data.messages:
+        full_messages.append(EngineChatMessage(
+            role=msg.role,
+            content=msg.content,
+            name=msg.name,
+            function_call=msg.function_call,
+            tool_calls=msg.tool_calls
+        ))
+    
+    return full_messages
+
+
 @router.get("/engines", response_model=EngineListResponse)
 async def list_engines() -> EngineListResponse:
-    """列出所有可用的AI引擎
-    
-    Returns:
-        EngineListResponse: 引擎列表
-    """
+    """列出所有可用的AI引擎"""
     try:
         from app.engines.ai.factory import AIEngineFactory
         available_engines = AIEngineFactory.list_available_engines()
@@ -1481,43 +397,17 @@ async def list_engines() -> EngineListResponse:
         )
 
 
-# 注意：模型列表端点已移至 /v1/models（models.py）
-# 这里不再提供 /v1/chat/models 端点，请使用 /v1/models
-
-
 @router.post("/voice-call-messages", response_model=SaveVoiceCallMessagesResponse)
 async def save_voice_call_messages(
     request: SaveVoiceCallMessagesRequest,
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_sync_session)
 ):
-    """保存语音通话消息到数据库
-    
-    Args:
-        request: 保存语音通话消息请求
-        user: 当前用户
-        db: 数据库会话
-        
-    Returns:
-        SaveVoiceCallMessagesResponse: 保存结果
-        
-    Raises:
-        HTTPException: 如果会话不存在或不属于当前用户
-    """
+    """保存语音通话消息到数据库"""
     try:
-        import uuid
-        from datetime import datetime
+        session_uuid = uuid.UUID(request.session_id)
         
-        # 验证会话ID
-        try:
-            session_uuid = uuid.UUID(request.session_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid session ID format"
-            )
-        
-        # 验证会话是否存在且属于当前用户
+        # 验证会话
         session = db.query(SessionModel).filter(
             and_(
                 SessionModel.id == session_uuid,
@@ -1527,57 +417,23 @@ async def save_voice_call_messages(
         ).first()
         
         if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
         
         # 保存消息
         saved_count = 0
         for msg in request.messages:
-            try:
-                # 解析时间戳（如果有）
-                created_at = datetime.utcnow()
-                if msg.timestamp:
-                    try:
-                        # 尝试解析ISO格式时间戳
-                        # 支持格式：2025-01-13T10:30:00.000Z 或 2025-01-13T10:30:00
-                        timestamp_str = msg.timestamp
-                        if timestamp_str.endswith('Z'):
-                            timestamp_str = timestamp_str[:-1] + '+00:00'
-                        elif '+' not in timestamp_str and '-' in timestamp_str:
-                            # 如果没有时区信息，假设是UTC
-                            if 'T' in timestamp_str:
-                                timestamp_str = timestamp_str + '+00:00'
-                        
-                        # 使用datetime.fromisoformat解析（Python 3.7+）
-                        parsed_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                        # 转换为UTC并移除时区信息
-                        if parsed_time.tzinfo:
-                            parsed_time = parsed_time.astimezone(timezone.utc)
-                        created_at = parsed_time.replace(tzinfo=None)
-                    except Exception as parse_error:
-                        # 如果解析失败，使用当前时间
-                        logger.debug(f"Failed to parse timestamp {msg.timestamp}: {parse_error}")
-                        pass
-                
-                message = MessageModel(
-                    session_id=session_uuid,
-                    user_id=user.id,
-                    role=msg.role,
-                    content=msg.content,
-                    created_at=created_at,
-                    message_metadata={"is_voice_call": True}  # 标记为语音通话消息
-                )
-                db.add(message)
-                saved_count += 1
-            except Exception as e:
-                logger.warning(
-                    f"Failed to save voice call message: {e}",
-                    extra={"user_id": str(user.id), "session_id": request.session_id}
-                )
+            message = MessageModel(
+                session_id=session_uuid,
+                user_id=user.id,
+                role=msg.role,
+                content=msg.content,
+                created_at=datetime.utcnow(),
+                message_metadata={"is_voice_call": True}
+            )
+            db.add(message)
+            saved_count += 1
         
-        # 更新会话统计信息
+        # 更新会话统计
         session.message_count = (session.message_count or 0) + saved_count  # type: ignore[assignment]
         session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
         
@@ -1585,11 +441,7 @@ async def save_voice_call_messages(
         
         logger.info(
             "Saved voice call messages",
-            extra={
-                "user_id": str(user.id),
-                "session_id": request.session_id,
-                "saved_count": saved_count
-            }
+            extra={"user_id": str(user.id), "session_id": request.session_id, "saved_count": saved_count}
         )
         
         return SaveVoiceCallMessagesResponse(

@@ -262,6 +262,10 @@ export class EventHandler {
   /**
    * 提交工具执行结果给 RealtimeSession
    * 
+   * 注意：如果工具是通过 tool() 函数创建的，并且有 execute 函数，
+   * 那么工具执行结果会自动返回，不需要手动提交。
+   * 此方法仅作为备用方案，用于手动提交工具结果。
+   * 
    * @param callId - 工具调用ID
    * @param toolName - 工具名称
    * @param result - 执行结果
@@ -277,44 +281,55 @@ export class EventHandler {
     }
 
     try {
-      // 根据 OpenAI Agents SDK 文档，提交工具结果的方法可能是：
-      // 1. session.submitToolResult(callId, result)
-      // 2. session.send({ type: 'conversation.item.create', item: { ... } })
-      // 3. session.addMessage({ role: 'tool', tool_call_id: callId, content: result })
+      // 根据 OpenAI Agents SDK，如果工具是通过 tool() 创建的，
+      // 工具执行结果会自动返回，不需要手动提交。
+      // 这里仅作为备用方案，尝试手动提交。
 
-      // 尝试方法1
+      // 方法1: 尝试使用 createItem 创建 function_call_output
+      if (typeof (this.session as any).createItem === 'function') {
+        try {
+          await (this.session as any).createItem({
+            type: 'function_call_output',
+            call_id: callId,
+            output: typeof result === 'string' ? result : JSON.stringify(result),
+          });
+          log.debug(`工具结果已提交 (createItem): ${toolName}`);
+          return;
+        } catch (e) {
+          log.debug('createItem 方法失败，尝试其他方法:', e);
+        }
+      }
+
+      // 方法2: 尝试使用 submitToolOutput
+      if (typeof (this.session as any).submitToolOutput === 'function') {
+        await (this.session as any).submitToolOutput(callId, result);
+        log.debug(`工具结果已提交 (submitToolOutput): ${toolName}`);
+        return;
+      }
+
+      // 方法3: 尝试使用 submitToolResult
       if (typeof (this.session as any).submitToolResult === 'function') {
         await (this.session as any).submitToolResult(callId, result);
         log.debug(`工具结果已提交 (submitToolResult): ${toolName}`);
         return;
       }
 
-      // 尝试方法2
+      // 方法4: 尝试使用 send
       if (typeof (this.session as any).send === 'function') {
         await (this.session as any).send({
           type: 'conversation.item.create',
           item: {
             type: 'function_call_output',
             call_id: callId,
-            output: JSON.stringify(result),
+            output: typeof result === 'string' ? result : JSON.stringify(result),
           },
         });
         log.debug(`工具结果已提交 (send): ${toolName}`);
         return;
       }
 
-      // 尝试方法3
-      if (typeof (this.session as any).addMessage === 'function') {
-        await (this.session as any).addMessage({
-          role: 'tool',
-          tool_call_id: callId,
-          content: JSON.stringify(result),
-        });
-        log.debug(`工具结果已提交 (addMessage): ${toolName}`);
-        return;
-      }
-
-      log.error('无法找到提交工具结果的方法');
+      // 如果所有方法都失败，记录警告（但不报错，因为工具可能已经自动提交）
+      log.warn('无法找到提交工具结果的方法，工具可能已自动提交（如果使用 tool() 创建）');
     } catch (error) {
       log.error('提交工具结果失败:', error);
     }

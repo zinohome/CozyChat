@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 # 本地库
+from app.engines.base import BaseEngine, EngineType
 from app.utils.logger import logger
 
 
@@ -153,7 +154,7 @@ class StreamChunk:
         }
 
 
-class AIEngineBase(ABC):
+class AIEngineBase(BaseEngine):
     """AI引擎基类
     
     所有AI引擎实现必须继承此类并实现抽象方法
@@ -183,20 +184,46 @@ class AIEngineBase(ABC):
             base_url: API基础URL
             **kwargs: 其他参数
         """
-        self.engine_name = engine_name
+        # 调用父类初始化
+        super().__init__(engine_name=engine_name, engine_type=EngineType.AI, **kwargs)
+        
+        # AI引擎特定属性
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.default_params = kwargs
         
         logger.info(
-            f"Initializing {engine_name} engine",
+            f"Initializing AI engine: {engine_name}",
             extra={
                 "engine": engine_name,
                 "model": model,
                 "base_url": base_url
             }
         )
+    
+    async def initialize(self) -> bool:
+        """初始化AI引擎
+        
+        子类可以覆盖此方法以执行特定的初始化逻辑
+        
+        Returns:
+            bool: 初始化是否成功
+        """
+        # 默认实现：标记为成功
+        logger.info(f"AI engine {self.engine_name} initialized successfully")
+        return True
+    
+    async def health_check(self) -> bool:
+        """健康检查
+        
+        子类可以覆盖此方法以执行特定的健康检查
+        
+        Returns:
+            bool: 引擎是否健康
+        """
+        # 默认实现：简单检查
+        return self.api_key is not None or self.base_url is not None
     
     @abstractmethod
     async def chat(

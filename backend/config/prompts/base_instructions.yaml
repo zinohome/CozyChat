@@ -1,0 +1,7 @@
+# 基础指令配置
+
+common:
+  avoid_stiff_opening: "直接回答问题，避免'以下是...'、'针对您的...'等生硬开场白。"
+  use_list_format: "用列表形式组织要点，每条详细说明"
+  provide_reasoning: "末尾简述判断依据（2-3句）"
+

@@ -99,10 +99,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 用户语音转文本回调
       onUserTranscript: (text: string) => {
         if (text.trim()) {
-          // 使用文本内容的hash作为ID的一部分，确保唯一性
-          const textHash = text.slice(0, 20).replace(/\s/g, '_');
+          // 使用更唯一的ID生成方式：timestamp + random + content hash
+          const timestamp = Date.now();
+          const random = Math.random().toString(36).substring(2, 9);
+          const textHash = text.slice(0, 15).replace(/\s/g, '_');
           const message: Message = {
-            id: `voice-user-${Date.now()}-${textHash}`,
+            id: `voice-user-${timestamp}-${random}-${textHash}`,
             role: 'user',
             content: text,
             timestamp: new Date(),
@@ -119,10 +121,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 助手回复文本回调
       onAssistantTranscript: (text: string) => {
         if (text.trim()) {
-          // 使用文本内容的hash作为ID的一部分，确保唯一性
-          const textHash = text.slice(0, 20).replace(/\s/g, '_');
+          // 使用更唯一的ID生成方式：timestamp + random + content hash
+          const timestamp = Date.now();
+          const random = Math.random().toString(36).substring(2, 9);
+          const textHash = text.slice(0, 15).replace(/\s/g, '_');
           const message: Message = {
-            id: `voice-assistant-${Date.now()}-${textHash}`,
+            id: `voice-assistant-${timestamp}-${random}-${textHash}`,
             role: 'assistant',
             content: text,
             timestamp: new Date(),
@@ -188,7 +192,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     if (currentSessionId && currentSessionId !== 'default' && currentSessionId !== lastSessionIdRef.current) {
       log.debug('Session ID changed, refetching messages:', currentSessionId);
       lastSessionIdRef.current = currentSessionId;
+      // 安全检查：确保refetchMessages是函数
+      if (typeof refetchMessages === 'function') {
       refetchMessages();
+      }
     }
   }, [currentSessionId, refetchMessages]);
 

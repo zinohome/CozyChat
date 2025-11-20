@@ -2,20 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useFileUpload } from './useFileUpload';
 
-// 设置DOM环境
-beforeEach(() => {
-  // 确保 document.body 存在
-  if (!document.body) {
-    const body = document.createElement('body');
-    document.appendChild(body);
-  }
-  // 确保有 root 容器
-  if (!document.getElementById('root')) {
-    const container = document.createElement('div');
-    container.id = 'root';
-    document.body.appendChild(container);
-  }
-});
+// 保存原始的createElement
+const originalCreateElement = document.createElement.bind(document);
 
 // Mock XMLHttpRequest
 class MockXMLHttpRequest {
@@ -32,14 +20,9 @@ class MockXMLHttpRequest {
 
 global.XMLHttpRequest = MockXMLHttpRequest as any;
 
-// Mock document.createElement
+// Mock用于文件选择的input元素
 const mockClick = vi.fn();
-const mockAppendChild = vi.fn();
-const mockRemoveChild = vi.fn();
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  global.document.createElement = vi.fn(() => ({
+const mockInputElement = {
     click: mockClick,
     type: 'file',
     accept: '',
@@ -47,9 +30,19 @@ beforeEach(() => {
     files: null,
     onchange: null,
     oncancel: null,
-  })) as any;
-  global.document.body.appendChild = mockAppendChild;
-  global.document.body.removeChild = mockRemoveChild;
+  style: {},
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  
+  // 只mock input元素的创建，其他元素使用真实创建
+  document.createElement = vi.fn((tagName: string) => {
+    if (tagName === 'input') {
+      return mockInputElement as any;
+    }
+    return originalCreateElement(tagName);
+  }) as any;
 });
 
 describe('useFileUpload', () => {
