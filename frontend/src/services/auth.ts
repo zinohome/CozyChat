@@ -16,18 +16,29 @@ export const authApi = {
    * 用户登录
    */
   async login(request: LoginRequest): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>(
-      '/v1/users/login',
-      request
-    );
-    // 保存token
-    if (response.access_token) {
+    try {
+      const response = await apiClient.post<AuthResponse>(
+        '/v1/users/login',
+        request
+      );
+      
+      // 检查响应是否有效（必须有user和access_token）
+      if (!response || !response.user || !response.access_token) {
+        throw new Error('登录失败：响应数据无效');
+      }
+      
+      // 保存token
       localStorage.setItem('access_token', response.access_token);
       if (response.refresh_token) {
         localStorage.setItem('refresh_token', response.refresh_token);
       }
+      return response;
+    } catch (error: any) {
+      // 清除可能已保存的token
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      throw error;
     }
-    return response;
   },
 
   /**

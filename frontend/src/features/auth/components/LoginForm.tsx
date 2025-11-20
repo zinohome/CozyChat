@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
@@ -10,6 +11,7 @@ import type { LoginRequest } from '@/types/user';
  */
 export const LoginForm: React.FC = () => {
   const { login, isLoggingIn } = useAuth();
+  const navigate = useNavigate();
   const [form] = Form.useForm<LoginRequest>();
 
   // Demo模式：自动填入用户名和密码
@@ -27,10 +29,24 @@ export const LoginForm: React.FC = () => {
 
   const onSubmit = async (values: LoginRequest) => {
     try {
-      await login(values);
+      const response = await login(values);
+      
+      // 验证登录是否真正成功（必须有user和access_token）
+      if (!response || !response.user || !response.access_token) {
+        throw new Error('登录失败：响应数据无效');
+      }
+      
+      // 登录成功，显示提示并跳转
       showSuccess('登录成功');
+      
+      // 延迟跳转，确保状态已更新
+      setTimeout(() => {
+        navigate('/chat', { replace: true });
+      }, 100);
     } catch (error: any) {
-      showError(error, '登录失败');
+      // 登录失败，显示错误信息
+      const errorMessage = error?.message || error?.response?.data?.detail || '登录失败，请检查用户名和密码';
+      showError(errorMessage, '登录失败');
     }
   };
 

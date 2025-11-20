@@ -214,6 +214,16 @@ class ApiClient {
     config?: AxiosRequestConfig
   ): Promise<T> {
     const response = await this.client.post<ApiResponse<T>>(url, data, config);
+    
+    // 检查HTTP状态码，如果是错误状态码，抛出错误
+    if (response.status >= 400) {
+      const errorMessage = 
+        (response.data as any)?.detail || 
+        (response.data as any)?.message || 
+        `请求失败: ${response.status} ${response.statusText}`;
+      throw new Error(errorMessage);
+    }
+    
     return this.handleResponse<T>(response);
   }
 

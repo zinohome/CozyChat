@@ -51,13 +51,23 @@ export const useStreamChat = (
           session_id: sessionId,
         };
         
-        // 创建AI消息占位符
+        // 创建AI消息占位符（显示随机"思考中..."文本）
         const aiMessageId = `assistant-${Date.now()}`;
         currentMessageIdRef.current = aiMessageId;
+        // 随机选择思考文本
+        const THINKING_TEXTS = [
+          '思考中…',
+          '请稍等…',
+          '……',
+          '让我想想…',
+        ];
+        const THINKING_TEXT = THINKING_TEXTS[Math.floor(Math.random() * THINKING_TEXTS.length)];
+        // 判断是否是"思考中"文本的辅助函数
+        const isThinkingText = (text: string) => THINKING_TEXTS.includes(text);
         const aiMessage: Message = {
           id: aiMessageId,
           role: 'assistant',
-          content: '',
+          content: THINKING_TEXT,
           timestamp: new Date(),
           session_id: sessionId,
         };
@@ -93,6 +103,7 @@ export const useStreamChat = (
         let finishReason: string | null = null;
         let lastUpdateTime = 0;
         let lastUpdateContent = ''; // 记录上次更新的内容
+        let isFirstChunk = true; // 标记是否是第一个chunk
         const UPDATE_THROTTLE_MS = 150; // 节流：最多每150ms更新一次
         
         // 节流更新函数
@@ -149,13 +160,30 @@ export const useStreamChat = (
           // 处理内容增量
           const deltaContent = delta?.content || '';
           if (deltaContent) {
-            accumulatedContent += deltaContent;
+            // 如果是第一个chunk，清除"思考中..."占位符
+            if (isFirstChunk) {
+              accumulatedContent = deltaContent; // 直接使用第一个chunk的内容，而不是追加
+              isFirstChunk = false;
+            } else {
+              accumulatedContent += deltaContent;
+            }
             // 使用节流更新
             throttledUpdate(accumulatedContent);
           }
           
           // 处理工具调用
           if (delta?.tool_calls) {
+            // 如果是第一个chunk且是工具调用，清除"思考中..."
+            if (isFirstChunk) {
+              isFirstChunk = false;
+              // 获取当前消息内容，如果是"思考中..."，清除它
+              const currentMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', sessionId]) || [];
+              const currentMsg = currentMessages.find((msg) => msg.id === aiMessageId);
+              if (currentMsg && isThinkingText(currentMsg.content as string)) {
+                accumulatedContent = ''; // 清除"思考中..."
+              }
+            }
+            
             // 合并工具调用（OpenAI流式API会分多个chunk发送）
             for (const toolCall of delta.tool_calls) {
               // 流式响应中的 tool_calls 可能包含 index 属性（增量数据）
@@ -186,12 +214,17 @@ export const useStreamChat = (
               .join('\n');
             
             if (toolCallText) {
+              // 如果accumulatedContent是空的（可能是"思考中..."被清除），只显示工具调用信息
+              const displayContent = accumulatedContent 
+                ? `${accumulatedContent}\n\n${toolCallText}`
+                : toolCallText;
+              
               queryClient.setQueryData(
                 ['chat', 'messages', sessionId],
                 (old: Message[] = []) =>
                   old.map((msg) =>
                     msg.id === aiMessageId
-                      ? { ...msg, content: accumulatedContent + (accumulatedContent ? '\n\n' : '') + toolCallText }
+                      ? { ...msg, content: displayContent }
                       : msg
                   )
               );
@@ -204,6 +237,11 @@ export const useStreamChat = (
             
             // 如果是工具调用，显示完整信息，但不要退出循环（后端会继续生成回复）
             if (finishReason === 'tool_calls' && toolCalls.length > 0) {
+              // 如果是第一个chunk且是工具调用，清除"思考中..."
+              if (isFirstChunk) {
+                isFirstChunk = false;
+              }
+              
               const toolCallText = toolCalls
                 .filter(tc => tc.function.name)
                 .map(tc => {
@@ -219,8 +257,8 @@ export const useStreamChat = (
                 })
                 .join('\n');
               
-              // 更新消息，显示工具调用信息
-              const currentContent = accumulatedContent || '';
+              // 更新消息，显示工具调用信息（清除"思考中..."）
+              const currentContent = isThinkingText(accumulatedContent) ? '' : accumulatedContent;
               const displayContent = currentContent 
                 ? `${currentContent}\n\n${toolCallText}\n\n⏳ 正在执行工具...`
                 : `${toolCallText}\n\n⏳ 正在执行工具...`;
