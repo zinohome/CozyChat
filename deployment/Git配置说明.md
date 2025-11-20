@@ -40,7 +40,7 @@ docker-compose build
 
 ```bash
 # 在 deployment 目录下创建 .env 文件
-GIT_REPO_URL=https://YOUR_TOKEN@github.com/your-username/CozyChat.git
+GIT_REPO_URL=https://YOUR_TOKEN@github.com/zinohome/CozyChat.git
 ```
 
 **方式B：使用环境变量（更安全）**
@@ -57,7 +57,7 @@ fi
 然后在 `.env` 中配置：
 
 ```bash
-GIT_REPO_URL=https://github.com/your-username/CozyChat.git
+GIT_REPO_URL=https://github.com/zinohome/CozyChat.git
 GIT_TOKEN=ghp_your_token_here
 ```
 
@@ -89,7 +89,7 @@ RUN mkdir -p /root/.ssh && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts
 
 # 修改 install.sh 使用 SSH URL
-# git clone git@github.com:your-username/CozyChat.git .
+# git clone git@github.com:zinohome/CozyChat.git .
 ```
 
 #### 3.4 构建时传入 SSH Key
@@ -120,7 +120,7 @@ docker build \
 
 ```bash
 # Git仓库配置
-GIT_REPO_URL=https://github.com/your-username/CozyChat.git
+GIT_REPO_URL=https://github.com/zinohome/CozyChat.git
 ```
 
 然后构建：
@@ -155,7 +155,7 @@ GIT_REPO_URL=https://YOUR_TOKEN@github.com/zinohome/CozyChat.git
 
 2. **支持环境变量配置**：
    ```bash
-   git clone ${GIT_REPO_URL:-https://github.com/your-repo/CozyChat.git}
+   git clone ${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}
    ```
 
 3. **自动降级**：

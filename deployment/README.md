@@ -92,7 +92,7 @@ Dockerfile 默认会复制本地代码到镜像中。确保在项目根目录执
 
 1. **后端**：编辑 `backend/docker/Dockerfile`，注释掉 `COPY backend` 和 `COPY packages` 行
 2. **前端**：编辑 `frontend/docker/Dockerfile`，注释掉 `COPY frontend` 行
-3. 编辑 `install.sh`，将 `https://github.com/your-repo/CozyChat.git` 替换为实际仓库地址
+3. 编辑 `install.sh`，将 `https://github.com/zinohome/CozyChat.git` 替换为实际仓库地址（如果需要使用不同的仓库）
 
 ### 步骤 3: 构建镜像
 
