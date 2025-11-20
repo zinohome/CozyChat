@@ -4,18 +4,24 @@
 """
 
 from .base import MemoryEngineBase
-from .chromadb_engine import ChromaDBMemoryEngine
+# ChromaDB 已注释（默认使用 qdrant），使用条件导入
+try:
+    from .chromadb_engine import ChromaDBMemoryEngine
+except ImportError:
+    ChromaDBMemoryEngine = None  # type: ignore
 from .qdrant_engine import QdrantMemoryEngine
 from .manager import MemoryManager, get_memory_manager
 from .models import Memory, MemoryType
 
 __all__ = [
     "MemoryEngineBase",
-    "ChromaDBMemoryEngine",
     "QdrantMemoryEngine",
     "MemoryManager",
     "get_memory_manager",
     "Memory",
     "MemoryType",
 ]
+# 如果 ChromaDB 可用，添加到 __all__
+if ChromaDBMemoryEngine is not None:
+    __all__.append("ChromaDBMemoryEngine")
 

@@ -19,7 +19,11 @@ from app.config.config import settings
 from app.utils.logger import logger
 from app.utils.config_loader import get_config_loader
 from .base import MemoryEngineBase
-from .chromadb_engine import ChromaDBMemoryEngine
+# ChromaDB 已注释（默认使用 qdrant），使用条件导入
+try:
+    from .chromadb_engine import ChromaDBMemoryEngine
+except ImportError:
+    ChromaDBMemoryEngine = None  # type: ignore
 from .qdrant_engine import QdrantMemoryEngine
 from .models import Memory, MemorySearchResult, MemoryType
 from .importance_scorer import ImportanceScorer
@@ -93,19 +97,23 @@ class MemoryManager:
             
             # 如果引擎未提供，从配置创建
             if engine is None:
-                default_engine = memory_config.get("default_engine", "chromadb")
+                default_engine = memory_config.get("default_engine", "qdrant")  # 默认使用 qdrant（ChromaDB 已注释）
                 engine_config = memory_config.get(default_engine, {})
                 
                 if default_engine == "chromadb":
-                    # ChromaDBMemoryEngine 接受 config 字典，不是 persist_directory 关键字参数
-                    engine = ChromaDBMemoryEngine(config=engine_config)
+                    if ChromaDBMemoryEngine is None:
+                        logger.warning("ChromaDB not installed, falling back to Qdrant")
+                        engine = QdrantMemoryEngine(config=memory_config.get("qdrant", {}))
+                    else:
+                        # ChromaDBMemoryEngine 接受 config 字典，不是 persist_directory 关键字参数
+                        engine = ChromaDBMemoryEngine(config=engine_config)
                 elif default_engine == "qdrant":
                     # Qdrant引擎
                     engine = QdrantMemoryEngine(config=engine_config)
                 else:
-                    # 其他引擎待实现
-                    logger.warning(f"Engine {default_engine} not implemented, using ChromaDB")
-                    engine = ChromaDBMemoryEngine()
+                    # 其他引擎待实现，回退到 Qdrant
+                    logger.warning(f"Engine {default_engine} not implemented, using Qdrant")
+                    engine = QdrantMemoryEngine(config=memory_config.get("qdrant", {}))
             
         except Exception as e:
             # 如果YAML配置加载失败，使用默认值
@@ -119,7 +127,8 @@ class MemoryManager:
             if cache_maxsize is None:
                 cache_maxsize = 100
             if engine is None:
-                engine = ChromaDBMemoryEngine()
+                # 默认使用 Qdrant（ChromaDB 已注释）
+                engine = QdrantMemoryEngine()
             
             # 跨Session记忆配置（默认关闭）
             self.cross_session_enabled = False
