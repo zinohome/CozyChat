@@ -42,7 +42,7 @@ export const HealthRecord: React.FC = () => {
         <Col flex="none">
           <div className={styles.avatarContainer}>
             <img 
-              src="/images/health/people.png" 
+              src="/images/health/man.png" 
               alt="用户头像"
               className={styles.avatar}
             />
