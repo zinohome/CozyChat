@@ -8,7 +8,10 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android",
+    "cap:build": "pnpm build && cap sync android"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
@@ -36,6 +39,9 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.6.1",
