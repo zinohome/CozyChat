@@ -72,10 +72,19 @@ export const useStreamChat = (
           session_id: sessionId,
         };
         
-        // 乐观更新：立即添加到 React Query 缓存
+        // 乐观更新：立即添加到 React Query 缓存（去重）
         queryClient.setQueryData(
           ['chat', 'messages', sessionId],
-          (old: Message[] = []) => [...old, userMessage, aiMessage]
+          (old: Message[] = []) => {
+            // 使用 Map 去重，确保不会重复添加
+            const messageMap = new Map<string, Message>();
+            // 先添加已有消息
+            old.forEach(msg => messageMap.set(msg.id, msg));
+            // 再添加新消息（如果ID已存在会被覆盖，但新消息通常更新）
+            messageMap.set(userMessage.id, userMessage);
+            messageMap.set(aiMessage.id, aiMessage);
+            return Array.from(messageMap.values());
+          }
         );
         
         const messageList = [
@@ -289,21 +298,35 @@ export const useStreamChat = (
           pendingUpdate = null;
         }
         
-        // 更新最终消息内容和时间戳（确保最终内容被保存）
+        // 更新最终消息内容和时间戳（确保最终内容被保存，并去重）
         queryClient.setQueryData(
           ['chat', 'messages', sessionId],
           (old: Message[] = []) => {
-            const updated = old.map((msg) => 
-              msg.id === aiMessageId 
-                ? { ...msg, content: accumulatedContent, timestamp: new Date() }
-                : msg
-            );
-            // 确保用户消息也在缓存中
-            const hasUserMessage = updated.some((msg) => msg.id === userMessage.id);
-            if (!hasUserMessage) {
-              return [...updated, userMessage];
+            // 使用 Map 去重，确保不会重复
+            const messageMap = new Map<string, Message>();
+            // 先添加已有消息
+            old.forEach(msg => messageMap.set(msg.id, msg));
+            // 更新 AI 消息内容
+            const existingAiMsg = messageMap.get(aiMessageId);
+            if (existingAiMsg) {
+              messageMap.set(aiMessageId, { 
+                ...existingAiMsg, 
+                content: accumulatedContent, 
+                timestamp: new Date() 
+              });
+            } else {
+              // 如果 AI 消息不存在，创建新消息
+              messageMap.set(aiMessageId, {
+                ...aiMessage,
+                content: accumulatedContent,
+                timestamp: new Date(),
+              });
             }
-            return updated;
+            // 确保用户消息也在缓存中
+            if (!messageMap.has(userMessage.id)) {
+              messageMap.set(userMessage.id, userMessage);
+            }
+            return Array.from(messageMap.values());
           }
         );
 

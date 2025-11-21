@@ -237,10 +237,16 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           
           log.info('Session title generated successfully:', currentSessionId);
         } catch (error: any) {
-          // 如果是400错误（消息数不足或已有标题），静默处理
+          // 如果是400错误（消息数不足或已有标题），静默处理，不记录为错误
           if (error?.response?.status === 400) {
-            log.debug('Title generation skipped:', error?.response?.data?.detail || error.message);
+            const errorDetail = error?.response?.data?.detail || error.message;
+            log.debug('Title generation skipped:', errorDetail);
+            // 如果是消息数不足，标记为已处理，避免重复尝试
+            if (errorDetail?.includes('below trigger threshold')) {
+              titleGeneratedRef.current.add(currentSessionId);
+            }
           } else {
+            // 其他错误才记录为错误
             log.error('Failed to generate session title:', error);
           }
         }
@@ -253,12 +259,26 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   // 合并加载状态
   const isLoading = isLoadingStore || isLoadingHistory;
   
-  // 合并普通消息和语音通话消息
+  // 合并普通消息和语音通话消息（去重）
   const allMessages = React.useMemo(() => {
     const normalMessages = messages || [];
     const voiceMessages = isVoiceCallActive ? voiceCallMessages : [];
-    // 合并并排序（按时间戳）
-    const combined = [...normalMessages, ...voiceMessages];
+    
+    // 使用 Map 去重，以消息 ID 为 key，保留最新的消息
+    const messageMap = new Map<string, Message>();
+    
+    // 先添加普通消息
+    normalMessages.forEach(msg => {
+      messageMap.set(msg.id, msg);
+    });
+    
+    // 再添加语音通话消息（如果 ID 已存在，会被覆盖，但语音通话消息通常更新）
+    voiceMessages.forEach(msg => {
+      messageMap.set(msg.id, msg);
+    });
+    
+    // 转换为数组并排序（按时间戳）
+    const combined = Array.from(messageMap.values());
     return combined.sort((a, b) => {
       const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
                      typeof a.timestamp === 'number' ? a.timestamp : 
