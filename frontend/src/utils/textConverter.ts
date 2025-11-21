@@ -4,7 +4,36 @@
  * 提供繁体中文转简体中文等功能
  */
 
-import { toSimplified } from 'chinese-simple2traditional';
+import { toSimplified, customT2SPhrases } from 'chinese-simple2traditional';
+import { setupEnhance } from 'chinese-simple2traditional/enhance';
+
+// 初始化短语库（只初始化一次）
+let enhanceInitialized = false;
+
+function initializeEnhance() {
+  if (!enhanceInitialized) {
+    setupEnhance();
+    
+    // 添加自定义短语修复已知的转换错误
+    // 注意：customT2SPhrases 的参数是 [繁体短语, 简体短语] 的数组
+    customT2SPhrases([
+      // 修复"退休"相关词汇
+      ['退休', '退休'],  // 修复：退休 -> 退休（而不是煺休）
+      ['退休人員', '退休人员'],  // 修复：退休人员
+      ['退休金', '退休金'],  // 修复：退休金
+      ['退休工資', '退休工资'],  // 修复：退休工资
+      // 修复"怎么"相关词汇
+      ['怎麽', '怎么'],  // 修复：怎麽 -> 怎么
+      ['怎麼樣', '怎么样'],  // 修复：怎么样 -> 怎么样
+      ['怎麽樣', '怎么样'],  // 修复：怎麽样 -> 怎么样（备用）
+    ]);
+    
+    enhanceInitialized = true;
+  }
+}
+
+// 初始化短语库
+initializeEnhance();
 
 /**
  * 将繁体中文转换为简体中文
@@ -23,9 +52,9 @@ export function toSimplifiedChinese(text: string): string {
   }
 
   try {
-    // chinese-simple2traditional 会自动检测并转换繁体到简体
-    // 如果文本已经是简体，不会改变
-    const converted = toSimplified(text);
+    // 使用增强模式（第二个参数传 true）以获得更精确的转换
+    // 增强模式会使用短语库，避免单个字符转换导致的错误
+    const converted = toSimplified(text, true);
     return converted;
   } catch (error) {
     // 转换失败时返回原文本

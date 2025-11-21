@@ -451,21 +451,58 @@ async def save_voice_call_messages(
         if not session:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
         
-        # 保存消息
+        # 保存消息（过滤空消息）
         saved_count = 0
         for msg in request.messages:
-            message = MessageModel(
-                session_id=session_uuid,
-                user_id=user.id,
-                role=msg.role,
-                content=msg.content,
-                created_at=datetime.utcnow(),
-                message_metadata={"is_voice_call": True}
-            )
-            db.add(message)
-            saved_count += 1
+            # 验证消息内容不为空
+            if not msg.content or not msg.content.strip():
+                logger.warning(
+                    f"Skipping message with empty content",
+                    extra={"user_id": str(user.id), "session_id": request.session_id, "role": msg.role}
+                )
+                continue
+            
+            # 验证role字段
+            if msg.role not in ['user', 'assistant', 'system', 'tool']:
+                logger.warning(
+                    f"Skipping message with invalid role: {msg.role}",
+                    extra={"user_id": str(user.id), "session_id": request.session_id}
+                )
+                continue
+            
+            try:
+                message = MessageModel(
+                    session_id=session_uuid,
+                    user_id=user.id,
+                    role=msg.role,
+                    content=msg.content.strip(),  # 去除首尾空格
+                    created_at=datetime.utcnow(),
+                    message_metadata={"is_voice_call": True}
+                )
+                db.add(message)
+                saved_count += 1
+            except Exception as msg_error:
+                logger.error(
+                    f"Failed to create message object: {msg_error}",
+                    extra={"user_id": str(user.id), "session_id": request.session_id, "role": msg.role, "content_preview": msg.content[:50] if msg.content else None},
+                    exc_info=True
+                )
+                # 继续处理下一条消息，不中断整个流程
+                continue
         
-        # 更新会话统计
+        # 如果没有保存任何消息，返回友好提示
+        if saved_count == 0:
+            logger.info(
+                "No valid messages to save (all messages were empty or invalid)",
+                extra={"user_id": str(user.id), "session_id": request.session_id, "total_messages": len(request.messages)}
+            )
+            return SaveVoiceCallMessagesResponse(
+                message="没有有效的消息需要保存（所有消息内容为空）",
+                saved_count=0,
+                session_id=request.session_id
+            )
+        
+        # 更新会话统计（只更新有保存消息的情况）
         session.message_count = (session.message_count or 0) + saved_count  # type: ignore[assignment]
         session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
         

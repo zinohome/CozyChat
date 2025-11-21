@@ -370,7 +370,10 @@ export class EventHandler {
       if (this.callbacks.onUserTranscript) {
         // 将繁体中文转换为简体中文
         const simplifiedTranscript = toSimplifiedChinese(transcript);
-        log.debug('✅ 调用用户转录回调');
+        if (simplifiedTranscript !== transcript) {
+          log.debug(`✅ 繁体转简体: "${transcript}" -> "${simplifiedTranscript}"`);
+        }
+        log.debug('✅ 调用用户转录回调，文本:', simplifiedTranscript);
         this.callbacks.onUserTranscript(simplifiedTranscript);
         return true;
       } else {
@@ -452,7 +455,11 @@ export class EventHandler {
           // 如果没有 itemId，直接调用回调（但可能重复）
           if (this.callbacks.onUserTranscript) {
             // 将繁体中文转换为简体中文
-            const simplifiedTranscript = toSimplifiedChinese(transcript.trim());
+            const originalTranscript = transcript.trim();
+            const simplifiedTranscript = toSimplifiedChinese(originalTranscript);
+            if (simplifiedTranscript !== originalTranscript) {
+              log.debug(`✅ 繁体转简体 (无ID): "${originalTranscript}" -> "${simplifiedTranscript}"`);
+            }
             log.debug('✅ 触发用户转录回调 (无ID):', simplifiedTranscript);
             this.callbacks.onUserTranscript(simplifiedTranscript);
           }

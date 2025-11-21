@@ -954,19 +954,47 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   // 保存语音通话消息到数据库，并添加到 React Query 缓存
                   if (voiceCallMessages.length > 0 && currentSessionId) {
                     try {
-                      // 保存到数据库
-                      await chatApi.saveVoiceCallMessages(
-                        currentSessionId,
-                        voiceCallMessages.map((msg) => ({
-                          role: msg.role as 'user' | 'assistant',
-                          content: typeof msg.content === 'string' ? msg.content : (msg.content as any)?.text || '',
-                          timestamp: typeof msg.timestamp === 'string' 
-                            ? msg.timestamp 
-                            : msg.timestamp instanceof Date 
-                              ? msg.timestamp.toISOString()
-                              : new Date(msg.timestamp).toISOString(),
-                        }))
-                      );
+                      // 过滤并格式化消息：只保存有效的消息（content不为空）
+                      const validMessages = voiceCallMessages
+                        .map((msg) => {
+                          // 提取content
+                          let content = '';
+                          if (typeof msg.content === 'string') {
+                            content = msg.content.trim();
+                          } else if (msg.content && typeof msg.content === 'object') {
+                            // 尝试从对象中提取text字段
+                            content = (msg.content as any)?.text || '';
+                            if (typeof content === 'string') {
+                              content = content.trim();
+                            } else {
+                              content = '';
+                            }
+                          }
+                          
+                          // 只返回有内容的消息
+                          if (!content) {
+                            return null;
+                          }
+                          
+                          return {
+                            role: msg.role as 'user' | 'assistant',
+                            content: content,
+                            timestamp: typeof msg.timestamp === 'string' 
+                              ? msg.timestamp 
+                              : msg.timestamp instanceof Date 
+                                ? msg.timestamp.toISOString()
+                                : new Date(msg.timestamp).toISOString(),
+                          };
+                        })
+                        .filter((msg): msg is { role: 'user' | 'assistant'; content: string; timestamp: string } => msg !== null);
+                      
+                      // 只保存有有效消息的情况
+                      if (validMessages.length > 0) {
+                        await chatApi.saveVoiceCallMessages(currentSessionId, validMessages);
+                        log.debug(`语音通话消息已保存到数据库: ${validMessages.length}条`);
+                      } else {
+                        log.warn('没有有效的语音通话消息需要保存（所有消息内容为空）');
+                      }
                       log.debug('语音通话消息已保存到数据库');
                       
                       // 将消息添加到 React Query 缓存，保留在会话历史中
