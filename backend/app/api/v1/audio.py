@@ -24,6 +24,7 @@ from app.engines.voice.tts.factory import TTSEngineFactory
 from app.models.user import User
 from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
+from app.utils.text_converter import to_simplified
 
 router = APIRouter()
 
@@ -206,6 +207,10 @@ async def create_transcription(
                 status_code=500,
                 detail=f"STT API调用失败: {error_msg}"
             )
+        
+        # 将繁体中文转换为简体中文（如果转录结果包含繁体）
+        # 这样可以确保转录文本始终是简体中文，提升用户体验
+        text = to_simplified(text)
         
         logger.info(
             "STT transcription completed",

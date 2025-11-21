@@ -7,6 +7,7 @@ import type { OpenAIConfig } from '@/services/config';
 import { ToolManager } from '@/features/voice/services/ToolManager';
 import { EventHandler } from '@/features/voice/services/EventHandler';
 import type { EventHandlerCallbacks } from '@/features/voice/services/EventHandler';
+import { toSimplifiedChinese } from '@/utils/textConverter';
 
 /**
  * Voice Agent Hook返回值
@@ -471,7 +472,9 @@ export const useVoiceAgent = (
       (session as any).on('conversation.item.input_audio_transcription.completed', (event: any) => {
         const transcript = event?.transcript;
         if (transcript && typeof transcript === 'string' && transcript.trim() && callbacks?.onUserTranscript) {
-          callbacks.onUserTranscript(transcript);
+          // 将繁体中文转换为简体中文
+          const simplifiedTranscript = toSimplifiedChinese(transcript.trim());
+          callbacks.onUserTranscript(simplifiedTranscript);
         }
       });
       
@@ -561,11 +564,13 @@ export const useVoiceAgent = (
           if (item.role === 'user') {
             const transcript = extractUserTranscript(item);
             if (transcript && callbacks?.onUserTranscript) {
-              const textKey = `${messageId}:${transcript}`;
+              // 将繁体中文转换为简体中文
+              const simplifiedTranscript = toSimplifiedChinese(transcript);
+              const textKey = `${messageId}:${simplifiedTranscript}`;
               if (!processedTexts.has(textKey)) {
                 processedMessageIds.add(messageId);
                 processedTexts.add(textKey);
-              callbacks.onUserTranscript(transcript);
+              callbacks.onUserTranscript(simplifiedTranscript);
               }
             }
           } else if (item.role === 'assistant') {
@@ -594,14 +599,16 @@ export const useVoiceAgent = (
             if (item.role === 'user') {
               const transcript = extractUserTranscript(item);
               if (transcript) {
+                // 将繁体中文转换为简体中文
+                const simplifiedTranscript = toSimplifiedChinese(transcript);
                 // 使用消息ID和文本内容作为唯一标识
-                const textKey = `${messageId}:${transcript}`;
+                const textKey = `${messageId}:${simplifiedTranscript}`;
                 
                 // 如果之前没有处理过这个文本
                 if (!processedTexts.has(textKey) && callbacks?.onUserTranscript) {
                   processedMessageIds.add(messageId);
                   processedTexts.add(textKey);
-                callbacks.onUserTranscript(transcript);
+                callbacks.onUserTranscript(simplifiedTranscript);
                 }
               }
             } else if (item.role === 'assistant') {

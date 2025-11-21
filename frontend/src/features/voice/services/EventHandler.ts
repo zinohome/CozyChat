@@ -11,6 +11,7 @@
 import type { RealtimeSession } from '@openai/agents/realtime';
 import { toolManager } from './ToolManager';
 import { logger } from '@/utils/logger';
+import { toSimplifiedChinese } from '@/utils/textConverter';
 
 const log = logger.withTag('EventHandler');
 
@@ -367,8 +368,10 @@ export class EventHandler {
       log.debug(`✅ 从 ${source} 提取用户转录:`, transcript);
       
       if (this.callbacks.onUserTranscript) {
+        // 将繁体中文转换为简体中文
+        const simplifiedTranscript = toSimplifiedChinese(transcript);
         log.debug('✅ 调用用户转录回调');
-        this.callbacks.onUserTranscript(transcript);
+        this.callbacks.onUserTranscript(simplifiedTranscript);
         return true;
       } else {
         log.debug('❌ 用户转录回调不存在！');
@@ -448,8 +451,10 @@ export class EventHandler {
         } else {
           // 如果没有 itemId，直接调用回调（但可能重复）
           if (this.callbacks.onUserTranscript) {
-            log.debug('✅ 触发用户转录回调 (无ID):', transcript.trim());
-            this.callbacks.onUserTranscript(transcript.trim());
+            // 将繁体中文转换为简体中文
+            const simplifiedTranscript = toSimplifiedChinese(transcript.trim());
+            log.debug('✅ 触发用户转录回调 (无ID):', simplifiedTranscript);
+            this.callbacks.onUserTranscript(simplifiedTranscript);
           }
         }
       } else {
