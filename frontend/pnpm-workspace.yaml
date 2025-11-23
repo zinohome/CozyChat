@@ -1,0 +1,6 @@
+ignoredBuiltDependencies:
+  - core-js-pure
+  - msw
+
+onlyBuiltDependencies:
+  - core-js
