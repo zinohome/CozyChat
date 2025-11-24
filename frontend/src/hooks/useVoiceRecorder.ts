@@ -14,9 +14,12 @@ const log = logger.withTag('useVoiceRecorder');
 export function useVoiceRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0); // 录音时长（秒）
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null); // 录音开始时间
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null); // 时长更新定时器
 
   /**
    * 开始录音
@@ -44,6 +47,18 @@ export function useVoiceRecorder() {
       // 开始录音
       mediaRecorder.start();
       setIsRecording(true);
+      
+      // 记录开始时间并启动时长更新
+      recordingStartTimeRef.current = Date.now();
+      setRecordingDuration(0);
+      
+      // 每秒更新一次录音时长
+      durationIntervalRef.current = setInterval(() => {
+        if (recordingStartTimeRef.current) {
+          const duration = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+          setRecordingDuration(duration);
+        }
+      }, 1000);
     } catch (error: any) {
       log.error('开始录音失败:', error);
       showError(error, '无法访问麦克风，请检查权限设置');
@@ -65,6 +80,16 @@ export function useVoiceRecorder() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    
+    // 清除时长更新定时器
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    
+    // 重置录音时长
+    recordingStartTimeRef.current = null;
+    setRecordingDuration(0);
   }, [isRecording]);
 
   /**
@@ -201,6 +226,7 @@ export function useVoiceRecorder() {
   return {
     isRecording,
     isTranscribing,
+    recordingDuration, // 录音时长（秒）
     startRecording,
     stopRecording,
     transcribe,

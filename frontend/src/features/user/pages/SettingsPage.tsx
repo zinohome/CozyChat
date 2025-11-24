@@ -25,6 +25,7 @@ export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [autoTts, setAutoTts] = useState(false);
   const [alwaysShowVoiceInput, setAlwaysShowVoiceInput] = useState(false);
+  const [voiceInputMode, setVoiceInputMode] = useState<'press' | 'click' | 'auto'>('auto');
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   
   // 对话风格相关状态
@@ -64,6 +65,10 @@ export const SettingsPage: React.FC = () => {
       const alwaysShowVoiceInputValue = preferences.always_show_voice_input === true;
       setAlwaysShowVoiceInput(alwaysShowVoiceInputValue);
       
+      // 初始化 voice_input_mode
+      const voiceInputModeValue = preferences.voice_input_mode || 'auto';
+      setVoiceInputMode(voiceInputModeValue);
+      
       // 初始化时区
       const timezoneValue = preferences.timezone || DEFAULT_TIMEZONE;
       setTimezone(timezoneValue);
@@ -80,6 +85,7 @@ export const SettingsPage: React.FC = () => {
       // 如果没有偏好设置，默认为 false
       setAutoTts(false);
       setAlwaysShowVoiceInput(false);
+      setVoiceInputMode('auto');
       setTimezone(DEFAULT_TIMEZONE);
       setResponseStyle('chatgpt_like');
       setStylePreset('chatgpt_like');
@@ -128,6 +134,24 @@ export const SettingsPage: React.FC = () => {
       console.error('SettingsPage: 更新失败:', error);
       // 恢复原状态
       setAlwaysShowVoiceInput(!checked);
+    }
+  };
+
+  const handleVoiceInputModeChange = async (value: 'press' | 'click' | 'auto') => {
+    const oldValue = voiceInputMode;
+    setVoiceInputMode(value);
+    console.log('SettingsPage: 更新 voice_input_mode 为:', value);
+    try {
+      const updated = await updateMutation.mutateAsync({ voice_input_mode: value });
+      console.log('SettingsPage: 更新成功, 返回的偏好设置:', updated);
+      // 确保状态同步
+      if (updated?.voice_input_mode !== undefined) {
+        setVoiceInputMode(updated.voice_input_mode);
+      }
+    } catch (error) {
+      console.error('SettingsPage: 更新失败:', error);
+      // 恢复原状态
+      setVoiceInputMode(oldValue);
     }
   };
 
@@ -210,6 +234,25 @@ export const SettingsPage: React.FC = () => {
           onChange={handleAlwaysShowVoiceInputChange}
           loading={updateMutation.isPending}
         />
+      </Space>
+      <Divider />
+      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ marginBottom: '4px' }}>语音输入模式</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            选择语音输入的交互方式：按住说话（移动端常用）、点击说话（桌面端常用）、自动（根据设备类型自动选择）
+          </div>
+        </div>
+        <Select
+          value={voiceInputMode}
+          onChange={handleVoiceInputModeChange}
+          style={{ width: 200 }}
+          loading={updateMutation.isPending}
+        >
+          <Select.Option value="auto">自动（根据设备类型）</Select.Option>
+          <Select.Option value="press">按住说话</Select.Option>
+          <Select.Option value="click">点击说话</Select.Option>
+        </Select>
       </Space>
       <Divider />
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>

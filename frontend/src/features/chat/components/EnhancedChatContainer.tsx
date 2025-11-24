@@ -81,7 +81,13 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   
   // 语音输入模式状态（仅在小屏幕下可用）
   const [isVoiceInputMode, setIsVoiceInputMode] = useState(false);
-  const { isRecording, isTranscribing, startRecording, stopRecording, transcribe } = useVoiceRecorder();
+  const { isRecording, isTranscribing, recordingDuration, startRecording, stopRecording, transcribe } = useVoiceRecorder();
+  
+  // 按住说话相关状态
+  const [isPressing, setIsPressing] = useState(false); // 是否正在按下
+  const isPressingRef = useRef(false); // 防止重复触发
+  const recordingStartTimeRef = useRef<number | null>(null); // 录音开始时间（用于计算时长）
+  const MIN_RECORDING_DURATION = 300; // 最小录音时长（毫秒），防止误触
   
   // 语音通话Hook
   const {
@@ -550,6 +556,173 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     [handleSend]
   );
 
+  /**
+   * 处理按住说话 - 按下开始
+   */
+  const handlePressStart = useCallback(async (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 防止重复触发
+    if (isPressingRef.current || isTranscribing || isLoading || isStreaming) {
+      return;
+    }
+    
+    isPressingRef.current = true;
+    setIsPressing(true);
+    recordingStartTimeRef.current = Date.now();
+    
+    try {
+      await startRecording();
+    } catch (error) {
+      log.error('开始录音失败:', error);
+      isPressingRef.current = false;
+      setIsPressing(false);
+      recordingStartTimeRef.current = null;
+    }
+  }, [isTranscribing, isLoading, isStreaming, startRecording]);
+
+  /**
+   * 处理按住说话 - 释放结束
+   */
+  const handlePressEnd = useCallback(async (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!isPressingRef.current || !isRecording) {
+      return;
+    }
+    
+    isPressingRef.current = false;
+    setIsPressing(false);
+    
+    // 检查最小录音时长
+    const duration = recordingStartTimeRef.current 
+      ? Date.now() - recordingStartTimeRef.current 
+      : 0;
+    
+    if (duration < MIN_RECORDING_DURATION) {
+      log.debug('录音时长太短，取消发送:', duration, 'ms');
+      stopRecording();
+      recordingStartTimeRef.current = null;
+      showError(new Error('录音时间太短'), '录音失败');
+      return;
+    }
+    
+    // 停止录音
+    stopRecording();
+    recordingStartTimeRef.current = null;
+    
+    // 等待一小段时间确保录音数据已收集
+    setTimeout(async () => {
+      try {
+        const text = await transcribe({
+          personality_id: personalityId,
+          language: 'zh-CN',
+        });
+        log.debug('STT识别结果:', text);
+        if (text && text.trim()) {
+          // 标记用户已经交互过（发送了消息）
+          hasUserInteractedRef.current = true;
+          // 直接调用 sendStreamMessage 发送
+          await sendStreamMessage(text.trim());
+        } else {
+          log.warn('STT返回空文本或无效文本:', text);
+          showError(new Error('未识别到有效语音，请重试'), '识别失败');
+        }
+      } catch (error) {
+        log.error('STT转录错误:', error);
+        showError(error, '语音识别失败');
+      }
+    }, 100);
+  }, [isRecording, stopRecording, transcribe, personalityId, sendStreamMessage]);
+
+  /**
+   * 处理按住说话 - 取消（拖拽离开或失去焦点）
+   */
+  const handlePressCancel = useCallback(() => {
+    if (isPressingRef.current && isRecording) {
+      log.debug('取消录音');
+      isPressingRef.current = false;
+      setIsPressing(false);
+      stopRecording();
+      recordingStartTimeRef.current = null;
+    }
+  }, [isRecording, stopRecording]);
+
+  /**
+   * 处理点击说话（桌面端模式）
+   */
+  const handleClickToRecord = useCallback(async () => {
+    if (isRecording) {
+      // 如果正在录音，停止并转录
+      stopRecording();
+      // 等待一小段时间确保录音数据已收集
+      setTimeout(async () => {
+        try {
+          const text = await transcribe({
+            personality_id: personalityId,
+            language: 'zh-CN',
+          });
+          log.debug('STT识别结果:', text);
+          if (text && text.trim()) {
+            // 直接发送识别后的文本，不切换回文本输入模式
+            // 标记用户已经交互过（发送了消息）
+            hasUserInteractedRef.current = true;
+            // 直接调用 sendStreamMessage 发送
+            await sendStreamMessage(text.trim());
+            // 保持语音输入模式，方便继续语音输入
+            // setIsVoiceInputMode(false); // 不切换回文本输入模式
+          } else {
+            log.warn('STT返回空文本或无效文本:', text);
+            // 如果识别结果为空，保持语音输入模式，显示提示
+            showError(new Error('未识别到有效语音，请重试'), '识别失败');
+          }
+        } catch (error) {
+          log.error('STT转录错误:', error);
+          showError(error, '语音识别失败');
+        }
+      }, 100);
+    } else if (!isTranscribing) {
+      // 如果未在录音且未在识别，开始录音
+      await startRecording();
+    }
+  }, [isRecording, isTranscribing, stopRecording, startRecording, transcribe, personalityId, sendStreamMessage]);
+
+  // 根据用户偏好和设备类型选择交互模式
+  const getVoiceInputMode = useCallback((): 'press' | 'click' => {
+    // 1. 优先使用用户偏好
+    const userPreference = preferences?.voice_input_mode;
+    
+    if (userPreference === 'press') {
+      return 'press';
+    }
+    if (userPreference === 'click') {
+      return 'click';
+    }
+    
+    // 2. 自动模式或未设置：根据设备类型
+    // 'auto' 或 undefined/null 都使用自动模式
+    return isMobile ? 'press' : 'click';
+  }, [preferences?.voice_input_mode, isMobile]);
+  
+  const usePressMode = getVoiceInputMode() === 'press';
+
+  // 处理页面失去焦点时取消录音
+  useEffect(() => {
+    const handleBlur = () => {
+      if (isPressingRef.current && isRecording) {
+        log.debug('页面失去焦点，取消录音');
+        handlePressCancel();
+      }
+    };
+    
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [isRecording, handlePressCancel]);
+
 
   /**
    * 处理删除消息
@@ -811,43 +984,23 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           {!isVoiceCallActive && !isConnecting && isVoiceInputMode && (
             <TextArea
               ref={inputRef}
-              value={isRecording ? '正在录音...' : isTranscribing ? '识别中...' : '点击说话'}
+              value={
+                isRecording 
+                  ? `正在录音... ${recordingDuration > 0 ? `${recordingDuration}秒` : ''}`.trim()
+                  : isTranscribing 
+                    ? '识别中...' 
+                    : usePressMode 
+                      ? '按住说话' 
+                      : '点击说话'
+              }
               readOnly
-              onClick={async () => {
-                if (isRecording) {
-                  // 如果正在录音，停止并转录
-                  stopRecording();
-                  // 等待一小段时间确保录音数据已收集
-                  setTimeout(async () => {
-                    try {
-                      const text = await transcribe({
-                        personality_id: personalityId,
-                        language: 'zh-CN',
-                      });
-                      log.debug('STT识别结果:', text);
-                      if (text && text.trim()) {
-                        // 直接发送识别后的文本，不切换回文本输入模式
-                        // 标记用户已经交互过（发送了消息）
-                        hasUserInteractedRef.current = true;
-                        // 直接调用 sendStreamMessage 发送
-                        await sendStreamMessage(text.trim());
-                        // 保持语音输入模式，方便继续语音输入
-                        // setIsVoiceInputMode(false); // 不切换回文本输入模式
-                      } else {
-                        log.warn('STT返回空文本或无效文本:', text);
-                        // 如果识别结果为空，保持语音输入模式，显示提示
-                        showError(new Error('未识别到有效语音，请重试'), '识别失败');
-                      }
-                    } catch (error) {
-                      log.error('STT转录错误:', error);
-                      showError(error, '语音识别失败');
-                    }
-                  }, 100);
-                } else if (!isTranscribing) {
-                  // 如果未在录音且未在识别，开始录音
-                  await startRecording();
-                }
-              }}
+              onClick={usePressMode ? undefined : handleClickToRecord}
+              onMouseDown={usePressMode ? handlePressStart : undefined}
+              onMouseUp={usePressMode ? handlePressEnd : undefined}
+              onMouseLeave={usePressMode ? handlePressCancel : undefined}
+              onTouchStart={usePressMode ? handlePressStart : undefined}
+              onTouchEnd={usePressMode ? handlePressEnd : undefined}
+              onTouchCancel={usePressMode ? handlePressCancel : undefined}
               disabled={isLoading || isStreaming || isTranscribing}
               style={{
                 flex: 1,
@@ -860,17 +1013,21 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 paddingBottom: '6px',
                 boxSizing: 'border-box',
                 cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
-                backgroundColor: isRecording 
+                userSelect: 'none', // 防止文本选择
+                WebkitUserSelect: 'none',
+                backgroundColor: isPressing || isRecording 
                   ? 'var(--error-color)' 
                   : isTranscribing
                     ? 'var(--bg-tertiary)'
                     : 'var(--bg-primary)',
-                color: isRecording 
+                color: isPressing || isRecording 
                   ? 'var(--text-inverse)' 
                   : 'var(--text-primary)',
-                borderColor: isRecording 
+                borderColor: isPressing || isRecording 
                   ? 'var(--error-color)' 
                   : 'var(--border-color)',
+                transform: isPressing ? 'scale(0.98)' : 'scale(1)',
+                transition: 'transform 0.1s ease, background-color 0.2s ease',
                 textAlign: 'center',
               }}
               autoSize={{ minRows: 1, maxRows: 1 }}
