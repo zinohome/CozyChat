@@ -26,6 +26,21 @@ export function useVoiceRecorder() {
    */
   const startRecording = useCallback(async () => {
     try {
+      // 检查是否已经正在录音
+      if (isRecording) {
+        log.warn('已经在录音中，忽略重复调用');
+        return;
+      }
+
+      // 检查浏览器是否支持 getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const error = new Error('浏览器不支持录音功能，请使用现代浏览器（Chrome、Firefox、Safari等）');
+        log.error('getUserMedia 不可用:', error);
+        showError(error, '录音功能不可用');
+        setIsRecording(false);
+        return;
+      }
+
       // 请求麦克风权限
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -61,10 +76,27 @@ export function useVoiceRecorder() {
       }, 1000);
     } catch (error: any) {
       log.error('开始录音失败:', error);
-      showError(error, '无法访问麦克风，请检查权限设置');
+      
+      // 清理资源
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      
+      // 根据错误类型显示不同的提示
+      let errorMessage = '无法访问麦克风，请检查权限设置';
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = '麦克风权限被拒绝，请在浏览器设置中允许访问麦克风';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        errorMessage = '未找到麦克风设备，请检查设备连接';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMessage = '麦克风被其他应用占用，请关闭其他应用后重试';
+      }
+      
+      showError(error, errorMessage);
       setIsRecording(false);
     }
-  }, []);
+  }, [isRecording]);
 
   /**
    * 停止录音

@@ -73,6 +73,11 @@ class UserPreferencesUpdateRequest(BaseModel):
     )
     auto_tts: Optional[bool] = Field(None, description="自动TTS")
     always_show_voice_input: Optional[bool] = Field(None, description="总是显示语音输入按钮（宽屏幕下也显示）")
+    voice_input_mode: Optional[str] = Field(
+        None,
+        description="语音输入交互模式（press/click/auto）",
+        pattern="^(press|click|auto)$"
+    )
     timezone: Optional[str] = Field(None, description="时区（如：Asia/Shanghai）")
     show_reasoning: Optional[bool] = Field(None, description="显示推理过程")
 

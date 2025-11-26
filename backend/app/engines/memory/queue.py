@@ -8,6 +8,7 @@
 import json
 from typing import List, Optional
 import redis.asyncio as aioredis
+import redis.exceptions
 
 # 本地库
 from app.config.config import settings
@@ -25,7 +26,9 @@ class MemoryQueue:
     RETRY_QUEUE_KEY = "memory:retry_queue"
     DLQ_KEY = "memory:dlq"  # Dead Letter Queue
     
-    redis_client: aioredis.Redis  # 类型注解：确保不为None
+    redis_client: Optional[aioredis.Redis]  # 类型注解：可能为None（连接失败时）
+    _enabled: bool  # 队列是否启用
+    _connection_error_logged: bool  # 是否已记录连接错误（避免重复报错）
     
     def __init__(self, redis_client: Optional[aioredis.Redis] = None):
         """初始化队列
@@ -33,6 +36,9 @@ class MemoryQueue:
         Args:
             redis_client: Redis客户端（可选，默认使用全局配置）
         """
+        self._enabled = True
+        self._connection_error_logged = False
+        
         if redis_client is None:
             # 如果没有提供redis_client，创建一个新的
             redis_url = settings.redis_url
@@ -58,9 +64,6 @@ class MemoryQueue:
         else:
             self.redis_client = redis_client
         
-        # 类型断言：确保redis_client不为None
-        assert self.redis_client is not None
-        
         logger.info(
             "Memory queue initialized",
             extra={"queue_key": self.QUEUE_KEY}
@@ -75,6 +78,10 @@ class MemoryQueue:
         Returns:
             int: 队列当前长度
         """
+        # 如果队列已禁用（Redis连接失败），直接返回0
+        if not self._enabled or self.redis_client is None:
+            return 0
+        
         try:
             job_json = job.model_dump_json()
             queue_length = await self.redis_client.rpush(self.QUEUE_KEY, job_json)
@@ -89,6 +96,17 @@ class MemoryQueue:
             )
             
             return queue_length
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            # Redis连接/认证错误：禁用队列功能
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}. "
+                    "Memory async write will be disabled.",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
+            return 0
         except Exception as e:
             logger.error(f"Failed to push job to queue: {e}", exc_info=True)
             raise
@@ -105,6 +123,10 @@ class MemoryQueue:
         if not jobs:
             return 0
         
+        # 如果队列已禁用（Redis连接失败），直接返回0
+        if not self._enabled or self.redis_client is None:
+            return 0
+        
         try:
             job_jsons = [job.model_dump_json() for job in jobs]
             queue_length = await self.redis_client.rpush(self.QUEUE_KEY, *job_jsons)
@@ -115,6 +137,17 @@ class MemoryQueue:
             )
             
             return queue_length
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            # Redis连接/认证错误：禁用队列功能
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}. "
+                    "Memory async write will be disabled.",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
+            return 0
         except Exception as e:
             logger.error(f"Failed to push batch to queue: {e}", exc_info=True)
             raise
@@ -163,6 +196,10 @@ class MemoryQueue:
         """
         jobs = []
         
+        # 如果队列已禁用（Redis连接失败），直接返回空列表
+        if not self._enabled or self.redis_client is None:
+            return jobs
+        
         try:
             # 使用pipeline提升性能
             pipe = self.redis_client.pipeline()
@@ -187,9 +224,27 @@ class MemoryQueue:
                     extra={"batch_size": batch_size, "actual_count": len(jobs)}
                 )
             
+            # 如果之前有连接错误，现在连接成功，重置标志
+            if self._connection_error_logged:
+                self._connection_error_logged = False
+                logger.info("Memory queue connection restored")
+            
+            return jobs
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            # Redis连接/认证错误：禁用队列功能，避免持续报错
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}. "
+                    "Memory async write will be disabled. Please check Redis configuration.",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
             return jobs
         except Exception as e:
-            logger.error(f"Failed to pop batch from queue: {e}", exc_info=True)
+            # 其他错误：记录但不禁用队列（可能是临时错误）
+            if not self._connection_error_logged:
+                logger.error(f"Failed to pop batch from queue: {e}", exc_info=True)
             return jobs
     
     async def get_length(self) -> int:
@@ -198,9 +253,21 @@ class MemoryQueue:
         Returns:
             int: 队列当前长度
         """
+        if not self._enabled or self.redis_client is None:
+            return 0
+        
         try:
             length = await self.redis_client.llen(self.QUEUE_KEY)
             return length
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
+            return 0
         except Exception as e:
             logger.error(f"Failed to get queue length: {e}", exc_info=True)
             return 0
@@ -214,6 +281,9 @@ class MemoryQueue:
         Returns:
             int: 重试队列当前长度
         """
+        if not self._enabled or self.redis_client is None:
+            return 0
+        
         try:
             job_json = job.model_dump_json()
             queue_length = await self.redis_client.rpush(self.RETRY_QUEUE_KEY, job_json)
@@ -224,6 +294,15 @@ class MemoryQueue:
             )
             
             return queue_length
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
+            return 0
         except Exception as e:
             logger.error(f"Failed to push job to retry queue: {e}", exc_info=True)
             raise
@@ -238,6 +317,9 @@ class MemoryQueue:
         Returns:
             int: 死信队列当前长度
         """
+        if not self._enabled or self.redis_client is None:
+            return 0
+        
         try:
             job_dict = job.model_dump()
             job_dict["error"] = error_msg
@@ -255,24 +337,52 @@ class MemoryQueue:
             )
             
             return queue_length
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
+            return 0
         except Exception as e:
             logger.error(f"Failed to push job to DLQ: {e}", exc_info=True)
             raise
     
     async def clear(self) -> None:
         """清空队列"""
+        if not self._enabled or self.redis_client is None:
+            return
+        
         try:
             await self.redis_client.delete(self.QUEUE_KEY)
             logger.info("Memory queue cleared")
+        except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:
+            if not self._connection_error_logged:
+                logger.warning(
+                    f"Memory queue disabled due to Redis connection error: {e}",
+                    exc_info=False
+                )
+                self._connection_error_logged = True
+                self._enabled = False
         except Exception as e:
             logger.error(f"Failed to clear queue: {e}", exc_info=True)
             raise
     
     async def close(self) -> None:
         """关闭Redis连接"""
+        if self.redis_client is None:
+            return
+        
         try:
             await self.redis_client.close()
             logger.info("Memory queue connection closed")
         except Exception as e:
             logger.error(f"Failed to close queue connection: {e}", exc_info=True)
+    
+    @property
+    def is_enabled(self) -> bool:
+        """检查队列是否启用"""
+        return self._enabled and self.redis_client is not None
 

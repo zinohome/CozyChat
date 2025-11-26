@@ -100,6 +100,7 @@ class User(UserBase):
             "theme": "blue",  # 使用颜色主题系统：blue, green, purple, orange, pink, cyan
             "auto_tts": False,
             "always_show_voice_input": False,  # 总是显示语音输入按钮（宽屏幕下也显示）
+            "voice_input_mode": "auto",  # 语音输入交互模式：press（按住说话）、click（点击说话）、auto（自动根据设备类型）
             "timezone": "Asia/Shanghai",  # 默认时区：上海
             "show_reasoning": False,
             "response_style": "chatgpt_like",

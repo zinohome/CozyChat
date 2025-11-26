@@ -68,7 +68,8 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pressButtonRef = useRef<HTMLDivElement>(null); // 专门用于按住说话的 div 引用
   const isMobile = useIsMobile();
   const [messagesContainerHeight, setMessagesContainerHeight] = React.useState(600);
   // 使用 sessionId prop 作为当前会话ID（确保切换时立即更新）
@@ -88,6 +89,11 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const isPressingRef = useRef(false); // 防止重复触发
   const recordingStartTimeRef = useRef<number | null>(null); // 录音开始时间（用于计算时长）
   const MIN_RECORDING_DURATION = 300; // 最小录音时长（毫秒），防止误触
+  
+  // 上划取消相关状态
+  const touchStartYRef = useRef<number | null>(null); // 触摸开始的 Y 坐标
+  const [isCanceling, setIsCanceling] = useState(false); // 是否正在取消（上划）
+  const CANCEL_THRESHOLD = 50; // 上划取消的阈值（像素），向上移动超过此距离则取消
   
   // 语音通话Hook
   const {
@@ -559,59 +565,112 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   /**
    * 处理按住说话 - 按下开始
    */
-  const handlePressStart = useCallback(async (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePressStart = useCallback(async (e?: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     // 防止重复触发
-    if (isPressingRef.current || isTranscribing || isLoading || isStreaming) {
+    if (isPressingRef.current || isRecording || isTranscribing || isLoading || isStreaming) {
+      log.debug('忽略重复触发，当前状态:', {
+        isPressing: isPressingRef.current,
+        isRecording,
+        isTranscribing,
+        isLoading,
+        isStreaming,
+      });
       return;
     }
     
+    // 记录触摸开始的 Y 坐标（用于检测上划取消）
+    if (e && 'touches' in e && e.touches && e.touches.length > 0) {
+      touchStartYRef.current = e.touches[0].clientY;
+    } else {
+      touchStartYRef.current = null;
+    }
+    
+    // 立即更新状态，让用户看到"松开发送，上划取消"的提示
     isPressingRef.current = true;
     setIsPressing(true);
+    setIsCanceling(false);
     recordingStartTimeRef.current = Date.now();
     
     try {
-      await startRecording();
+      // 异步启动录音，但不等待完成（状态已经更新，UI会立即显示）
+      startRecording().catch((error) => {
+        log.error('开始录音失败:', error);
+        // 如果录音启动失败，重置状态
+        isPressingRef.current = false;
+        setIsPressing(false);
+        setIsCanceling(false);
+        recordingStartTimeRef.current = null;
+        touchStartYRef.current = null;
+      });
     } catch (error) {
       log.error('开始录音失败:', error);
       isPressingRef.current = false;
       setIsPressing(false);
+      setIsCanceling(false);
       recordingStartTimeRef.current = null;
+      touchStartYRef.current = null;
     }
-  }, [isTranscribing, isLoading, isStreaming, startRecording]);
+  }, [isRecording, isTranscribing, isLoading, isStreaming, startRecording]);
 
   /**
    * 处理按住说话 - 释放结束
    */
-  const handlePressEnd = useCallback(async (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePressEnd = useCallback(async (e?: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
-    if (!isPressingRef.current || !isRecording) {
+    if (!isPressingRef.current) {
+      touchStartYRef.current = null;
+      return;
+    }
+    
+    // 如果正在取消（上划），直接取消录音
+    if (isCanceling) {
+      log.debug('上划取消录音');
+      isPressingRef.current = false;
+      setIsPressing(false);
+      setIsCanceling(false);
+      stopRecording();
+      recordingStartTimeRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
+    
+    if (!isRecording) {
+      isPressingRef.current = false;
+      setIsPressing(false);
+      setIsCanceling(false);
+      touchStartYRef.current = null;
       return;
     }
     
     isPressingRef.current = false;
     setIsPressing(false);
+    setIsCanceling(false);
     
     // 检查最小录音时长
     const duration = recordingStartTimeRef.current 
       ? Date.now() - recordingStartTimeRef.current 
       : 0;
     
-    if (duration < MIN_RECORDING_DURATION) {
-      log.debug('录音时长太短，取消发送:', duration, 'ms');
-      stopRecording();
-      recordingStartTimeRef.current = null;
-      showError(new Error('录音时间太短'), '录音失败');
-      return;
-    }
-    
     // 停止录音
     stopRecording();
+    const actualDuration = duration;
     recordingStartTimeRef.current = null;
+    touchStartYRef.current = null;
+    
+    // 如果录音时长太短，可能是误触，不进行识别也不显示错误
+    if (actualDuration < MIN_RECORDING_DURATION) {
+      log.debug('录音时长太短，可能是误触，取消处理:', actualDuration, 'ms');
+      return;
+    }
     
     // 等待一小段时间确保录音数据已收集
     setTimeout(async () => {
@@ -627,15 +686,21 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           // 直接调用 sendStreamMessage 发送
           await sendStreamMessage(text.trim());
         } else {
-          log.warn('STT返回空文本或无效文本:', text);
-          showError(new Error('未识别到有效语音，请重试'), '识别失败');
+          // 如果录音时长较短（可能是误触），不显示错误
+          // 只有录音时长足够长但识别为空时，才显示错误
+          if (actualDuration >= 1000) {
+            log.warn('STT返回空文本或无效文本:', text);
+            showError(new Error('未识别到有效语音，请重试'), '识别失败');
+          } else {
+            log.debug('录音时长较短且识别为空，可能是误触，不显示错误');
+          }
         }
       } catch (error) {
         log.error('STT转录错误:', error);
         showError(error, '语音识别失败');
       }
     }, 100);
-  }, [isRecording, stopRecording, transcribe, personalityId, sendStreamMessage]);
+  }, [isRecording, isCanceling, stopRecording, transcribe, personalityId, sendStreamMessage]);
 
   /**
    * 处理按住说话 - 取消（拖拽离开或失去焦点）
@@ -645,8 +710,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       log.debug('取消录音');
       isPressingRef.current = false;
       setIsPressing(false);
+      setIsCanceling(false);
       stopRecording();
       recordingStartTimeRef.current = null;
+      touchStartYRef.current = null;
     }
   }, [isRecording, stopRecording]);
 
@@ -722,6 +789,160 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       window.removeEventListener('blur', handleBlur);
     };
   }, [isRecording, handlePressCancel]);
+
+  // 使用原生触摸事件监听器（设置 passive: false 以支持 preventDefault）
+  // 使用 ref 存储处理函数，避免频繁重新绑定事件监听器
+  const handlePressStartRef = useRef(handlePressStart);
+  const handlePressEndRef = useRef(handlePressEnd);
+  const handlePressCancelRef = useRef(handlePressCancel);
+  
+  // 更新 ref 值
+  useEffect(() => {
+    handlePressStartRef.current = handlePressStart;
+    handlePressEndRef.current = handlePressEnd;
+    handlePressCancelRef.current = handlePressCancel;
+  }, [handlePressStart, handlePressEnd, handlePressCancel]);
+
+  useEffect(() => {
+    if (!usePressMode || !pressButtonRef.current) {
+      return;
+    }
+
+    let cleanup: (() => void) | null = null;
+
+    // 延迟一下确保元素完全渲染（Chrome可能需要）
+    const timer = setTimeout(() => {
+      if (!pressButtonRef.current) {
+        return;
+      }
+
+      // pressButtonRef 直接指向 div 元素
+      const pressButtonElement = pressButtonRef.current;
+
+      // 触摸开始处理函数 - 在捕获阶段就阻止默认行为
+      const handleTouchStart = (e: TouchEvent) => {
+        // 立即阻止默认行为，防止系统长按菜单
+        e.preventDefault();
+        e.stopPropagation();
+        log.debug('原生 touchstart 事件触发');
+        handlePressStartRef.current(e);
+      };
+
+      // 触摸移动处理函数 - 检测上划取消
+      const handleTouchMove = (e: TouchEvent) => {
+        // 如果正在录音，阻止滚动
+        if (isPressingRef.current || isRecording) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // 检测上划取消：如果手指向上移动超过阈值，则取消录音
+          if (touchStartYRef.current !== null && e.touches && e.touches.length > 0) {
+            const currentY = e.touches[0].clientY;
+            const deltaY = touchStartYRef.current - currentY; // 向上移动为正值
+            
+            if (deltaY > CANCEL_THRESHOLD) {
+              // 上划超过阈值，标记为取消状态
+              setIsCanceling((prev) => {
+                if (!prev) {
+                  log.debug('检测到上划，准备取消录音');
+                }
+                return true;
+              });
+            } else {
+              // 回到阈值内，取消取消状态
+              setIsCanceling((prev) => {
+                if (prev) {
+                  log.debug('回到正常区域，取消取消状态');
+                }
+                return false;
+              });
+            }
+          }
+        }
+      };
+
+      // 触摸结束处理函数
+      const handleTouchEnd = (e: TouchEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        log.debug('原生 touchend 事件触发');
+        handlePressEndRef.current(e);
+      };
+
+      // 触摸取消处理函数
+      const handleTouchCancel = () => {
+        log.debug('原生 touchcancel 事件触发');
+        handlePressCancelRef.current();
+      };
+
+      // 阻止上下文菜单（长按菜单）
+      const handleContextMenu = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      };
+
+      // 阻止文本选择
+      const handleSelectStart = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      };
+
+      // 阻止拖拽
+      const handleDragStart = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      };
+
+      // 在捕获阶段添加事件监听器，确保最早阻止默认行为
+      // 使用 capture: true 在捕获阶段处理，确保在其他监听器之前执行
+      // 注意：必须在捕获阶段阻止，否则系统默认行为会先执行
+      const options = { passive: false, capture: true };
+      
+      // 同时添加冒泡阶段的监听器（Chrome可能需要）
+      const bubbleOptions = { passive: false, capture: false };
+      
+      pressButtonElement.addEventListener('touchstart', handleTouchStart, options);
+      pressButtonElement.addEventListener('touchstart', handleTouchStart, bubbleOptions);
+      pressButtonElement.addEventListener('touchmove', handleTouchMove, options);
+      pressButtonElement.addEventListener('touchmove', handleTouchMove, bubbleOptions);
+      pressButtonElement.addEventListener('touchend', handleTouchEnd, options);
+      pressButtonElement.addEventListener('touchend', handleTouchEnd, bubbleOptions);
+      pressButtonElement.addEventListener('touchcancel', handleTouchCancel, options);
+      pressButtonElement.addEventListener('touchcancel', handleTouchCancel, bubbleOptions);
+      pressButtonElement.addEventListener('contextmenu', handleContextMenu, options);
+      pressButtonElement.addEventListener('selectstart', handleSelectStart, options);
+      pressButtonElement.addEventListener('dragstart', handleDragStart, options);
+      
+      // 额外：在元素上设置属性，进一步阻止默认行为
+      pressButtonElement.setAttribute('draggable', 'false');
+      pressButtonElement.setAttribute('contenteditable', 'false');
+
+      // 保存清理函数
+      cleanup = () => {
+        pressButtonElement.removeEventListener('touchstart', handleTouchStart, options);
+        pressButtonElement.removeEventListener('touchstart', handleTouchStart, bubbleOptions);
+        pressButtonElement.removeEventListener('touchmove', handleTouchMove, options);
+        pressButtonElement.removeEventListener('touchmove', handleTouchMove, bubbleOptions);
+        pressButtonElement.removeEventListener('touchend', handleTouchEnd, options);
+        pressButtonElement.removeEventListener('touchend', handleTouchEnd, bubbleOptions);
+        pressButtonElement.removeEventListener('touchcancel', handleTouchCancel, options);
+        pressButtonElement.removeEventListener('touchcancel', handleTouchCancel, bubbleOptions);
+        pressButtonElement.removeEventListener('contextmenu', handleContextMenu, options);
+        pressButtonElement.removeEventListener('selectstart', handleSelectStart, options);
+        pressButtonElement.removeEventListener('dragstart', handleDragStart, options);
+      };
+    }, 100); // 延迟100ms确保元素已渲染
+
+    return () => {
+      clearTimeout(timer);
+      if (cleanup) {
+        cleanup();
+      }
+    };
+  }, [usePressMode, isRecording]);
 
 
   /**
@@ -982,56 +1203,85 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
 
           {/* 语音输入模式 */}
           {!isVoiceCallActive && !isConnecting && isVoiceInputMode && (
-            <TextArea
-              ref={inputRef}
-              value={
-                isRecording 
-                  ? `正在录音... ${recordingDuration > 0 ? `${recordingDuration}秒` : ''}`.trim()
-                  : isTranscribing 
-                    ? '识别中...' 
-                    : usePressMode 
-                      ? '按住说话' 
-                      : '点击说话'
-              }
-              readOnly
+            <div
+              ref={pressButtonRef}
               onClick={usePressMode ? undefined : handleClickToRecord}
               onMouseDown={usePressMode ? handlePressStart : undefined}
               onMouseUp={usePressMode ? handlePressEnd : undefined}
               onMouseLeave={usePressMode ? handlePressCancel : undefined}
-              onTouchStart={usePressMode ? handlePressStart : undefined}
-              onTouchEnd={usePressMode ? handlePressEnd : undefined}
-              onTouchCancel={usePressMode ? handlePressCancel : undefined}
-              disabled={isLoading || isStreaming || isTranscribing}
+              // Chrome移动端也需要React事件处理器作为备用
+              onTouchStart={usePressMode ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log.debug('React onTouchStart 事件触发');
+                handlePressStart(e);
+              } : undefined}
+              onTouchEnd={usePressMode ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log.debug('React onTouchEnd 事件触发');
+                handlePressEnd(e);
+              } : undefined}
+              onTouchCancel={usePressMode ? () => {
+                log.debug('React onTouchCancel 事件触发');
+                handlePressCancel();
+              } : undefined}
               style={{
                 flex: 1,
                 minWidth: 0,
                 maxWidth: '100%',
                 minHeight: '36px',
                 height: '36px',
-                lineHeight: '24px',
-                paddingTop: '6px',
-                paddingBottom: '6px',
+                lineHeight: '36px',
+                paddingLeft: '12px',
+                paddingRight: '12px',
                 boxSizing: 'border-box',
                 cursor: (isLoading || isStreaming || isTranscribing) ? 'not-allowed' : 'pointer',
                 userSelect: 'none', // 防止文本选择
                 WebkitUserSelect: 'none',
-                backgroundColor: isPressing || isRecording 
-                  ? 'var(--error-color)' 
-                  : isTranscribing
-                    ? 'var(--bg-tertiary)'
-                    : 'var(--bg-primary)',
-                color: isPressing || isRecording 
-                  ? 'var(--text-inverse)' 
-                  : 'var(--text-primary)',
-                borderColor: isPressing || isRecording 
-                  ? 'var(--error-color)' 
-                  : 'var(--border-color)',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                touchAction: 'none', // 阻止触摸默认行为（缩放、滚动等）
+                WebkitTouchCallout: 'none', // iOS 阻止长按菜单
+                WebkitTapHighlightColor: 'transparent', // 移除点击高亮
+                pointerEvents: (isLoading || isStreaming || isTranscribing) ? 'none' : 'auto',
+                backgroundColor: isCanceling
+                  ? 'var(--text-tertiary)' // 取消状态：灰色
+                  : isPressing || isRecording 
+                    ? 'var(--error-color)' // 录音状态：红色
+                    : isTranscribing
+                      ? 'var(--bg-tertiary)'
+                      : 'var(--bg-primary)',
+                color: isCanceling
+                  ? 'var(--text-inverse)' // 取消状态：白色文字
+                  : isPressing || isRecording 
+                    ? 'var(--text-inverse)' // 录音状态：白色文字
+                    : 'var(--text-primary)',
+                border: `1px solid ${isCanceling
+                  ? 'var(--text-tertiary)'
+                  : isPressing || isRecording 
+                    ? 'var(--error-color)' 
+                    : 'var(--border-color)'}`,
+                borderRadius: '8px',
                 transform: isPressing ? 'scale(0.98)' : 'scale(1)',
-                transition: 'transform 0.1s ease, background-color 0.2s ease',
+                transition: 'transform 0.1s ease, background-color 0.2s ease, border-color 0.2s ease',
                 textAlign: 'center',
+                fontSize: '14px',
+                outline: 'none',
+                position: 'relative',
               }}
-              autoSize={{ minRows: 1, maxRows: 1 }}
-            />
+            >
+              {isCanceling
+                ? '松手取消'
+                : isPressing || isRecording
+                  ? '松开发送，上划取消'
+                  : isTranscribing 
+                    ? '识别中...' 
+                    : usePressMode 
+                      ? '按住说话' 
+                      : '点击说话'
+              }
+            </div>
           )}
 
           {/* 发送按钮 */}
