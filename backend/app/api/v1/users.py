@@ -5,7 +5,7 @@
 """
 
 # 标准库
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # 第三方库
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
@@ -380,47 +380,149 @@ async def get_user_profile(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_sync_session)
 ) -> Dict[str, Any]:
-    """获取用户画像
+    """获取用户资料（包含基本信息和画像）
     
     Args:
         current_user: 当前用户对象
         db: 数据库会话
         
     Returns:
-        Dict[str, Any]: 用户画像
+        Dict[str, Any]: 用户资料（包含 display_name, bio, avatar_url, interests 等）
     """
     try:
+        # 获取用户画像
         profile_manager = UserProfileManager(db)
         profile = profile_manager.get_profile(str(current_user.id))
         
-        if not profile:
-            return {
-                "user_id": str(current_user.id),
-                "profile": {
-                    "interests": [],
-                    "habits": {},
-                    "personality_insights": {},
-                    "statistics": {}
-                },
-                "generated_at": None
-            }
-        
-        return {
+        # 构建用户资料响应，包含用户基本信息和画像
+        result: Dict[str, Any] = {
             "user_id": str(current_user.id),
-            "profile": {
-                "interests": profile.interests,
-                "habits": profile.get_habits(),
-                "personality_insights": profile.get_personality_insights(),
-                "statistics": profile.get_statistics()
-            },
-            "generated_at": profile.generated_at.isoformat()
+            "display_name": current_user.display_name if current_user.display_name else None,  # type: ignore[arg-type]
+            "avatar_url": current_user.avatar_url if current_user.avatar_url else None,  # type: ignore[arg-type]
+            "bio": current_user.bio if current_user.bio else None,  # type: ignore[arg-type]
         }
+        
+        # 添加用户画像信息
+        if profile:
+            result["interests"] = profile.interests
+            result["habits"] = profile.get_habits()
+            result["personality_insights"] = profile.get_personality_insights()
+            result["statistics"] = profile.get_statistics()
+            result["generated_at"] = profile.generated_at.isoformat() if profile.generated_at else None
+        else:
+            result["interests"] = []
+            result["habits"] = {}
+            result["personality_insights"] = {}
+            result["statistics"] = {}
+            result["generated_at"] = None
+        
+        return result
         
     except Exception as e:
         logger.error(f"Failed to get user profile: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取用户画像失败"
+            detail="获取用户资料失败"
+        )
+
+
+class UserProfileUpdateRequest(BaseModel):
+    """用户资料更新请求"""
+    display_name: Optional[str] = Field(None, max_length=100, description="显示名称")
+    avatar_url: Optional[str] = Field(None, description="头像URL")
+    bio: Optional[str] = Field(None, description="个人简介")
+    interests: Optional[List[str]] = Field(None, description="兴趣列表")
+
+
+@router.put("/me/profile")
+async def update_user_profile(
+    request: UserProfileUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_sync_session)
+) -> Dict[str, Any]:
+    """更新用户资料（包含基本信息和画像）
+    
+    Args:
+        request: 用户资料更新请求
+        current_user: 当前用户对象
+        db: 数据库会话
+        
+    Returns:
+        Dict[str, Any]: 更新后的用户资料
+    """
+    try:
+        manager = UserManager(db)
+        updates = request.model_dump(exclude_unset=True)
+        
+        # 分离用户基本信息和画像信息
+        user_updates: Dict[str, Any] = {}
+        profile_updates: Dict[str, Any] = {}
+        
+        if "display_name" in updates:
+            user_updates["display_name"] = updates["display_name"]
+        if "avatar_url" in updates:
+            user_updates["avatar_url"] = updates["avatar_url"]
+        if "bio" in updates:
+            user_updates["bio"] = updates["bio"]
+        if "interests" in updates:
+            profile_updates["interests"] = updates["interests"]
+        
+        # 更新用户基本信息
+        if user_updates:
+            user = await manager.update_user(
+                user_id=str(current_user.id),
+                updates=user_updates
+            )
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="用户不存在"
+                )
+        else:
+            # 如果没有更新用户基本信息，直接获取当前用户
+            user = current_user
+        
+        # 更新用户画像
+        if profile_updates:
+            await manager.update_user_profile(
+                user_id=str(current_user.id),
+                updates=profile_updates
+            )
+        
+        # 获取更新后的用户资料
+        profile_manager = UserProfileManager(db)
+        profile = profile_manager.get_profile(str(current_user.id))
+        
+        # 构建响应
+        result: Dict[str, Any] = {
+            "user_id": str(current_user.id),
+            "display_name": user.display_name if user.display_name else None,  # type: ignore[arg-type]
+            "avatar_url": user.avatar_url if user.avatar_url else None,  # type: ignore[arg-type]
+            "bio": user.bio if user.bio else None,  # type: ignore[arg-type]
+        }
+        
+        if profile:
+            result["interests"] = profile.interests
+            result["habits"] = profile.get_habits()
+            result["personality_insights"] = profile.get_personality_insights()
+            result["statistics"] = profile.get_statistics()
+            result["generated_at"] = profile.generated_at.isoformat() if profile.generated_at else None
+        else:
+            result["interests"] = []
+            result["habits"] = {}
+            result["personality_insights"] = {}
+            result["statistics"] = {}
+            result["generated_at"] = None
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update user profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="更新用户资料失败"
         )
 
 

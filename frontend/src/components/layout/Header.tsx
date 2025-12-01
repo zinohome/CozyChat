@@ -7,11 +7,13 @@ import {
   MenuOutlined,
   HeartOutlined,
 } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/slices/authSlice';
 import { useUIStore } from '@/store/slices/uiSlice';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { userApi } from '@/services/user';
 import { Logo } from './Logo';
 
 const { Header: AntHeader } = Layout;
@@ -27,6 +29,13 @@ export const Header: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  
+  // 获取用户资料（包含 display_name）
+  const { data: profile } = useQuery({
+    queryKey: ['user', 'profile', user?.id],
+    queryFn: () => userApi.getCurrentUserProfile(),
+    enabled: !!user?.id,
+  });
   
   // 在窄屏幕下，只有当侧边栏打开时才显示切换按钮
   const shouldShowMenuButton = !isMobile || (isMobile && sidebarOpen);
@@ -126,7 +135,7 @@ export const Header: React.FC = () => {
                 }}
               />
               <span style={{ color: '#fff', fontWeight: 500 }}>
-                {user.username}
+                {profile?.display_name || user.username}
               </span>
             </Space>
           </Dropdown>

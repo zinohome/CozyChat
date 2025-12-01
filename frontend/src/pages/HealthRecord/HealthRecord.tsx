@@ -17,8 +17,10 @@ import {
   ArrowLeftOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useAuthStore } from '@/store/slices/authSlice';
+import { userApi } from '@/services/user';
 import styles from './HealthRecord.module.css';
 
 /**
@@ -30,6 +32,13 @@ export const HealthRecord: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('health_check');
+
+  // 获取用户资料（包含 display_name）
+  const { data: profile } = useQuery({
+    queryKey: ['user', 'profile', user?.id],
+    queryFn: () => userApi.getCurrentUserProfile(),
+    enabled: !!user?.id,
+  });
 
   const handleBack = () => {
     navigate('/chat');
@@ -51,7 +60,9 @@ export const HealthRecord: React.FC = () => {
         <Col flex="auto">
           <Space direction="vertical" size={8} className={styles.userInfo}>
             <Space size={12} wrap>
-              <span className={styles.userName}>{user?.username || '用户'}</span>
+              <span className={styles.userName}>
+                {profile?.display_name || user?.username || '用户'}
+              </span>
               <span className={styles.userDetail}>男</span>
             </Space>
             <span className={styles.userAge}>65岁</span>

@@ -38,7 +38,8 @@ export const userApi = {
     userId: string,
     data: Partial<UserProfile>
   ): Promise<UserProfile> {
-    return apiClient.put<UserProfile>(`/v1/users/${userId}/profile`, data);
+    // 使用 /me/profile 端点，更安全（只能更新自己的资料）
+    return apiClient.put<UserProfile>('/v1/users/me/profile', data);
   },
 
   /**
