@@ -18,11 +18,26 @@ tokenizers>=0.22.1,<=0.23.0
 hf-xet>=1.2.0,<2.0.0
 
 # NumPy 版本约束（cognee 需要更高版本）
-# 注意：cognee>=0.4.1 要求 numpy>=1.26.4,<=4.0.0
-numpy>=1.26.4,<4.0.0
+# 注意：
+# 1. cognee>=0.4.1 要求 numpy>=1.26.4,<=4.0.0
+# 2. 但 torch/sentence-transformers 等模块是用 NumPy 1.x 编译的，不兼容 NumPy 2.x
+# 3. 因此限制为 numpy>=1.26.4,<2.0.0 以避免 NumPy 2.x
+numpy>=1.26.4,<2.0.0
 
 # grpcio 版本约束（litellm 的依赖，cognee 间接依赖）
 # 注意：litellm 1.80.7 要求 grpcio<1.68.0,>=1.62.3
 # 必须限制 grpcio 版本以满足 litellm 的要求
 grpcio>=1.62.3,<1.68.0
+# grpcio-tools 版本约束（qdrant-client 的依赖）
+# 注意：grpcio-tools 版本必须与 grpcio 版本匹配，qdrant-client 需要 grpcio-tools
+grpcio-tools>=1.62.3,<1.68.0
+# bcrypt 版本约束（防止 pwdlib 升级到 4.x）
+# 注意：pwdlib（fastapi-users 的依赖）需要 bcrypt，但没有版本限制，可能安装 4.x
+# passlib 1.7.4 需要 bcrypt 3.x（4.x 移除了 __about__ 属性）
+# 必须固定为 3.2.2 以兼容 passlib 1.7.4（4.x 版本移除了 __about__ 属性）
+# 注意：在 Docker 安装脚本中，安装完 cognee.txt 后会强制重新安装 bcrypt==3.2.2
+#bcrypt==3.2.2  # 注释掉，避免 pip install 时版本冲突，在 Docker 安装脚本中强制安装
+# 注意：这些是 cognee 的可选依赖，安装后可以消除警告
+protego>=0.1  # 用于网页内容提取（cognee 可选依赖）
+playwright>=1.9.0  # 用于浏览器自动化（cognee 可选依赖）
 

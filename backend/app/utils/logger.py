@@ -102,6 +102,21 @@ def format_callsite(logger, method_name, event_dict):
     return event_dict
 
 
+def expand_extra_fields(logger, method_name, event_dict):
+    """展开extra字段到顶层
+    
+    将extra字段中的内容展开到event_dict的顶层，避免JSON格式中的extra嵌套
+    这样日志格式更清晰：{"event": "...", "level": "info", "field1": "value1", ...}
+    而不是：{"extra": {"field1": "value1"}, "event": "...", "level": "info"}
+    """
+    extra = event_dict.pop("extra", None)
+    if extra and isinstance(extra, dict):
+        # 将extra中的字段展开到顶层
+        event_dict.update(extra)
+    
+    return event_dict
+
+
 class CompactConsoleRenderer:
     """紧凑的控制台渲染器
     
@@ -239,9 +254,9 @@ def setup_logging() -> structlog.BoundLogger:
     logging.getLogger("multipart").setLevel(logging.INFO)
     
     # 配置structlog
-    # 文件输出：使用JSON格式（纯文本，无颜色）
-    # 控制台输出：使用可读格式（开发环境带颜色，生产环境JSON）
-    # 注意：文件输出会通过PlainTextFormatter自动移除ANSI转义码
+    # 控制台输出：始终使用可读格式（带颜色，便于开发调试）
+    # 文件输出：也使用可读格式（PlainTextFormatter会自动移除ANSI转义码，变成纯文本）
+    # 注意：如果需要文件输出JSON格式，可以后续优化
     
     processors = [
         structlog.contextvars.merge_contextvars,
@@ -256,18 +271,21 @@ def setup_logging() -> structlog.BoundLogger:
         structlog.processors.TimeStamper(fmt="iso", utc=False),  # 使用本地时区
         format_timestamp_local,  # 格式化为简洁的本地时间格式
         format_callsite,  # 格式化位置信息为简洁格式
+        expand_extra_fields,  # 展开extra字段到顶层，避免JSON格式中的extra嵌套
         structlog.processors.StackInfoRenderer(),
         structlog.dev.set_exc_info,
+        CompactConsoleRenderer(),  # 始终使用可读格式（控制台带颜色，文件自动移除颜色）
     ]
     
-    # 根据环境选择渲染器
-    if settings.is_development:
-        # 开发环境：使用自定义的紧凑渲染器（强制启用颜色）
-        # 注意：即使在 TERM=dumb 的环境下也强制启用颜色
-        processors.append(CompactConsoleRenderer())
-    else:
-        # 生产环境：使用JSON格式（无颜色）
-        processors.append(structlog.processors.JSONRenderer())
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(
+            getattr(logging, settings.log_level.upper())
+        ),
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
     
     structlog.configure(
         processors=processors,

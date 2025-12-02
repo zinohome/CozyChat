@@ -17,16 +17,16 @@ apt install -y --no-install-recommends \
     procps \
     git \
     python3-pip && \
-# 安装 Python 3.11（如果不存在）
-if ! command -v python3.11 &> /dev/null; then \
+# 安装 Python 3.12（如果不存在）
+if ! command -v python3.12 &> /dev/null; then \
     apt install -y software-properties-common && \
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && \
-    apt install -y --no-install-recommends python3.11 python3.11-venv; \
+    apt install -y --no-install-recommends python3.12 python3.12-venv; \
 fi && \
 # 安装构建工具（仅用于编译 Python 包，后续会删除）
-apt install -y --no-install-recommends build-essential python3.11-dev libpython3.11-dev && \
-rm -f /usr/bin/python && ln -s /usr/bin/python3.11 /usr/bin/python && \
+apt install -y --no-install-recommends build-essential python3.12-dev libpython3.12-dev && \
+rm -f /usr/bin/python && ln -s /usr/bin/python3.12 /usr/bin/python && \
 python -m pip install --no-cache-dir virtualenv && \
 cd /opt && \
 mkdir -p cozychat && \
@@ -82,8 +82,15 @@ export TORCH_HOME=/tmp && \
 # 先安装CPU版本的PyTorch（避免下载CUDA版本，减少~700MB）
 echo "安装CPU版本的PyTorch（避免CUDA依赖）..."; \
 pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-# 安装其他依赖（不缓存，不自动下载模型）
-pip install --no-cache-dir -r requirements/base.txt && \
+# 安装核心依赖（不缓存，不自动下载模型）
+echo "安装核心依赖 (core.txt)..."; \
+pip install --no-cache-dir -r requirements/core.txt && \
+# 安装Cognee依赖（可选，用于知识图谱记忆存储）
+echo "安装Cognee依赖 (cognee.txt)..."; \
+pip install --no-cache-dir -r requirements/cognee.txt && \
+# 强制重新安装 bcrypt==3.2.2（兼容 passlib 1.7.4，避免版本冲突）
+echo "强制安装 bcrypt==3.2.2（兼容 passlib）..."; \
+pip install --force-reinstall --no-cache-dir bcrypt==3.2.2 && \
 # 安装腾讯语音SDK（如果存在）
 if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
     # 验证vendor目录中的SDK是否存在
@@ -109,7 +116,7 @@ if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
     fi; \
 fi && \
 # 清理：删除构建工具和开发依赖（生产环境不需要）
-apt-get remove -y --purge build-essential python3.11-dev libpython3.11-dev git && \
+apt-get remove -y --purge build-essential python3.12-dev libpython3.12-dev git && \
 apt-get autoremove -y && \
 apt-get clean && \
 rm -rf /var/lib/apt/lists/* && \
