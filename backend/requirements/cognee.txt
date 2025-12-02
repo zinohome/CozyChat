@@ -21,3 +21,8 @@ hf-xet>=1.2.0,<2.0.0
 # 注意：cognee>=0.4.1 要求 numpy>=1.26.4,<=4.0.0
 numpy>=1.26.4,<4.0.0
 
+# grpcio 版本约束（litellm 的依赖，cognee 间接依赖）
+# 注意：litellm 1.80.7 要求 grpcio<1.68.0,>=1.62.3
+# 必须限制 grpcio 版本以满足 litellm 的要求
+grpcio>=1.62.3,<1.68.0
+
