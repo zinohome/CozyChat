@@ -179,7 +179,7 @@ class PersonalityLoader:
             raise ValueError(f"Temperature must be between 0 and 2, got {personality.ai.temperature}")
         
         # 验证记忆配置
-        if personality.memory.vector_db not in ["chromadb", "qdrant"]:
+        if personality.memory.vector_db not in ["chromadb", "qdrant", "cognee"]:
             raise ValueError(f"Unsupported vector DB: {personality.memory.vector_db}")
         
         if personality.memory.save_mode not in ["both", "user_only", "assistant_only"]:

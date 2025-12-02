@@ -135,7 +135,7 @@ class MemoryRetrieval:
 class MemoryConfig:
     """记忆配置"""
     enabled: bool = True
-    vector_db: str = "chromadb"  # chromadb / qdrant
+    vector_db: str = "chromadb"  # chromadb / qdrant / cognee
     save_mode: str = "both"      # both / user_only / assistant_only
     strategy: Dict[str, MemoryStrategy] = field(default_factory=dict)
     retrieval: MemoryRetrieval = field(default_factory=MemoryRetrieval)

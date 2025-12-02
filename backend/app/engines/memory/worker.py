@@ -16,7 +16,7 @@ from app.utils.logger import logger
 from .queue import MemoryQueue
 from .jobs import MemoryWriteJob, MemoryWriteJobStatus
 from .models import Memory, MemoryType
-from .qdrant_engine import QdrantMemoryEngine
+from .base import MemoryEngineBase
 from .deduplicator import MemoryDeduplicator
 
 
@@ -33,7 +33,7 @@ class MemoryWorker:
     def __init__(
         self,
         queue: MemoryQueue,
-        engine: QdrantMemoryEngine,
+        engine: MemoryEngineBase,
         deduplicator: Optional[MemoryDeduplicator] = None,
         batch_size: Optional[int] = None,
         poll_interval: float = 1.0
@@ -42,7 +42,7 @@ class MemoryWorker:
         
         Args:
             queue: 记忆写入队列
-            engine: Qdrant引擎
+            engine: 记忆引擎（支持任意引擎：Qdrant、ChromaDB、Cognee等）
             deduplicator: 去重器（可选，如果不提供则创建新的）
             batch_size: 批次大小（可选，默认从配置读取）
             poll_interval: 轮询间隔（秒）

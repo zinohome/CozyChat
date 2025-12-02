@@ -1,6 +1,6 @@
 memory:
   # 默认向量数据库引擎
-  default_engine: "qdrant"  # chromadb 或 qdrant
+  default_engine: "qdrant"  # chromadb / qdrant / cognee
   
   # 跨Session记忆配置
   cross_session_memory:
@@ -50,6 +50,98 @@ memory:
     performance:
       batch_size: 100
       max_retries: 3
+  
+  # Cognee配置
+  # ⚠️ 重要：Cognee 使用独立的数据库（docker-compose 中的 postgres/neo4j/redis/minio）
+  # 不能复用当前项目的数据库
+  # ⚠️ 注意：开发环境使用 IP 地址（192.168.66.11），生产环境可配置为服务名
+  cognee:
+    engine: "cognee"
+    
+    # ==================== 数据库配置 ====================
+    # PostgreSQL 关系数据库（独立，Cognee 专用）
+    # 开发环境：使用 IP 地址 192.168.66.11
+    # 生产环境（Docker 内部）：可使用服务名 postgres
+    database_url: "postgresql://cognee_user:cognee_password@192.168.66.11:5432/cognee_db"
+    vector_db_provider: "pgvector"  # 使用 pgvector（向量数据存储在 PostgreSQL 中）
+    
+    # ==================== 图数据库配置 ====================
+    # Neo4j 图数据库（独立，Cognee 专用）
+    # 开发环境：使用 IP 地址 192.168.66.11
+    # 生产环境（Docker 内部）：可使用服务名 neo4j
+    graph_database_provider: "neo4j"  # 可选: "neo4j" 或 "kuzu"
+    graph_database_url: "bolt://192.168.66.11:7687"
+    graph_database_username: "neo4j"
+    graph_database_password: "pleaseletmein"
+    
+    # ==================== Redis 配置 ====================
+    # Redis（独立，用于异步队列和 Cognee 内部缓存）
+    # 开发环境：使用 IP 地址 192.168.66.11
+    # 生产环境（Docker 内部）：可使用服务名 redis
+    redis_url: "redis://:cognee_redis_password@192.168.66.11:6379/0"
+    
+    # ==================== 对象存储配置 ====================
+    # MinIO/S3（独立，Cognee 专用）
+    # 开发环境：使用 IP 地址 192.168.66.11
+    # 生产环境（Docker 内部）：可使用服务名 minio
+    s3_endpoint: "http://192.168.66.11:9000"
+    s3_access_key: "minioadmin"
+    s3_secret_key: "minioadmin"
+    s3_bucket_name: "cognee-storage"
+    s3_use_ssl: false
+    
+    # ==================== LLM 配置 ====================
+    # LLM 用于知识图谱构建（cognify）和搜索增强
+    # 注意：这些配置会传递给 Cognee，Cognee 会使用这些配置进行知识图谱处理
+    llm:
+      provider: "openai"  # 可选: openai, anthropic, groq, ollama, mistral
+      model: "gpt-4o-mini"
+      api_key: ""  # 从环境变量 LLM_API_KEY 读取
+      endpoint: ""  # 从环境变量 LLM_ENDPOINT 读取（可选）
+      max_tokens: 16384
+    
+    # ==================== Embedding 配置 ====================
+    # Embedding 用于向量化文本
+    embedding:
+      provider: "openai"  # 可选: openai, ollama, etc.
+      api_key: ""  # 从环境变量 EMBEDDING_API_KEY 读取
+      endpoint: ""  # 从环境变量 EMBEDDING_ENDPOINT 读取（可选）
+      model: "openai/text-embedding-3-large"
+      dimensions: 3072
+    
+    # ==================== 数据集配置 ====================
+    # 数据集命名规则和配置
+    datasets:
+      # 用户会话数据集命名模式
+      user_pattern: "conversation_{user_id}"
+      # 专业记忆数据集（可选，用于共享的专业知识）
+      professional: []  # 例如: ["medical_knowledge", "psychology_knowledge"]
+    
+    # ==================== 节点集配置 ====================
+    # 节点集用于在知识图谱中组织和标记数据
+    node_sets:
+      # 用户记忆节点集命名模式
+      user: "user_{user_id}_conversations"
+      # AI助手记忆节点集命名模式
+      assistant: "assistant_{user_id}_conversations"
+    
+    # ==================== 性能配置 ====================
+    performance:
+      # 异步写入配置
+      async_write: true  # ✅ 优先使用异步写入
+      # 知识图谱构建配置
+      enable_cognify: false  # 默认关闭（性能考虑），按需启用
+      # 图遍历搜索配置
+      enable_graph_search: false  # 默认关闭（性能考虑），只使用向量搜索
+      # 批量操作大小
+      batch_size: 10
+    
+    # ==================== 搜索配置 ====================
+    search:
+      default_top_k: 5  # 默认返回结果数量
+      similarity_threshold: 0.7  # 相似度阈值
+      use_graph_completion: false  # 是否使用图遍历（需要 enable_graph_search=true）
+      use_combined_context: true  # 是否使用混合上下文
   
   # 缓存配置
   cache:

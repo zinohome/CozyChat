@@ -1,0 +1,23 @@
+# Cognee 依赖（需要先安装 core.txt）
+# 安装方式：pip install -r requirements/cognee.txt
+# 注意：必须先安装 core.txt: pip install -r requirements/core.txt
+
+# Cognee 知识图谱框架（可选，用于知识图谱记忆存储）
+# 注意：
+# 1. Cognee 需要独立的数据库（PostgreSQL、Neo4j、Redis、MinIO），不能复用项目数据库
+# 2. 如果未安装，代码会自动回退到 Qdrant（代码中有容错处理）
+# 3. 配置方式：在 backend/config/memory.yaml 中设置 default_engine: "cognee"
+cognee>=0.4.1
+
+# Cognee 相关依赖约束
+# 注意：这些约束帮助 pip 快速解析依赖，避免 resolution-too-deep 错误
+aiohttp>=3.11.14,<4.0.0
+yarl>=1.22.0,<2.0.0
+fastapi-users[sqlalchemy]>=14.0.2,<15.0.0
+tokenizers>=0.22.1,<=0.23.0
+hf-xet>=1.2.0,<2.0.0
+
+# NumPy 版本约束（cognee 需要更高版本）
+# 注意：cognee>=0.4.1 要求 numpy>=1.26.4,<=4.0.0
+numpy>=1.26.4,<4.0.0
+

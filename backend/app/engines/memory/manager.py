@@ -123,6 +123,29 @@ class MemoryManager:
                     if settings.qdrant_api_key:
                         engine_config["api_key"] = settings.qdrant_api_key
                     engine = QdrantMemoryEngine(config=engine_config)
+                elif default_engine == "cognee":
+                    # Cognee引擎
+                    try:
+                        from .cognee_engine import CogneeMemoryEngine
+                        engine = CogneeMemoryEngine(engine_name="cognee", config=engine_config)
+                    except ImportError:
+                        logger.warning("Cognee not installed, falling back to Qdrant")
+                        qdrant_config = memory_config.get("qdrant", {})
+                        from app.config.config import settings
+                        if settings.qdrant_url:
+                            qdrant_config["url"] = settings.qdrant_url
+                        if settings.qdrant_api_key:
+                            qdrant_config["api_key"] = settings.qdrant_api_key
+                        engine = QdrantMemoryEngine(config=qdrant_config)
+                    except Exception as e:
+                        logger.error(f"Failed to initialize Cognee: {e}, falling back to Qdrant", exc_info=True)
+                        qdrant_config = memory_config.get("qdrant", {})
+                        from app.config.config import settings
+                        if settings.qdrant_url:
+                            qdrant_config["url"] = settings.qdrant_url
+                        if settings.qdrant_api_key:
+                            qdrant_config["api_key"] = settings.qdrant_api_key
+                        engine = QdrantMemoryEngine(config=qdrant_config)
                 else:
                     # 其他引擎待实现，回退到 Qdrant
                     logger.warning(f"Engine {default_engine} not implemented, using Qdrant")
