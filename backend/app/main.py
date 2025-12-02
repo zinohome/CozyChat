@@ -51,15 +51,15 @@ async def lifespan(app: FastAPI):
         # Sentry初始化失败不影响应用启动
         logger.warning(f"Failed to initialize Sentry: {e}", exc_info=False)
     
-    # 初始化数据库（仅开发环境，生产环境使用Alembic迁移）
-    # 注意：生产环境应该使用Alembic迁移，而不是自动创建表
+    # 初始化数据库（检查并创建缺失的表）
+    # 注意：生产环境应该使用Alembic迁移，但为了容错，也会检查并创建缺失的表
     # 如果表已存在，init_db会跳过创建，不会报错
-    if settings.is_development:
-        try:
-            await init_db()
-        except Exception as e:
-            # 数据库初始化失败不影响应用启动（表可能已存在）
-            logger.warning(f"Database initialization skipped: {e}", exc_info=False)
+    try:
+        await init_db()
+        logger.info("Database tables checked and created if needed")
+    except Exception as e:
+        # 数据库初始化失败不影响应用启动（表可能已存在）
+        logger.warning(f"Database initialization warning: {e}", exc_info=False)
     
     # 初始化全局组件（Phase 2: Lifecycle Optimization）
     logger.info("Initializing global components...")

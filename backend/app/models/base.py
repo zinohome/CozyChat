@@ -130,9 +130,12 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     """初始化数据库
     
-    创建所有表（仅用于开发环境，生产环境使用Alembic迁移）
+    检查并创建所有缺失的表（用于容错，确保所有表都存在）
     
-    注意：此函数会尝试创建所有表，如果表已存在会跳过（不会报错）
+    注意：
+    1. 生产环境应该使用Alembic迁移，但此函数作为容错机制
+    2. 如果表已存在，会跳过创建（不会报错）
+    3. 此函数会创建所有在 Base.metadata 中定义的表
     """
     try:
         async with async_engine.begin() as conn:
