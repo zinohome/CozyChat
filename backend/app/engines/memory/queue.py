@@ -29,6 +29,7 @@ class MemoryQueue:
     redis_client: Optional[aioredis.Redis]  # 类型注解：可能为None（连接失败时）
     _enabled: bool  # 队列是否启用
     _connection_error_logged: bool  # 是否已记录连接错误（避免重复报错）
+    _redis_url: str  # Redis连接URL（用于重连）
     
     def __init__(self, redis_client: Optional[aioredis.Redis] = None):
         """初始化队列
@@ -38,6 +39,7 @@ class MemoryQueue:
         """
         self._enabled = True
         self._connection_error_logged = False
+        self._redis_url = ""
         
         if redis_client is None:
             # 如果没有提供redis_client，创建一个新的
@@ -55,11 +57,19 @@ class MemoryQueue:
                     rest = redis_url[9:]  # 去掉 "rediss://"
                     redis_url = f"rediss://:{settings.redis_password}@{rest}"
             
+            self._redis_url = redis_url
+            
             self.redis_client = aioredis.from_url(
                 redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                max_connections=settings.redis_max_connections
+                max_connections=settings.redis_max_connections,
+                socket_connect_timeout=settings.redis_socket_connect_timeout,
+                socket_timeout=settings.redis_socket_timeout,
+                retry_on_timeout=settings.redis_retry_on_timeout,
+                health_check_interval=settings.redis_health_check_interval,
+                # 启用连接池健康检查
+                retry_on_error=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
             )
         else:
             self.redis_client = redis_client
@@ -68,6 +78,75 @@ class MemoryQueue:
             "Memory queue initialized",
             extra={"queue_key": self.QUEUE_KEY}
         )
+    
+    async def _check_and_reconnect(self) -> bool:
+        """检查连接并尝试重连
+        
+        Returns:
+            bool: 连接是否可用
+        """
+        if self.redis_client is None:
+            return False
+        
+        try:
+            # 使用PING命令检查连接
+            await self.redis_client.ping()
+            # 如果之前有连接错误，现在连接成功，重置标志
+            if self._connection_error_logged:
+                self._connection_error_logged = False
+                self._enabled = True
+                logger.info("Memory queue connection restored")
+            return True
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
+            # 连接失败，尝试重连
+            if self._redis_url:
+                try:
+                    # 关闭旧连接
+                    if self.redis_client:
+                        await self.redis_client.close()
+                    
+                    # 创建新连接
+                    self.redis_client = aioredis.from_url(
+                        self._redis_url,
+                        encoding="utf-8",
+                        decode_responses=True,
+                        max_connections=settings.redis_max_connections,
+                        socket_connect_timeout=settings.redis_socket_connect_timeout,
+                        socket_timeout=settings.redis_socket_timeout,
+                        retry_on_timeout=settings.redis_retry_on_timeout,
+                        health_check_interval=settings.redis_health_check_interval,
+                        retry_on_error=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+                    )
+                    
+                    # 测试新连接
+                    await self.redis_client.ping()
+                    self._connection_error_logged = False
+                    self._enabled = True
+                    logger.info("Memory queue reconnected successfully")
+                    return True
+                except Exception as reconnect_error:
+                    if not self._connection_error_logged:
+                        logger.warning(
+                            f"Memory queue reconnection failed: {reconnect_error}. "
+                            "Memory async write will be disabled.",
+                            exc_info=False
+                        )
+                        self._connection_error_logged = True
+                        self._enabled = False
+                    return False
+            else:
+                if not self._connection_error_logged:
+                    logger.warning(
+                        f"Memory queue connection check failed: {e}. "
+                        "Memory async write will be disabled.",
+                        exc_info=False
+                    )
+                    self._connection_error_logged = True
+                    self._enabled = False
+                return False
+        except Exception as e:
+            logger.error(f"Unexpected error during connection check: {e}", exc_info=True)
+            return False
     
     async def push(self, job: MemoryWriteJob) -> int:
         """将任务推入队列
@@ -123,9 +202,11 @@ class MemoryQueue:
         if not jobs:
             return 0
         
-        # 如果队列已禁用（Redis连接失败），直接返回0
+        # 如果队列已禁用，尝试重连
         if not self._enabled or self.redis_client is None:
-            return 0
+            await self._check_and_reconnect()
+            if not self._enabled or self.redis_client is None:
+                return 0
         
         try:
             job_jsons = [job.model_dump_json() for job in jobs]
@@ -161,6 +242,12 @@ class MemoryQueue:
         Returns:
             Optional[MemoryWriteJob]: 任务对象，队列为空时返回None
         """
+        # 检查连接
+        if not self._enabled or self.redis_client is None:
+            await self._check_and_reconnect()
+            if not self._enabled or self.redis_client is None:
+                return None
+        
         try:
             # BLPOP: 阻塞式左侧弹出
             result = await self.redis_client.blpop(self.QUEUE_KEY, timeout=timeout)
@@ -196,9 +283,11 @@ class MemoryQueue:
         """
         jobs = []
         
-        # 如果队列已禁用（Redis连接失败），直接返回空列表
+        # 如果队列已禁用，尝试重连
         if not self._enabled or self.redis_client is None:
-            return jobs
+            await self._check_and_reconnect()
+            if not self._enabled or self.redis_client is None:
+                return jobs
         
         try:
             # 使用pipeline提升性能
@@ -223,11 +312,6 @@ class MemoryQueue:
                     f"Popped {len(jobs)} memory jobs from queue",
                     extra={"batch_size": batch_size, "actual_count": len(jobs)}
                 )
-            
-            # 如果之前有连接错误，现在连接成功，重置标志
-            if self._connection_error_logged:
-                self._connection_error_logged = False
-                logger.info("Memory queue connection restored")
             
             return jobs
         except (redis.exceptions.AuthenticationError, redis.exceptions.ConnectionError) as e:

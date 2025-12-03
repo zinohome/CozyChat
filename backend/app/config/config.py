@@ -139,6 +139,10 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     redis_password: Optional[str] = Field(default=None, alias="REDIS_PASSWORD")
     redis_max_connections: int = Field(default=50, alias="REDIS_MAX_CONNECTIONS")
+    redis_socket_connect_timeout: float = Field(default=5.0, alias="REDIS_SOCKET_CONNECT_TIMEOUT")
+    redis_socket_timeout: float = Field(default=5.0, alias="REDIS_SOCKET_TIMEOUT")
+    redis_retry_on_timeout: bool = Field(default=True, alias="REDIS_RETRY_ON_TIMEOUT")
+    redis_health_check_interval: int = Field(default=30, alias="REDIS_HEALTH_CHECK_INTERVAL")
     
     # ===== OpenAI配置 =====
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
