@@ -1,0 +1,149 @@
+.container {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.header {
+  padding: 16px 24px;
+  background-color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  height: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  box-sizing: border-box;
+}
+
+.backButton {
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-right: 8px;
+}
+
+.backButton:hover {
+  opacity: 0.8;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-left: 8px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tabsCard {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Tab激活状态样式 */
+.tabsCard :global(.ant-tabs-tab-active) {
+  color: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-ink-bar) {
+  background: var(--primary-color) !important;
+}
+
+.tabsCard :global(.ant-tabs-tab:hover) {
+  color: var(--primary-color) !important;
+}
+
+.tabContent {
+  padding: 16px 0;
+}
+
+.circleList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.circleCard {
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+}
+
+.circleCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.circleName {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.circleDescription {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
+.enterButton {
+  color: var(--primary-color);
+  font-size: 16px;
+  padding: 0 8px;
+  height: auto;
+}
+
+.enterButton:hover {
+  color: var(--primary-color);
+  background-color: var(--bg-secondary);
+}
+
+.joinButton {
+  height: 36px;
+  padding: 0 20px;
+  font-size: 14px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .content {
+    padding: 12px;
+  }
+
+  .header {
+    padding: 12px 16px;
+  }
+
+  .circleName {
+    font-size: 16px;
+  }
+
+  .circleDescription {
+    font-size: 13px;
+  }
+
+  .enterButton,
+  .joinButton {
+    font-size: 12px;
+    padding: 0 12px;
+  }
+}
+

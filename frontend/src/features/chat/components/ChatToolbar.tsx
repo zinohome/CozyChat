@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Space } from 'antd';
-import { HeartOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';
+import { HeartOutlined, UserOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import styles from './ChatToolbar.module.css';
@@ -27,6 +27,10 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
     navigate('/health-record');
   };
 
+  const handleHealthCircle = () => {
+    navigate('/health-circle');
+  };
+
   const handleProfile = () => {
     navigate('/profile');
   };
@@ -45,6 +49,14 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
           className={styles.toolbarButton}
         >
           健康档案
+        </Button>
+        <Button
+          type="text"
+          icon={<TeamOutlined />}
+          onClick={handleHealthCircle}
+          className={styles.toolbarButton}
+        >
+          健康圈
         </Button>
         <Button
           type="text"

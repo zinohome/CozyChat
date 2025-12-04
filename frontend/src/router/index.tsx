@@ -11,6 +11,7 @@ const ChatPage = lazy(() => import('@/features/chat/pages/ChatPage'));
 const SettingsPage = lazy(() => import('@/features/user/pages/SettingsPage'));
 const ProfilePage = lazy(() => import('@/features/user/pages/ProfilePage'));
 const HealthRecordPage = lazy(() => import('@/pages/HealthRecord/HealthRecord'));
+const HealthCirclePage = lazy(() => import('@/pages/HealthCircle/HealthCircle'));
 
 /**
  * 加载中组件
@@ -97,6 +98,14 @@ export const AppRouter: React.FC = () => {
             element={
               <ProtectedRoute>
                 <HealthRecordPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/health-circle"
+            element={
+              <ProtectedRoute>
+                <HealthCirclePage />
               </ProtectedRoute>
             }
           />

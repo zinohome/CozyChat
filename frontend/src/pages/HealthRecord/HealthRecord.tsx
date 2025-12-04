@@ -31,7 +31,7 @@ import styles from './HealthRecord.module.css';
 export const HealthRecord: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('health_check');
+  const [activeTab, setActiveTab] = useState('health_history');
 
   // 获取用户资料（包含 display_name）
   const { data: profile } = useQuery({
@@ -389,16 +389,6 @@ export const HealthRecord: React.FC = () => {
 
   const tabItems = [
     {
-      key: 'health_check',
-      label: (
-        <span>
-          <HeartOutlined />
-          健康自测
-        </span>
-      ),
-      children: renderHealthCheckTab(),
-    },
-    {
       key: 'health_history',
       label: (
         <span>
@@ -407,6 +397,16 @@ export const HealthRecord: React.FC = () => {
         </span>
       ),
       children: renderHealthHistoryTab(),
+    },
+    {
+      key: 'health_check',
+      label: (
+        <span>
+          <HeartOutlined />
+          健康自测
+        </span>
+      ),
+      children: renderHealthCheckTab(),
     },
     {
       key: 'health_report',

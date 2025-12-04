@@ -6,6 +6,7 @@ import {
   SettingOutlined,
   MenuOutlined,
   HeartOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/slices/authSlice';
@@ -56,6 +57,12 @@ export const Header: React.FC = () => {
         icon: <HeartOutlined />,
         label: '健康档案',
         onClick: () => navigate('/health-record'),
+      },
+      {
+        key: 'health-circle',
+        icon: <TeamOutlined />,
+        label: '健康圈',
+        onClick: () => navigate('/health-circle'),
       },
       {
         key: 'profile',
