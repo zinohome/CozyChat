@@ -17,6 +17,6 @@ except ImportError:
     # ChromaDB 未安装时忽略
     pass
 
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 
 
