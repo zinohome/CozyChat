@@ -122,3 +122,6 @@ example/
 # PPT文档目录（包含所有子目录和文件）
 docs/ppt/
 
+# Reference目录（参考代码和示例）
+reference/
+
