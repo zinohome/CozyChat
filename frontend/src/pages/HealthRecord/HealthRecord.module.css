@@ -192,13 +192,36 @@
   color: var(--text-primary);
 }
 
+.timelineContainer {
+  width: 100%;
+}
+
+.customTimeline {
+  width: 100%;
+}
+
+.timelineItem {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
 .timelineLabel {
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  order: 1;
 }
 
 .timelineContent {
   color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  order: 2;
 }
 
 .statsContainer {
@@ -331,6 +354,42 @@
 
   .statValue {
     font-size: 24px;
+  }
+
+  /* 小屏幕下时间轴布局调整 */
+  .timelineItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .timelineLabel {
+    order: 1;
+    font-size: 13px;
+  }
+
+  .timelineContent {
+    order: 2;
+    font-size: 14px;
+    width: 100%;
+  }
+
+  /* 确保时间轴在小屏幕下不重叠 */
+  .customTimeline :global(.ant-timeline-item-content) {
+    margin-left: 24px;
+    padding-left: 0;
+    width: calc(100% - 24px);
+    min-width: 0;
+  }
+
+  .customTimeline :global(.ant-timeline-item-tail) {
+    left: 6px;
+  }
+
+  .customTimeline :global(.ant-timeline-item-head) {
+    left: 0;
+    width: 12px;
+    height: 12px;
   }
 }
 

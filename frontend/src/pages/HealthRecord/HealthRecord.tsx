@@ -183,22 +183,37 @@ export const HealthRecord: React.FC = () => {
           </Col>
         </Row>
         <Divider style={{ margin: '12px 0' }} />
-        <Timeline
-          items={[
-            {
-              label: <span className={styles.timelineLabel}>2023年6月</span>,
-              children: <span className={styles.timelineContent}>急性胃炎，已治愈</span>,
-            },
-            {
-              label: <span className={styles.timelineLabel}>2022年3月</span>,
-              children: <span className={styles.timelineContent}>阑尾炎手术</span>,
-            },
-            {
-              label: <span className={styles.timelineLabel}>2021年1月</span>,
-              children: <span className={styles.timelineContent}>感冒发烧</span>,
-            },
-          ]}
-        />
+        <div className={styles.timelineContainer}>
+          <Timeline
+            className={styles.customTimeline}
+            items={[
+              {
+                children: (
+                  <div className={styles.timelineItem}>
+                    <span className={styles.timelineContent}>急性胃炎，已治愈</span>
+                    <span className={styles.timelineLabel}>2023年6月</span>
+                  </div>
+                ),
+              },
+              {
+                children: (
+                  <div className={styles.timelineItem}>
+                    <span className={styles.timelineContent}>阑尾炎手术</span>
+                    <span className={styles.timelineLabel}>2022年3月</span>
+                  </div>
+                ),
+              },
+              {
+                children: (
+                  <div className={styles.timelineItem}>
+                    <span className={styles.timelineContent}>感冒发烧</span>
+                    <span className={styles.timelineLabel}>2021年1月</span>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
       </Card>
     </div>
   );
