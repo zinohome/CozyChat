@@ -95,6 +95,17 @@ class CogneeMemoryEngine(MemoryEngineBase):
         self.s3_bucket_name = config.get("s3_bucket_name", "cognee-storage")
         self.s3_use_ssl = config.get("s3_use_ssl", False)
         
+        # 数据目录配置（⚠️ 重要：避免数据存储在 venv 目录下）
+        # 默认使用项目根目录下的 data/cognee 目录
+        self.data_dir = config.get("data_dir", "./data/cognee")
+        # 转换为绝对路径
+        if not os.path.isabs(self.data_dir):
+            # 相对于 backend 目录
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            self.data_dir = os.path.join(backend_dir, self.data_dir.lstrip("./"))
+        # 确保目录存在
+        os.makedirs(self.data_dir, exist_ok=True)
+        
         # LLM 配置
         llm_config = config.get("llm", {})
         self.llm_provider = llm_config.get("provider", "openai")
@@ -141,6 +152,7 @@ class CogneeMemoryEngine(MemoryEngineBase):
                 "database_url": self.database_url.split("@")[-1] if "@" in self.database_url else "***",  # 隐藏密码
                 "vector_db_provider": self.vector_db_provider,
                 "graph_database_provider": self.graph_database_provider,
+                "data_dir": self.data_dir,  # 显示数据目录路径
                 "async_enabled": self.async_enabled,
                 "enable_cognify": self.enable_cognify,
                 "enable_graph_search": self.enable_graph_search
@@ -154,6 +166,10 @@ class CogneeMemoryEngine(MemoryEngineBase):
         
         try:
             # ✅ 从配置读取所有环境变量，不硬编码
+            # ⚠️ 重要：先设置数据目录，避免数据存储在 venv 目录下
+            os.environ["COGNEE_DATA_DIR"] = self.data_dir
+            os.environ["DATA_ROOT_DIRECTORY"] = self.data_dir
+            
             # 设置 Cognee 环境变量（从配置读取）
             os.environ["DATABASE_URL"] = self.database_url
             os.environ["VECTOR_DB_PROVIDER"] = self.vector_db_provider
@@ -206,7 +222,13 @@ class CogneeMemoryEngine(MemoryEngineBase):
             await cognee.setup()
             self._initialized = True
             
-            logger.info("Cognee initialized successfully")
+            logger.info(
+                "Cognee initialized successfully",
+                extra={
+                    "data_dir": self.data_dir,
+                    "database_url": self.database_url.split("@")[-1] if "@" in self.database_url else "***"
+                }
+            )
             return True
             
         except Exception as e:
