@@ -167,12 +167,33 @@ async def get_realtime_token(
             client_secret = None
             
             try:
-                # ✅ 加载 voice 配置：优先使用 personality 配置，否则使用全局配置
+                # ✅ 加载 voice 和 language 配置：优先使用 personality 配置，否则使用全局配置
                 config_loader = get_config_loader()
                 voice = 'shimmer'  # 默认值
+                language = None  # 默认不指定语言，让 Whisper 自动检测
                 
-                # 如果提供了 personality_id，尝试加载 personality 的 voice 配置
+                def normalize_language_code(lang: Optional[str]) -> Optional[str]:
+                    """将语言代码转换为 ISO-639-1 格式（OpenAI Realtime API 要求）
+                    
+                    Args:
+                        lang: 语言代码（如 zh-CN, en-US）
+                        
+                    Returns:
+                        ISO-639-1 格式的语言代码（如 zh, en），如果输入无效则返回 None
+                    """
+                    if not lang:
+                        return None
+                    # 转换为小写并提取前两位（ISO-639-1 格式）
+                    lang_lower = lang.lower()
+                    # 如果包含连字符，取第一部分
+                    if '-' in lang_lower:
+                        lang_lower = lang_lower.split('-')[0]
+                    # 只取前两位字母
+                    return lang_lower[:2] if len(lang_lower) >= 2 else lang_lower
+                
+                # 如果提供了 personality_id，尝试加载 personality 的配置
                 # ✅ 统一逻辑：尝试加载 personality 配置，如果不存在或为 'default'，则使用全局配置
+                personality = None
                 if data and data.personality_id:
                     try:
                         personality_registry = get_personality_registry()
@@ -186,39 +207,46 @@ async def get_realtime_token(
                                 "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
                             }
                         )
-                        if personality and personality.voice and personality.voice.realtime:
-                            # personality.voice.realtime 是一个字典
-                            personality_voice = personality.voice.realtime.get('voice')
-                            if personality_voice:
-                                voice = personality_voice
+                        if personality and personality.voice:
+                            # 加载 voice 配置
+                            if personality.voice.realtime:
+                                # personality.voice.realtime 是一个字典
+                                personality_voice = personality.voice.realtime.get('voice')
+                                if personality_voice:
+                                    voice = personality_voice
+                                    logger.info(
+                                        f"✅ Using personality voice '{voice}' for ephemeral token",
+                                        extra={
+                                            "user_id": str(user.id),
+                                            "personality_id": data.personality_id,
+                                            "voice": voice
+                                        }
+                                    )
+                            
+                            # 加载 language 配置（优先从 STT 配置，其次从 user_preferences）
+                            if personality.voice.stt and personality.voice.stt.get('language'):
+                                language = personality.voice.stt.get('language')
                                 logger.info(
-                                    f"✅ Using personality voice '{voice}' for ephemeral token",
+                                    f"✅ Using personality STT language '{language}' for transcription",
                                     extra={
                                         "user_id": str(user.id),
                                         "personality_id": data.personality_id,
-                                        "voice": voice
+                                        "language": language
                                     }
                                 )
-                            else:
-                                logger.warning(
-                                    f"⚠️ Personality {data.personality_id} realtime config exists but voice is missing",
+                            elif personality.user_preferences and personality.user_preferences.get('default_language'):
+                                language = personality.user_preferences.get('default_language')
+                                logger.info(
+                                    f"✅ Using personality default_language '{language}' for transcription",
                                     extra={
+                                        "user_id": str(user.id),
                                         "personality_id": data.personality_id,
-                                        "realtime_config": personality.voice.realtime
+                                        "language": language
                                     }
                                 )
-                        else:
-                            logger.debug(
-                                f"Personality {data.personality_id} has no realtime voice config",
-                                extra={
-                                    "personality_id": data.personality_id,
-                                    "has_voice": personality and personality.voice is not None,
-                                    "has_realtime": personality and personality.voice and personality.voice.realtime is not None,
-                                }
-                            )
                     except Exception as e:
                         logger.error(
-                            f"❌ Failed to load personality voice config: {e}",
+                            f"❌ Failed to load personality config: {e}",
                             extra={
                                 "personality_id": data.personality_id if data else None,
                                 "error": str(e),
@@ -227,7 +255,7 @@ async def get_realtime_token(
                             exc_info=True
                         )
                 
-                # 如果没有找到 personality voice 配置，使用全局配置
+                # 如果没有找到 personality 配置，使用全局配置
                 # ✅ 统一逻辑：如果 voice 还是默认值 'shimmer'，说明没有找到 personality 配置，使用全局配置
                 if voice == 'shimmer':  # 如果还是默认值，说明没有找到 personality 配置
                     realtime_config = config_loader.load_voice_config('realtime')
@@ -240,6 +268,49 @@ async def get_realtime_token(
                             "user_id": str(user.id),
                             "personality_id": data.personality_id if data else None,
                             "voice": voice
+                        }
+                    )
+                
+                # 如果没有找到 personality language 配置，使用全局 STT 配置
+                if language is None:
+                    stt_config = config_loader.load_voice_config('stt')
+                    # 获取默认 STT 引擎的语言配置
+                    default_stt = stt_config.get('stt', {}).get('default', 'tencent')
+                    default_stt_config = stt_config.get('stt', {}).get(default_stt, {})
+                    global_language = default_stt_config.get('language')
+                    if global_language:
+                        language = global_language
+                        logger.info(
+                            f"Using global STT language '{language}' for transcription",
+                            extra={
+                                "user_id": str(user.id),
+                                "personality_id": data.personality_id if data else None,
+                                "language": language
+                            }
+                        )
+                
+                # 转换语言代码为 ISO-639-1 格式
+                language_code = normalize_language_code(language)
+                
+                # ✅ 如果所有配置都没有指定语言，默认使用中文（避免自动检测误判）
+                if not language_code:
+                    language_code = 'zh'
+                    logger.info(
+                        f"Using default language 'zh' (Chinese) for transcription",
+                        extra={
+                            "user_id": str(user.id),
+                            "personality_id": data.personality_id if data else None,
+                            "reason": "No language specified in config, using default Chinese"
+                        }
+                    )
+                else:
+                    logger.info(
+                        f"Transcription language set to '{language_code}' (from '{language}')",
+                        extra={
+                            "user_id": str(user.id),
+                            "personality_id": data.personality_id if data else None,
+                            "original_language": language,
+                            "normalized_language": language_code
                         }
                     )
                 
@@ -261,7 +332,9 @@ async def get_realtime_token(
                                 'audio': {
                                     'input': {
                                         'transcription': {
-                                            'model': 'whisper-1'
+                                            'model': 'whisper-1',
+                                            # ✅ 修复：添加 language 参数，确保中文转录准确
+                                            **({'language': language_code} if language_code else {})
                                         }
                                     },
                                     # ✅ 修复：添加 voice 配置到 audio.output
