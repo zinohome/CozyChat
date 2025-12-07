@@ -3,7 +3,8 @@ set -e
 set -x
 apt clean && rm -rf /var/lib/apt/lists/* && \
 rm /etc/apt/sources.list.d/passenger.list  && \
-apt-get update && DEBIAN_FRONTEND=noninteractive && \
+export DEBIAN_FRONTEND=noninteractive && \
+apt-get update && \
 # 安装运行时依赖（最小化）
 apt install -y --no-install-recommends \
     ffmpeg \
@@ -17,6 +18,12 @@ apt install -y --no-install-recommends \
     procps \
     git \
     python3-pip && \
+# 验证 git 是否安装成功
+if ! command -v git &> /dev/null; then \
+    echo "✗ 错误: git 安装失败"; \
+    exit 1; \
+fi && \
+echo "✓ git 已安装: $(git --version)" && \
 # 安装 Python 3.12（如果不存在）
 if ! command -v python3.12 &> /dev/null; then \
     apt install -y software-properties-common && \
@@ -44,6 +51,11 @@ fi && \
 # 尝试克隆（支持公开仓库，无需认证）
 REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
 echo "正在克隆仓库: $REPO_URL"; \
+# 再次验证 git 是否可用（双重检查）
+if ! command -v git &> /dev/null; then \
+    echo "✗ 错误: git 命令不可用，无法克隆代码"; \
+    exit 1; \
+fi && \
 # 使用 --recurse-submodules 参数克隆，自动初始化submodule
 if git clone --recurse-submodules "$REPO_URL" . 2>&1; then \
     echo "✓ Git克隆成功（包含submodule）"; \
