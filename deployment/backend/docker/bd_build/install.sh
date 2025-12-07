@@ -86,8 +86,8 @@ pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cp
 echo "安装核心依赖 (core.txt)..."; \
 pip install --no-cache-dir -r requirements/core.txt && \
 # 安装Cognee依赖（可选，用于知识图谱记忆存储）
-echo "安装Cognee依赖 (cognee.txt)..."; \
-pip install --no-cache-dir -r requirements/cognee.txt && \
+#echo "安装Cognee依赖 (cognee.txt)..."; \
+#pip install --no-cache-dir -r requirements/cognee.txt && \
 # 强制重新安装 bcrypt==3.2.2（兼容 passlib 1.7.4，避免版本冲突）
 echo "强制安装 bcrypt==3.2.2（兼容 passlib）..."; \
 pip install --force-reinstall --no-cache-dir bcrypt==3.2.2 && \
