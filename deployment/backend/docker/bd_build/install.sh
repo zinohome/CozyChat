@@ -34,19 +34,33 @@ fi && \
 # 安装构建工具（仅用于编译 Python 包，后续会删除）
 apt install -y --no-install-recommends build-essential python3.12-dev libpython3.12-dev && \
 rm -f /usr/bin/python && ln -s /usr/bin/python3.12 /usr/bin/python && \
-python -m pip install --no-cache-dir virtualenv && \
+# 使用 --break-system-packages 绕过 externally-managed-environment 限制（Docker 环境安全）
+python -m pip install --no-cache-dir --break-system-packages virtualenv && \
 cd /opt && \
 mkdir -p cozychat && \
 cd /opt/cozychat && \
+# 验证当前目录是否正确（防止在错误目录执行清理操作）
+CURRENT_DIR=$(pwd) && \
+if [ "$CURRENT_DIR" != "/opt/cozychat" ]; then \
+    echo "✗ 错误: 当前目录不正确: $CURRENT_DIR，期望: /opt/cozychat"; \
+    exit 1; \
+fi && \
 # 优先从Git克隆代码（避免复制本地venv等文件）
 echo "尝试从Git克隆代码..."; \
 # 配置Git（禁用交互式认证提示）
 export GIT_TERMINAL_PROMPT=0 && \
 export GIT_ASKPASS=/bin/echo && \
-# 清理目录（如果存在旧文件）
-if [ "$(ls -A . 2>/dev/null)" ]; then \
+# 清理目录（如果存在旧文件）- 使用更安全的方式，只清理当前目录下的内容
+# 检查是否有文件（排除 . 和 ..）
+if [ "$(ls -A . 2>/dev/null | grep -v '^\.$' | grep -v '^\.\.$' | wc -l)" -gt 0 ]; then \
     echo "⚠ 目录不为空，清理中..."; \
-    rm -rf * .* 2>/dev/null || true; \
+    # 使用 find 命令安全删除，避免误删系统目录
+    find . -mindepth 1 -maxdepth 1 ! -name '.' ! -name '..' -exec rm -rf {} + 2>/dev/null || true; \
+    # 再次验证当前目录（防止被误删）
+    if [ "$(pwd)" != "/opt/cozychat" ]; then \
+        echo "✗ 错误: 目录验证失败，可能误删了系统文件"; \
+        exit 1; \
+    fi; \
 fi && \
 # 尝试克隆（支持公开仓库，无需认证）
 REPO_URL="${GIT_REPO_URL:-https://github.com/zinohome/CozyChat.git}"; \
@@ -85,7 +99,7 @@ else \
 fi && \
 virtualenv .venv && \
 . .venv/bin/activate && \
-pip install --upgrade pip && \
+pip install --upgrade pip setuptools wheel && \
 # 设置环境变量，防止自动下载模型
 export SENTENCE_TRANSFORMERS_HOME=/tmp && \
 export TRANSFORMERS_CACHE=/tmp && \
