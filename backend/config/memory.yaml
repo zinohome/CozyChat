@@ -52,66 +52,55 @@ memory:
       max_retries: 3
   
   # Cognee配置
-  # ⚠️ 重要：Cognee 使用独立的数据库（docker-compose 中的 postgres/neo4j/redis/minio）
-  # 不能复用当前项目的数据库
+  # ⚠️ 重要：使用 cognee-sdk 通过 HTTP API 调用 Cognee 服务
+  # ⚠️ 注意：需要先部署独立的 Cognee API 服务器（端口 8000）
   # ⚠️ 注意：开发环境使用 IP 地址（192.168.66.11），生产环境可配置为服务名
   cognee:
     engine: "cognee"
     
-    # ==================== 数据目录配置 ====================
-    # ⚠️ 重要：设置 Cognee 数据存储目录，避免数据存储在 venv 目录下
-    # 默认值：./data/cognee（相对于 backend 目录）
-    # 支持绝对路径和相对路径（相对路径相对于 backend 目录）
+    # ==================== API 服务器配置 ====================
+    # Cognee API 服务器地址（必需）
+    # 开发环境：http://localhost:8000 或 http://192.168.66.11:8000
+    # 生产环境（Docker 内部）：http://cognee-api:8000
+    api_url: "http://localhost:8000"  # 默认值，可通过环境变量 COGNEE_API_URL 覆盖
+    # API 认证 Token（可选，如果 Cognee API 启用了认证）
+    api_token: ""  # 从环境变量 COGNEE_API_TOKEN 读取（可选）
+    
+    # ==================== 数据目录配置（已废弃，保留用于兼容）====================
+    # ⚠️ 注意：使用 SDK 后，数据目录由 Cognee API 服务器管理
+    # 此配置仅用于向后兼容，实际不再使用
     data_dir: "./data/cognee"
     
-    # ==================== 数据库配置 ====================
-    # PostgreSQL 关系数据库（独立，Cognee 专用）
-    # 开发环境：使用 IP 地址 192.168.66.11
-    # 生产环境（Docker 内部）：可使用服务名 postgres
+    # ==================== 数据库配置（已废弃，保留用于兼容）====================
+    # ⚠️ 注意：使用 SDK 后，数据库配置由 Cognee API 服务器管理
+    # 这些配置仅用于向后兼容，实际不再使用
+    # 数据库配置现在在 Cognee API 服务器端管理
     database_url: "postgresql://cognee_user:cognee_password@192.168.66.11:5432/cognee_db"
-    vector_db_provider: "pgvector"  # 使用 pgvector（向量数据存储在 PostgreSQL 中）
-    
-    # ==================== 图数据库配置 ====================
-    # Neo4j 图数据库（独立，Cognee 专用）
-    # 开发环境：使用 IP 地址 192.168.66.11
-    # 生产环境（Docker 内部）：可使用服务名 neo4j
-    graph_database_provider: "neo4j"  # 可选: "neo4j" 或 "kuzu"
+    vector_db_provider: "pgvector"
+    graph_database_provider: "neo4j"
     graph_database_url: "bolt://192.168.66.11:7687"
     graph_database_username: "neo4j"
     graph_database_password: "pleaseletmein"
-    
-    # ==================== Redis 配置 ====================
-    # Redis（独立，用于异步队列和 Cognee 内部缓存）
-    # 开发环境：使用 IP 地址 192.168.66.11
-    # 生产环境（Docker 内部）：可使用服务名 redis
     redis_url: "redis://:cognee_redis_password@192.168.66.11:6379/0"
-    
-    # ==================== 对象存储配置 ====================
-    # MinIO/S3（独立，Cognee 专用）
-    # 开发环境：使用 IP 地址 192.168.66.11
-    # 生产环境（Docker 内部）：可使用服务名 minio
     s3_endpoint: "http://192.168.66.11:9000"
     s3_access_key: "minioadmin"
     s3_secret_key: "minioadmin"
     s3_bucket_name: "cognee-storage"
     s3_use_ssl: false
     
-    # ==================== LLM 配置 ====================
-    # LLM 用于知识图谱构建（cognify）和搜索增强
-    # 注意：这些配置会传递给 Cognee，Cognee 会使用这些配置进行知识图谱处理
+    # ==================== LLM 配置（已废弃，保留用于兼容）====================
+    # ⚠️ 注意：LLM 和 Embedding 配置现在在 Cognee API 服务器端管理
+    # 这些配置仅用于向后兼容，实际不再使用
     llm:
-      provider: "openai"  # 可选: openai, anthropic, groq, ollama, mistral
+      provider: "openai"
       model: "gpt-4o-mini"
-      api_key: ""  # 从环境变量 LLM_API_KEY 读取
-      endpoint: ""  # 从环境变量 LLM_ENDPOINT 读取（可选）
+      api_key: ""
+      endpoint: ""
       max_tokens: 16384
-    
-    # ==================== Embedding 配置 ====================
-    # Embedding 用于向量化文本
     embedding:
-      provider: "openai"  # 可选: openai, ollama, etc.
-      api_key: ""  # 从环境变量 EMBEDDING_API_KEY 读取
-      endpoint: ""  # 从环境变量 EMBEDDING_ENDPOINT 读取（可选）
+      provider: "openai"
+      api_key: ""
+      endpoint: ""
       model: "openai/text-embedding-3-large"
       dimensions: 3072
     

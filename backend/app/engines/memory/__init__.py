@@ -10,7 +10,7 @@ try:
 except ImportError:
     ChromaDBMemoryEngine = None  # type: ignore
 from .qdrant_engine import QdrantMemoryEngine
-# Cognee 引擎（条件导入）
+# Cognee 引擎（条件导入，使用 SDK）
 try:
     from .cognee_engine import CogneeMemoryEngine
     COGNEE_AVAILABLE = True

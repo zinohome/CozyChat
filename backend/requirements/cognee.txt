@@ -2,42 +2,24 @@
 # 安装方式：pip install -r requirements/cognee.txt
 # 注意：必须先安装 core.txt: pip install -r requirements/core.txt
 
-# Cognee 知识图谱框架（可选，用于知识图谱记忆存储）
+# Cognee Python SDK（可选，用于知识图谱记忆存储）
 # 注意：
-# 1. Cognee 需要独立的数据库（PostgreSQL、Neo4j、Redis、MinIO），不能复用项目数据库
+# 1. Cognee SDK 通过 HTTP API 调用 Cognee 服务（需要先部署独立的 Cognee API 服务器）
 # 2. 如果未安装，代码会自动回退到 Qdrant（代码中有容错处理）
-# 3. 配置方式：在 backend/config/memory.yaml 中设置 default_engine: "cognee"
-cognee>=0.4.1
+# 3. 配置方式：在 backend/config/memory.yaml 中设置 default_engine: "cognee" 和 api_url
+# 4. 轻量级 SDK（5-10MB），替代完整的 cognee 库（500MB-2GB）
+cognee-sdk>=0.1.1
 
-# Cognee 相关依赖约束
-# 注意：这些约束帮助 pip 快速解析依赖，避免 resolution-too-deep 错误
-aiohttp>=3.11.14,<4.0.0
-yarl>=1.22.0,<2.0.0
-fastapi-users[sqlalchemy]>=14.0.2,<15.0.0
-tokenizers>=0.22.1,<=0.23.0
-hf-xet>=1.2.0,<2.0.0
-
-# NumPy 版本约束（cognee 需要更高版本）
-# 注意：
-# 1. cognee>=0.4.1 要求 numpy>=1.26.4,<=4.0.0
-# 2. 但 torch/sentence-transformers 等模块是用 NumPy 1.x 编译的，不兼容 NumPy 2.x
-# 3. 因此限制为 numpy>=1.26.4,<2.0.0 以避免 NumPy 2.x
-numpy>=1.26.4,<2.0.0
-
-# grpcio 版本约束（litellm 的依赖，cognee 间接依赖）
-# 注意：litellm 1.80.7 要求 grpcio<1.68.0,>=1.62.3
-# 必须限制 grpcio 版本以满足 litellm 的要求
-grpcio>=1.62.3,<1.68.0
-# grpcio-tools 版本约束（qdrant-client 的依赖）
-# 注意：grpcio-tools 版本必须与 grpcio 版本匹配，qdrant-client 需要 grpcio-tools
-grpcio-tools>=1.62.3,<1.68.0
-# bcrypt 版本约束（防止 pwdlib 升级到 4.x）
-# 注意：pwdlib（fastapi-users 的依赖）需要 bcrypt，但没有版本限制，可能安装 4.x
-# passlib 1.7.4 需要 bcrypt 3.x（4.x 移除了 __about__ 属性）
-# 必须固定为 3.2.2 以兼容 passlib 1.7.4（4.x 版本移除了 __about__ 属性）
-# 注意：在 Docker 安装脚本中，安装完 cognee.txt 后会强制重新安装 bcrypt==3.2.2
-#bcrypt==3.2.2  # 注释掉，避免 pip install 时版本冲突，在 Docker 安装脚本中强制安装
-# 注意：这些是 cognee 的可选依赖，安装后可以消除警告
-protego>=0.1  # 用于网页内容提取（cognee 可选依赖）
-playwright>=1.9.0  # 用于浏览器自动化（cognee 可选依赖）
+# Cognee SDK 相关依赖（SDK 本身已包含，这里列出用于参考）
+# 注意：cognee-sdk 的依赖：
+# - httpx>=0.25.0（HTTP 客户端）
+# - pydantic>=2.0.0（数据验证）
+# - typing-extensions>=4.0.0（类型扩展）
+# 
+# 可选依赖（WebSocket 支持）：
+# - websockets>=12.0（pip install cognee-sdk[websocket]）
+#
+# 注意：不再需要以下 cognee 库的依赖：
+# - aiohttp, yarl, fastapi-users, tokenizers, hf-xet
+# - numpy, grpcio 等（这些由 SDK 的依赖管理）
 
