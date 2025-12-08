@@ -12,14 +12,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, and_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, and_, func, select
 
 # 本地库
 from app.api.deps import (
-    get_current_active_user,
-    get_sync_session,
+    get_current_active_user_async,
+    get_db,
     get_personality_registry,
     get_llm_engine_pool,
+    get_sync_session,
 )
 from app.core.personality import PersonalityRegistry
 from app.engines.ai.engine_pool import LLMEnginePool
@@ -122,8 +124,8 @@ class GenerateTitleResponse(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateSessionResponse)
 async def create_session(
     request: CreateSessionRequest,
-    user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session),
+    user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
     personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> CreateSessionResponse:
     """创建会话
@@ -156,8 +158,8 @@ async def create_session(
         )
         
         db.add(session)
-        db.commit()
-        db.refresh(session)
+        await db.commit()
+        await db.refresh(session)
         
         # 如果 personality 有欢迎词，自动创建一条助手消息
         if personality.welcome_message:
@@ -172,7 +174,7 @@ async def create_session(
             # 更新会话统计信息
             session.message_count = 1  # type: ignore[assignment]
             session.last_message_at = welcome_message.created_at  # type: ignore[assignment]
-            db.commit()
+            await db.commit()
             
             logger.info(
                 "Welcome message added to session",
@@ -203,7 +205,7 @@ async def create_session(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to create session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -218,8 +220,8 @@ async def list_sessions(
     personality_id: Optional[str] = Query(None, description="人格ID过滤"),
     sort: str = Query("created_at", description="排序字段"),
     order: str = Query("desc", description="排序方向：asc/desc"),
-    user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session),
+    user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
     personality_registry: PersonalityRegistry = Depends(get_personality_registry),
 ) -> SessionsListResponse:
     """列出用户会话
@@ -237,8 +239,8 @@ async def list_sessions(
         SessionsListResponse: 会话列表
     """
     try:
-        # 构建查询
-        query = db.query(SessionModel).filter(
+        # 构建查询（异步版本）
+        stmt = select(SessionModel).where(
             and_(
                 SessionModel.user_id == user.id,
                 SessionModel.deleted_at.is_(None)
@@ -247,7 +249,7 @@ async def list_sessions(
         
         # 人格过滤
         if personality_id:
-            query = query.filter(SessionModel.personality_id == personality_id)
+            stmt = stmt.where(SessionModel.personality_id == personality_id)
         
         # 排序
         # 如果按 last_message_at 排序，需要处理 null 值（使用 created_at 作为后备）
@@ -256,23 +258,27 @@ async def list_sessions(
             # 使用部分索引 idx_sessions_user_deleted_lastmsg 优化此查询
             sort_column = func.coalesce(SessionModel.last_message_at, SessionModel.created_at)
             if order == "desc":
-                query = query.order_by(desc(sort_column))
+                stmt = stmt.order_by(desc(sort_column))
             else:
-                query = query.order_by(sort_column)
+                stmt = stmt.order_by(sort_column)
         else:
             # 使用部分索引 idx_sessions_user_deleted_created 优化此查询
             sort_column = getattr(SessionModel, sort, SessionModel.created_at)
             if order == "desc":
-                query = query.order_by(desc(sort_column))
+                stmt = stmt.order_by(desc(sort_column))
             else:
-                query = query.order_by(sort_column)
+                stmt = stmt.order_by(sort_column)
         
         # 总数（优化：使用子查询避免重复计算）
-        total = query.count()
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar_one()
         
         # 分页
         offset = (page - 1) * page_size
-        sessions = query.offset(offset).limit(page_size).all()
+        stmt = stmt.offset(offset).limit(page_size)
+        result = await db.execute(stmt)
+        sessions = result.scalars().all()
         
         # 构建响应
         items = []
@@ -311,7 +317,7 @@ async def list_sessions(
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session(
     session_id: str,
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(get_current_active_user_async),
     db: Session = Depends(get_sync_session)
 ) -> SessionDetailResponse:
     """获取会话详情
@@ -347,16 +353,19 @@ async def get_session(
                 detail=f"Invalid session ID format: {str(e)}"
             )
         
-        # 查询会话（使用joinedload优化，避免N+1查询）
-        session = db.query(SessionModel).options(
-            joinedload(SessionModel.messages)
-        ).filter(
+        # 查询会话（异步版本，使用selectinload优化，避免N+1查询）
+        from sqlalchemy.orm import selectinload
+        stmt = select(SessionModel).options(
+            selectinload(SessionModel.messages)
+        ).where(
             and_(
                 SessionModel.id == session_uuid,
                 SessionModel.user_id == user.id,
                 SessionModel.deleted_at.is_(None)
             )
-        ).first()
+        )
+        result = await db.execute(stmt)
+        session = result.scalar_one_or_none()
         
         if not session:
             raise HTTPException(
@@ -364,7 +373,7 @@ async def get_session(
                 detail="Session not found"
             )
         
-        # 消息已通过joinedload加载，直接使用关系属性
+        # 消息已通过selectinload加载，直接使用关系属性
         # 按创建时间排序
         messages = sorted(session.messages, key=lambda m: m.created_at)
         
@@ -417,7 +426,7 @@ async def get_session(
 async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(get_current_active_user_async),
     db: Session = Depends(get_sync_session)
 ) -> UpdateSessionResponse:
     """更新会话
@@ -458,8 +467,8 @@ async def update_session(
             session.title = request.title  # type: ignore[assignment]
         
         session.updated_at = datetime.utcnow()  # type: ignore[assignment]
-        db.commit()
-        db.refresh(session)
+        await db.commit()
+        await db.refresh(session)
         
         logger.info(
             "Updated session",
@@ -480,7 +489,7 @@ async def update_session(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to update session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -492,8 +501,8 @@ async def update_session(
 async def generate_session_title(
     session_id: str,
     request: GenerateTitleRequest,
-    user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session),
+    user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
     engine_pool: LLMEnginePool = Depends(get_llm_engine_pool),
 ) -> GenerateTitleResponse:
     """生成或更新会话标题
@@ -544,12 +553,14 @@ async def generate_session_title(
             message_count = session_msg_count
         else:
             # Fallback: 查询实际消息数
-            messages = db.query(MessageModel).filter(
+            stmt = select(MessageModel).where(
                 and_(
                     MessageModel.session_id == session_uuid,
                     MessageModel.role.in_(["user", "assistant"])
                 )
-            ).order_by(MessageModel.created_at.asc()).all()
+            ).order_by(MessageModel.created_at.asc())
+            result = await db.execute(stmt)
+            messages = result.scalars().all()
             message_count = len(messages)
         
         if not request.force:
@@ -575,12 +586,14 @@ async def generate_session_title(
         # 查询消息内容（用于生成标题）
         # 构建消息内容（限制消息数量）
         max_messages = request.max_messages or settings.session_title_max_messages
-        messages = db.query(MessageModel).filter(
+        stmt = select(MessageModel).where(
             and_(
                 MessageModel.session_id == session_uuid,
                 MessageModel.role.in_(["user", "assistant"])
             )
-        ).order_by(MessageModel.created_at.asc()).limit(max_messages).all()
+        ).order_by(MessageModel.created_at.asc()).limit(max_messages)
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
         messages_for_title = messages
         
         # 构建消息文本
@@ -636,7 +649,7 @@ async def generate_session_title(
             session.title = title  # type: ignore[assignment]
             session.title_generated_at = datetime.utcnow()  # type: ignore[assignment]
             session.updated_at = datetime.utcnow()  # type: ignore[assignment]
-            db.commit()
+            await db.commit()
             db.refresh(session)
             
             logger.info(
@@ -670,7 +683,7 @@ async def generate_session_title(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to generate session title: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -681,7 +694,7 @@ async def generate_session_title(
 @router.delete("/{session_id}", response_model=DeleteSessionResponse)
 async def delete_session(
     session_id: str,
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(get_current_active_user_async),
     db: Session = Depends(get_sync_session)
 ) -> DeleteSessionResponse:
     """删除会话（软删除）
@@ -702,13 +715,15 @@ async def delete_session(
         session_uuid = uuid.UUID(session_id)
         
         # 查询会话
-        session = db.query(SessionModel).filter(
+        stmt = select(SessionModel).where(
             and_(
                 SessionModel.id == session_uuid,
                 SessionModel.user_id == user.id,
                 SessionModel.deleted_at.is_(None)
             )
-        ).first()
+        )
+        result = await db.execute(stmt)
+        session = result.scalar_one_or_none()
         
         if not session:
             raise HTTPException(
@@ -721,11 +736,14 @@ async def delete_session(
         
         # 删除该会话的所有消息（物理删除，因为消息通常不需要恢复）
         # 注意：虽然 Message 表有 CASCADE，但软删除不会触发，需要手动删除
-        deleted_messages_count = db.query(MessageModel).filter(
+        from sqlalchemy import delete
+        delete_stmt = delete(MessageModel).where(
             MessageModel.session_id == session_uuid
-        ).delete()
+        )
+        result = await db.execute(delete_stmt)
+        deleted_messages_count = result.rowcount
         
-        db.commit()
+        await db.commit()
         
         logger.info(
             "Deleted session and messages",
@@ -749,7 +767,7 @@ async def delete_session(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to delete session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

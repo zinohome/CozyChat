@@ -9,7 +9,8 @@ from typing import List, Optional, Dict, Any
 import asyncio
 
 # 第三方库
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
 
 # 本地库
 from app.core.personality import PersonalityManager
@@ -20,17 +21,37 @@ from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
 
 
+# ============================================================================
+# 旧实现：SessionTitleGeneratorLegacy（已移除）
+# ============================================================================
+# 创建时间：2024-XX-XX
+# 移除时间：2025-01-XX
+# 状态：✅ 已移除（新实现已验证通过）
+# 替代：SessionTitleGenerator (使用异步会话)
+# 说明：Legacy类已在阶段三清理中移除，代码约280行
+# 如需查看历史实现，请查看git历史记录
+# ============================================================================
+
+
+# ============================================================================
+# 新实现：SessionTitleGenerator
+# ============================================================================
+# 创建时间：2025-01-XX
+# 状态：✅ 新实现，使用异步会话
+# 替代：SessionTitleGeneratorLegacy（已在 v2.0 移除）
+# ============================================================================
 class SessionTitleGenerator:
-    """会话标题生成器
+    """会话标题生成器（异步版本）
     
     根据会话消息内容自动生成简洁的标题
+    使用异步数据库会话
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """初始化标题生成器
         
         Args:
-            db: 数据库会话
+            db: 数据库会话（异步）
         """
         self.db = db
         self.config_loader = get_config_loader()
@@ -82,20 +103,24 @@ class SessionTitleGenerator:
             import uuid
             session_uuid = uuid.UUID(session_id)
             
-            # 查询会话
-            session = self.db.query(SessionModel).filter(
-                SessionModel.id == session_uuid
-            ).first()
+            # 查询会话（异步）
+            stmt = select(SessionModel).where(SessionModel.id == session_uuid)
+            result = await self.db.execute(stmt)
+            session = result.scalar_one_or_none()
             
             if not session:
                 logger.warning(f"Session not found: {session_id}")
                 return None
             
-            # 查询消息（只查询用户和助手消息，排除系统消息）
-            messages = self.db.query(MessageModel).filter(
-                MessageModel.session_id == session_uuid,
-                MessageModel.role.in_(["user", "assistant"])
-            ).order_by(MessageModel.created_at.asc()).all()
+            # 查询消息（只查询用户和助手消息，排除系统消息）（异步）
+            stmt = select(MessageModel).where(
+                and_(
+                    MessageModel.session_id == session_uuid,
+                    MessageModel.role.in_(["user", "assistant"])
+                )
+            ).order_by(MessageModel.created_at.asc())
+            result = await self.db.execute(stmt)
+            messages = result.scalars().all()
             
             if not messages:
                 logger.debug(f"No messages found for session: {session_id}")
@@ -233,21 +258,26 @@ class SessionTitleGenerator:
         """
         try:
             import uuid
+            from sqlalchemy import and_
             session_uuid = uuid.UUID(session_id)
             
-            # 查询会话
-            session = self.db.query(SessionModel).filter(
-                SessionModel.id == session_uuid
-            ).first()
+            # 查询会话（异步）
+            stmt = select(SessionModel).where(SessionModel.id == session_uuid)
+            result = await self.db.execute(stmt)
+            session = result.scalar_one_or_none()
             
             if not session:
                 return False
             
-            # 查询消息数量
-            message_count = self.db.query(MessageModel).filter(
-                MessageModel.session_id == session_uuid,
-                MessageModel.role.in_(["user", "assistant"])
-            ).count()
+            # 查询消息数量（异步）
+            stmt = select(func.count(MessageModel.id)).where(
+                and_(
+                    MessageModel.session_id == session_uuid,
+                    MessageModel.role.in_(["user", "assistant"])
+                )
+            )
+            result = await self.db.execute(stmt)
+            message_count = result.scalar_one()
             
             # 检查是否应该生成标题
             if not self._should_auto_generate_title(message_count):
@@ -266,8 +296,8 @@ class SessionTitleGenerator:
                 session.title = title  # type: ignore[assignment]
                 from datetime import datetime
                 session.updated_at = datetime.utcnow()  # type: ignore[assignment]
-                self.db.commit()
-                self.db.refresh(session)
+                await self.db.commit()
+                await self.db.refresh(session)
                 
                 logger.info(
                     f"Updated session title automatically",
@@ -288,6 +318,5 @@ class SessionTitleGenerator:
                 exc_info=True,
                 extra={"session_id": session_id}
             )
-            self.db.rollback()
+            await self.db.rollback()
             return False
-

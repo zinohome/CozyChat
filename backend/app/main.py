@@ -24,6 +24,27 @@ from app.config.config import settings
 from app.models.base import close_db, init_db
 from app.middleware.performance import PerformanceMiddleware
 from app.middleware.rate_limit import limiter, rate_limit_handler
+from app.middleware.exception_handler import (
+    cozy_exception_handler,
+    general_exception_handler,
+    chat_service_error_handler,
+    context_service_error_handler,
+    message_service_error_handler,
+    authentication_error_handler,
+    authorization_error_handler,
+    validation_error_handler,
+    resource_not_found_error_handler,
+)
+from app.utils.exceptions import (
+    CozyError,
+    ChatServiceError,
+    ContextServiceError,
+    MessageServiceError,
+    AuthenticationError,
+    AuthorizationError,
+    ValidationError,
+    ResourceNotFoundError,
+)
 from app.utils.logger import logger
 from app.utils.cache import cache_manager
 from slowapi.errors import RateLimitExceeded
@@ -440,25 +461,22 @@ if STATIC_DIR.exists():
 
 
 # ===== 全局异常处理器 =====
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc: Exception):
-    """全局异常处理器
-    
-    捕获所有未处理的异常并返回统一格式的错误响应
-    """
-    logger.error(
-        f"Unhandled exception: {exc}",
-        exc_info=True,
-        extra={"path": request.url.path, "method": request.method}
-    )
-    
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "message": str(exc) if settings.is_development else "An error occurred"
-        }
-    )
+# 注意：异常处理器按注册顺序匹配，先注册具体的异常类型，最后注册通用异常
+
+# 业务异常处理器（按优先级注册）
+app.add_exception_handler(ChatServiceError, chat_service_error_handler)
+app.add_exception_handler(ContextServiceError, context_service_error_handler)
+app.add_exception_handler(MessageServiceError, message_service_error_handler)
+app.add_exception_handler(AuthenticationError, authentication_error_handler)
+app.add_exception_handler(AuthorizationError, authorization_error_handler)
+app.add_exception_handler(ValidationError, validation_error_handler)
+app.add_exception_handler(ResourceNotFoundError, resource_not_found_error_handler)
+
+# CozyError基础异常处理器（处理所有CozyError子类，如果没有特定处理器）
+app.add_exception_handler(CozyError, cozy_exception_handler)
+
+# 通用异常处理器（最后注册，捕获所有其他异常）
+app.add_exception_handler(Exception, general_exception_handler)
 
 
 # ===== 自定义 Swagger UI 路由 =====

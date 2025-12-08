@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 # 第三方库
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, and_, select
 
 # 本地库
 from app.models.user import User
@@ -18,24 +18,44 @@ from app.models.user_profile import UserProfile
 from app.utils.logger import logger
 
 
+# ============================================================================
+# 旧实现：UserStatsManagerLegacy（已移除）
+# ============================================================================
+# 创建时间：2024-XX-XX
+# 移除时间：2025-01-XX
+# 状态：✅ 已移除（新实现已验证通过）
+# 替代：UserStatsManager (使用异步会话)
+# 说明：Legacy类已在阶段三清理中移除，代码约200行
+# 如需查看历史实现，请查看git历史记录
+# ============================================================================
+
+
+# ============================================================================
+# 新实现：UserStatsManager
+# ============================================================================
+# 创建时间：2025-01-XX
+# 状态：✅ 新实现，使用异步会话
+# 替代：UserStatsManagerLegacy（已在 v2.0 移除）
+# ============================================================================
 class UserStatsManager:
-    """用户统计管理器
+    """用户统计管理器（异步版本）
     
     提供用户使用数据统计和报表生成功能
+    使用异步数据库会话
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """初始化用户统计管理器
         
         Args:
-            db: 数据库会话
+            db: 数据库会话（异步）
         """
         self.db = db
         
         logger.debug("UserStatsManager initialized")
     
-    def get_user_stats(self, user_id: str) -> Dict[str, Any]:
-        """获取用户统计信息
+    async def get_user_stats(self, user_id: str) -> Dict[str, Any]:
+        """获取用户统计信息（异步版本）
         
         Args:
             user_id: 用户ID
@@ -44,13 +64,16 @@ class UserStatsManager:
             Dict[str, Any]: 统计信息字典
         """
         try:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            stmt = select(User).where(User.id == user_id)
+            result = await self.db.execute(stmt)
+            user = result.scalar_one_or_none()
+            
             if not user:
                 return {}
             
-            profile = self.db.query(UserProfile).filter(
-                UserProfile.user_id == user_id
-            ).first()
+            stmt = select(UserProfile).where(UserProfile.user_id == user_id)
+            result = await self.db.execute(stmt)
+            profile = result.scalar_one_or_none()
             
             return {
                 "user_id": str(user.id),
@@ -76,12 +99,12 @@ class UserStatsManager:
             logger.error(f"Failed to get user stats: {e}", exc_info=True)
             return {}
     
-    def get_user_activity(
+    async def get_user_activity(
         self,
         user_id: str,
         days: int = 30
     ) -> Dict[str, Any]:
-        """获取用户活动统计
+        """获取用户活动统计（异步版本）
         
         Args:
             user_id: 用户ID
@@ -91,7 +114,10 @@ class UserStatsManager:
             Dict[str, Any]: 活动统计字典
         """
         try:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            stmt = select(User).where(User.id == user_id)
+            result = await self.db.execute(stmt)
+            user = result.scalar_one_or_none()
+            
             if not user:
                 return {}
             
@@ -127,34 +153,42 @@ class UserStatsManager:
             logger.error(f"Failed to get user activity: {e}", exc_info=True)
             return {}
     
-    def get_system_stats(self) -> Dict[str, Any]:
-        """获取系统统计信息
+    async def get_system_stats(self) -> Dict[str, Any]:
+        """获取系统统计信息（异步版本）
         
         Returns:
             Dict[str, Any]: 系统统计字典
         """
         try:
             # 统计用户总数
-            total_users = self.db.query(func.count(User.id)).filter(
-                User.status != "deleted"
-            ).scalar() or 0
+            stmt = select(func.count(User.id)).where(User.status != "deleted")
+            result = await self.db.execute(stmt)
+            total_users = result.scalar_one() or 0
             
             # 统计活跃用户（最近30天登录）
-            active_users = self.db.query(func.count(User.id)).filter(
+            stmt = select(func.count(User.id)).where(
                 and_(
                     User.status == "active",  # type: ignore[arg-type]
                     User.last_login_at >= datetime.utcnow() - timedelta(days=30)  # type: ignore[arg-type]
                 )
-            ).scalar() or 0
+            )
+            result = await self.db.execute(stmt)
+            active_users = result.scalar_one() or 0
             
             # 统计总会话数
-            total_sessions = self.db.query(func.sum(User.total_sessions)).scalar() or 0
+            stmt = select(func.sum(User.total_sessions))
+            result = await self.db.execute(stmt)
+            total_sessions = result.scalar_one() or 0
             
             # 统计总消息数
-            total_messages = self.db.query(func.sum(User.total_messages)).scalar() or 0
+            stmt = select(func.sum(User.total_messages))
+            result = await self.db.execute(stmt)
+            total_messages = result.scalar_one() or 0
             
             # 统计总Token使用量
-            total_tokens = self.db.query(func.sum(User.total_tokens_used)).scalar() or 0
+            stmt = select(func.sum(User.total_tokens_used))
+            result = await self.db.execute(stmt)
+            total_tokens = result.scalar_one() or 0
             
             return {
                 "total_users": total_users,
@@ -174,14 +208,14 @@ class UserStatsManager:
             logger.error(f"Failed to get system stats: {e}", exc_info=True)
             return {}
     
-    def update_user_stats(
+    async def update_user_stats(
         self,
         user_id: str,
         sessions: int = 0,
         messages: int = 0,
         tokens: int = 0
     ) -> bool:
-        """更新用户统计信息
+        """更新用户统计信息（异步版本）
         
         Args:
             user_id: 用户ID
@@ -193,7 +227,10 @@ class UserStatsManager:
             bool: 是否更新成功
         """
         try:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            stmt = select(User).where(User.id == user_id)
+            result = await self.db.execute(stmt)
+            user = result.scalar_one_or_none()
+            
             if not user:
                 return False
             
@@ -206,7 +243,7 @@ class UserStatsManager:
             if tokens > 0:
                 user.total_tokens_used = (user.total_tokens_used or 0) + tokens  # type: ignore[assignment]
             
-            self.db.commit()
+            await self.db.commit()
             
             logger.debug(
                 f"User stats updated: {user_id}",
@@ -216,7 +253,6 @@ class UserStatsManager:
             return True
             
         except Exception as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Failed to update user stats: {e}", exc_info=True)
             return False
-

@@ -12,9 +12,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # 本地库
-from app.api.deps import get_sync_session, get_current_active_user
+from app.api.deps import get_db, get_current_active_user_async
 from app.models.user import User
 from app.engines.memory import get_memory_manager, MemoryType
 from app.middleware.rate_limit import rate_limit
@@ -45,7 +46,7 @@ async def create_memory(
     request: Request,
     memory: MemoryCreate,
     response: Response,
-    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
 ):
     """创建记忆
     
@@ -96,7 +97,7 @@ async def search_memories(
     request: Request,
     data: MemorySearchRequest,
     response: Response,
-    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
 ):
     """搜索记忆
     
@@ -163,7 +164,7 @@ async def search_memories(
 @router.get("/stats/{user_id}", response_model=MemoryStatsResponse)
 async def get_memory_stats(
     user_id: str,
-    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
 ):
     """获取记忆统计信息
     
@@ -198,7 +199,7 @@ async def get_memory_stats(
 async def delete_memory(
     memory_id: str,
     user_id: str,
-    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
 ):
     """删除记忆
     
@@ -243,7 +244,7 @@ async def delete_memory(
 async def delete_session_memories(
     user_id: str,
     session_id: str,
-    current_user: User = Depends(get_current_active_user),  # 添加认证要求
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
 ):
     """删除会话的所有记忆
     

@@ -7,8 +7,8 @@ MessageSaver服务单元测试
 import pytest
 import uuid
 from datetime import datetime
-from unittest.mock import Mock, AsyncMock, patch
-from sqlalchemy.orm import Session
+from unittest.mock import Mock, AsyncMock, MagicMock, patch
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.chat.message_saver import MessageSaver
 from app.models.message import Message as MessageModel
@@ -20,12 +20,16 @@ class TestMessageSaver:
     
     @pytest.fixture
     def mock_db(self):
-        """创建模拟数据库会话"""
-        db = Mock(spec=Session)
-        db.query.return_value.filter.return_value.first.return_value = None
-        db.add = Mock()
-        db.commit = Mock()
-        db.rollback = Mock()
+        """创建模拟数据库会话（异步）"""
+        db = AsyncMock(spec=AsyncSession)
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
+        # 配置execute返回结果
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        db.execute = AsyncMock(return_value=mock_result)
         return db
     
     @pytest.fixture
@@ -70,7 +74,10 @@ class TestMessageSaver:
         assistant_message = "你好！有什么可以帮助你的吗？"
         model = "gpt-3.5-turbo"
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -105,7 +112,10 @@ class TestMessageSaver:
         user_message = "介绍一下量子计算"
         assistant_message = "量子计算是基于量子力学原理的新型计算方式..."
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -121,7 +131,7 @@ class TestMessageSaver:
         # Assert
         assert result is True
         mock_db.commit.assert_called_once()
-        mock_memory_manager.add_conversation_turn.assert_called_once_with(
+        mock_memory_manager.add_conversation_turn.assert_awaited_once_with(
             user_id=user_id,
             session_id=session_id,
             user_message=user_message,
@@ -146,7 +156,10 @@ class TestMessageSaver:
         assistant_message = "测试回复"
         
         mock_personality.memory.enabled = False
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -178,7 +191,10 @@ class TestMessageSaver:
         user_message = "测试"
         assistant_message = "回复"
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -239,7 +255,10 @@ class TestMessageSaver:
         user_message = "测试"
         assistant_message = "回复"
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         mock_memory_manager.add_conversation_turn.side_effect = Exception("Memory error")
         
         # Act
@@ -298,7 +317,10 @@ class TestMessageSaver:
         assistant_message = "测试回复"
         
         mock_session_model.message_count = 10
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -327,7 +349,10 @@ class TestMessageSaver:
         user_message = "测试"
         assistant_message = "回复"
         
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # 配置execute返回None（会话不存在）
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -357,7 +382,10 @@ class TestMessageSaver:
         user_message = ""
         assistant_message = ""
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # Act
         result = await message_saver.save_conversation_turn(
@@ -387,7 +415,10 @@ class TestMessageSaver:
         assistant_message = "回复"
         model = "gpt-4"
         
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_session_model
+        # 配置execute返回会话模型
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_session_model)
+        mock_db.execute = AsyncMock(return_value=mock_result)
         
         # 捕获add的调用参数
         added_messages = []

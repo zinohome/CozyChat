@@ -1,11 +1,23 @@
 """全局异常处理器
 
 集成Sentry监控，自动捕获和上报异常
+统一处理所有业务异常
 """
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from app.utils.exceptions import CozyError
+from app.utils.exceptions import (
+    CozyError,
+    ChatServiceError,
+    ContextServiceError,
+    MessageServiceError,
+    ToolServiceError,
+    MemoryServiceError,
+    AuthenticationError,
+    AuthorizationError,
+    ValidationError,
+    ResourceNotFoundError,
+)
 from app.utils.logger import logger
 
 
@@ -81,5 +93,119 @@ async def general_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"error": {"code": "INTERNAL_ERROR", "message": "Internal server error"}}
+    )
+
+
+# ============================================================================
+# 业务异常处理器（新增）
+# ============================================================================
+# 创建时间：2025-01-XX
+# 状态：✅ 统一业务异常处理
+# ============================================================================
+
+async def chat_service_error_handler(request: Request, exc: ChatServiceError):
+    """处理聊天服务异常"""
+    logger.error(
+        f"ChatServiceError: {exc.code} - {exc.message}",
+        exc_info=True,
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    # 发送到Sentry
+    try:
+        from app.utils.monitoring import capture_exception, set_context
+        set_context("chat_service_error", {
+            "error_code": exc.code,
+            "error_message": exc.message,
+            "request_path": str(request.url.path),
+        })
+        capture_exception(exc, level="error")
+    except Exception:
+        pass
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": {"code": exc.code, "message": exc.message}}
+    )
+
+
+async def context_service_error_handler(request: Request, exc: ContextServiceError):
+    """处理上下文服务异常"""
+    logger.error(
+        f"ContextServiceError: {exc.code} - {exc.message}",
+        exc_info=True,
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": {"code": exc.code, "message": exc.message}}
+    )
+
+
+async def message_service_error_handler(request: Request, exc: MessageServiceError):
+    """处理消息服务异常"""
+    logger.error(
+        f"MessageServiceError: {exc.code} - {exc.message}",
+        exc_info=True,
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"error": {"code": exc.code, "message": exc.message}}
+    )
+
+
+async def authentication_error_handler(request: Request, exc: AuthenticationError):
+    """处理认证异常"""
+    logger.warning(
+        f"AuthenticationError: {exc.code} - {exc.message}",
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"error": {"code": exc.code, "message": exc.message}},
+        headers={"WWW-Authenticate": "Bearer"}
+    )
+
+
+async def authorization_error_handler(request: Request, exc: AuthorizationError):
+    """处理授权异常"""
+    logger.warning(
+        f"AuthorizationError: {exc.code} - {exc.message}",
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={"error": {"code": exc.code, "message": exc.message}}
+    )
+
+
+async def validation_error_handler(request: Request, exc: ValidationError):
+    """处理验证异常"""
+    logger.warning(
+        f"ValidationError: {exc.code} - {exc.message}",
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"error": {"code": exc.code, "message": exc.message}}
+    )
+
+
+async def resource_not_found_error_handler(request: Request, exc: ResourceNotFoundError):
+    """处理资源未找到异常"""
+    logger.warning(
+        f"ResourceNotFoundError: {exc.code} - {exc.message}",
+        extra={"code": exc.code, "path": request.url.path}
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": {"code": exc.code, "message": exc.message}}
     )
 

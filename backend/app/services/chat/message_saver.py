@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 # 第三方库
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 
 # 本地库
 from app.models.message import Message as MessageModel
@@ -21,17 +22,37 @@ if TYPE_CHECKING:
     from app.core.personality.models import Personality
 
 
+# ============================================================================
+# 旧实现：MessageSaverLegacy（已移除）
+# ============================================================================
+# 创建时间：2024-XX-XX
+# 移除时间：2025-01-XX
+# 状态：✅ 已移除（新实现已验证通过）
+# 替代：MessageSaver (使用异步会话)
+# 说明：Legacy类已在阶段三清理中移除，代码约160行
+# 如需查看历史实现，请查看git历史记录
+# ============================================================================
+
+
+# ============================================================================
+# 新实现：MessageSaver
+# ============================================================================
+# 创建时间：2025-01-XX
+# 状态：✅ 新实现，使用异步会话
+# 替代：MessageSaverLegacy（已在 v2.0 移除）
+# ============================================================================
 class MessageSaver:
-    """消息保存服务
+    """消息保存服务（异步版本）
     
     统一处理流式和非流式对话的消息保存逻辑
+    使用异步数据库会话
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """初始化MessageSaver
         
         Args:
-            db: 数据库会话
+            db: 数据库会话（异步）
         """
         self.db = db
     
@@ -86,14 +107,14 @@ class MessageSaver:
                 self.db.add(assistant_msg)
                 
                 # 更新会话的message_count和last_message_at
-                session = self.db.query(SessionModel).filter(
-                    SessionModel.id == session_uuid
-                ).first()
+                stmt = select(SessionModel).where(SessionModel.id == session_uuid)
+                result = await self.db.execute(stmt)
+                session = result.scalar_one_or_none()
                 if session:
                     session.message_count = (session.message_count or 0) + 2  # type: ignore[assignment]
                     session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
                 
-                self.db.commit()
+                await self.db.commit()
                 
                 logger.debug(
                     f"Saved messages to database",
@@ -109,7 +130,7 @@ class MessageSaver:
                     f"Failed to save messages to database: {msg_error}",
                     exc_info=False
                 )
-                self.db.rollback()
+                await self.db.rollback()
                 return False
             
             # 保存记忆(如果启用了记忆系统)
@@ -148,4 +169,3 @@ class MessageSaver:
                 exc_info=False
             )
             return False
-

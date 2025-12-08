@@ -13,12 +13,14 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 
 # 本地库
-from app.api.deps import get_sync_session
+from app.api.deps import get_db, get_current_user_async
 from app.core.user.auth import AuthService
 from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 router = APIRouter(tags=["auth"])
 security = HTTPBearer()
@@ -45,7 +47,7 @@ async def refresh_token(
     request: Request,
     data: RefreshTokenRequest,
     response: Response,
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 统一使用异步会话
 ) -> RefreshTokenResponse:
     """刷新访问令牌
     
@@ -104,7 +106,9 @@ async def refresh_token(
                 detail="Invalid user ID format"
             )
         
-        user = db.query(User).filter(User.id == user_id_uuid).first()
+        stmt = select(User).where(User.id == user_id_uuid)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -11,9 +11,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 # 本地库
-from app.api.deps import get_current_active_user, get_sync_session
+from app.api.deps import get_current_active_user_async, get_db
 from app.config.config import settings
 from app.core.user.manager import UserManager
 from app.core.user.profile import UserProfileManager
@@ -112,7 +114,7 @@ async def register_user(
     request: Request,
     data: UserRegisterRequest,
     response: Response,
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """用户注册
     
@@ -173,7 +175,7 @@ async def login_user(
     request: Request,
     data: UserLoginRequest,
     response: Response,
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 统一使用异步会话
 ) -> AuthResponse:
     """用户登录
     
@@ -211,7 +213,7 @@ async def login_user(
 
 @router.get("/me")
 async def get_current_user_info(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user_async)  # 使用异步版本的认证
 ) -> UserResponse:
     """获取当前用户信息
     
@@ -237,8 +239,8 @@ async def get_current_user_info(
 @router.put("/me")
 async def update_current_user(
     request: UserUpdateRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """更新当前用户信息
     
@@ -288,7 +290,7 @@ async def update_current_user(
 
 @router.get("/me/preferences")
 async def get_user_preferences(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user_async)  # 使用异步版本的认证
 ) -> Dict[str, Any]:
     """获取用户偏好设置
     
@@ -306,8 +308,8 @@ async def get_user_preferences(
 @router.put("/me/preferences")
 async def update_user_preferences(
     request: UserPreferencesUpdateRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """更新用户偏好设置
     
@@ -354,8 +356,8 @@ async def update_user_preferences(
                 detail="用户不存在"
             )
         
-        # 刷新数据库会话，确保获取最新数据
-        db.refresh(user)
+        # 刷新数据库会话，确保获取最新数据（异步版本）
+        await db.refresh(user)
         
         updated_preferences = user.get_preferences()
         logger.info(f"User preferences updated: user_id={current_user.id}, preferences={updated_preferences}")
@@ -377,8 +379,8 @@ async def update_user_preferences(
 
 @router.get("/me/profile")
 async def get_user_profile(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """获取用户资料（包含基本信息和画像）
     
@@ -390,9 +392,9 @@ async def get_user_profile(
         Dict[str, Any]: 用户资料（包含 display_name, bio, avatar_url, interests 等）
     """
     try:
-        # 获取用户画像
+        # 获取用户画像（使用异步版本）
         profile_manager = UserProfileManager(db)
-        profile = profile_manager.get_profile(str(current_user.id))
+        profile = await profile_manager.get_profile(str(current_user.id))
         
         # 构建用户资料响应，包含用户基本信息和画像
         result: Dict[str, Any] = {
@@ -437,8 +439,8 @@ class UserProfileUpdateRequest(BaseModel):
 @router.put("/me/profile")
 async def update_user_profile(
     request: UserProfileUpdateRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """更新用户资料（包含基本信息和画像）
     
@@ -489,9 +491,9 @@ async def update_user_profile(
                 updates=profile_updates
             )
         
-        # 获取更新后的用户资料
+        # 获取更新后的用户资料（使用异步版本）
         profile_manager = UserProfileManager(db)
-        profile = profile_manager.get_profile(str(current_user.id))
+        profile = await profile_manager.get_profile(str(current_user.id))
         
         # 构建响应
         result: Dict[str, Any] = {
@@ -528,8 +530,8 @@ async def update_user_profile(
 
 @router.get("/me/stats")
 async def get_user_statistics(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_sync_session)
+    current_user: User = Depends(get_current_active_user_async),  # 使用异步版本的认证
+    db: AsyncSession = Depends(get_db),  # 统一使用异步会话
 ) -> Dict[str, Any]:
     """获取用户统计信息
     
@@ -542,7 +544,7 @@ async def get_user_statistics(
     """
     try:
         stats_manager = UserStatsManager(db)
-        stats = stats_manager.get_user_stats(str(current_user.id))
+        stats = await stats_manager.get_user_stats(str(current_user.id))
         
         return stats
         
