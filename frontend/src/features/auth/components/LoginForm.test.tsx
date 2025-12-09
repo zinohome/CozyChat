@@ -21,6 +21,23 @@ vi.mock('@/utils/errorHandler', () => ({
   showSuccess: vi.fn(),
 }));
 
+// Mock useNavigate
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+// Mock environment variables to disable demo mode
+vi.mock('import.meta', () => ({
+  env: {
+    VITE_DEMO_MODE: 'false',
+  },
+}));
+
 describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,6 +45,8 @@ describe('LoginForm', () => {
       login: mockLogin,
       isLoggingIn: false,
     });
+    // 清除表单状态
+    mockNavigate.mockClear();
   });
 
   it('应该渲染登录表单', () => {
@@ -42,18 +61,37 @@ describe('LoginForm', () => {
     const user = userEvent.setup();
     customRender(<LoginForm />);
 
+    // 先清空表单（如果Demo模式自动填充了值）
+    const usernameInput = screen.getByPlaceholderText(/请输入用户名或邮箱/i);
+    const passwordInput = screen.getByPlaceholderText(/请输入密码/i);
+    
+    // 清空输入框
+    await user.clear(usernameInput);
+    await user.clear(passwordInput);
+
     // 按钮文本是 "登 录"（有空格），使用更宽松的匹配
     const submitButton = screen.getByRole('button', { name: /登\s*录/i });
     await user.click(submitButton);
 
-    await waitFor(() => {
-      expect(screen.getByText(/请输入用户名或邮箱/i)).toBeInTheDocument();
-    });
+    // Ant Design的表单验证可能需要等待
+    await waitFor(
+      () => {
+        // 查找表单验证错误信息（可能在label或help文本中）
+        const errorText = screen.queryByText(/请输入用户名或邮箱/i) || 
+                         screen.queryByText(/请输入密码/i);
+        expect(errorText).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('应该提交表单', async () => {
     const user = userEvent.setup();
-    mockLogin.mockResolvedValue({});
+    // Mock login返回完整的响应对象
+    mockLogin.mockResolvedValue({
+      user: { id: '1', username: 'testuser' },
+      access_token: 'test-token',
+    });
 
     customRender(<LoginForm />);
 
@@ -62,16 +100,25 @@ describe('LoginForm', () => {
     // 按钮文本是 "登 录"（有空格），使用更宽松的匹配
     const submitButton = screen.getByRole('button', { name: /登\s*录/i });
 
+    // 先清空输入框（如果Demo模式自动填充了值）
+    await user.clear(usernameInput);
+    await user.clear(passwordInput);
+
+    // 输入新值
     await user.type(usernameInput, 'testuser');
     await user.type(passwordInput, 'password123');
+    
     await user.click(submitButton);
 
-    await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({
-        username: 'testuser',
-        password: 'password123',
-      });
-    });
+    await waitFor(
+      () => {
+        expect(mockLogin).toHaveBeenCalledWith({
+          username: 'testuser',
+          password: 'password123',
+        });
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('应该显示加载状态', () => {

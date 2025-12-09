@@ -25,6 +25,7 @@ const MediaRecorderMock = vi.fn().mockImplementation((_stream: any, _options?: a
 global.MediaRecorder = MediaRecorderMock as any;
 
 // Mock navigator.mediaDevices
+// 注意：setup.ts中已经mock了mediaDevices，这里只需要覆盖getUserMedia
 const mockStream = {
   getTracks: vi.fn(() => [
     {
@@ -33,13 +34,10 @@ const mockStream = {
   ]),
 };
 
-Object.defineProperty(global.navigator, 'mediaDevices', {
-  value: {
-    getUserMedia: vi.fn(() => Promise.resolve(mockStream)),
-  },
-  writable: true,
-  configurable: true,
-});
+// 覆盖getUserMedia方法（setup.ts中已经定义了mediaDevices）
+if (global.navigator.mediaDevices) {
+  (global.navigator.mediaDevices as any).getUserMedia = vi.fn(() => Promise.resolve(mockStream));
+}
 
 describe('useAudioRecorder', () => {
   beforeEach(() => {
