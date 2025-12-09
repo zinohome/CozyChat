@@ -12,7 +12,8 @@ from app.utils.logger import logger
 
 try:
     # 尝试导入 zhconv（如果已安装）
-    import zhconv  # type: ignore[import-untyped]
+    # 类型存根文件位于 stubs/zhconv/__init__.pyi
+    import zhconv
     ZHCONV_AVAILABLE = True
 except ImportError:
     ZHCONV_AVAILABLE = False

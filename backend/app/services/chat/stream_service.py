@@ -6,7 +6,7 @@
 # 标准库
 import asyncio
 import json
-from typing import Any, AsyncIterator, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, AsyncIterator, Dict, List, Optional, TYPE_CHECKING, cast
 
 # 本地库
 from app.engines.ai import ChatMessage as EngineChatMessage
@@ -110,7 +110,11 @@ class StreamChatService:
                     max_tokens=actual_max_tokens,
                     tools=tools
                 )
-                async for chunk in stream:  # type: ignore[misc,attr-defined]
+                # chat_stream返回AsyncIterator[StreamChunk]，使用类型注释明确类型
+                from app.engines.ai.base import StreamChunk
+                from typing import AsyncIterator
+                typed_stream: AsyncIterator[StreamChunk] = cast(AsyncIterator[StreamChunk], stream)
+                async for chunk in typed_stream:
                     chunk_dict = chunk.to_dict()
                     
                     # 检查是否有工具调用和内容
@@ -298,7 +302,8 @@ class StreamChatService:
             if not self.personality_registry:
                 return messages
             
-            personality = self.personality_registry.get_personality(str(personality_id))  # type: ignore[arg-type]
+            # personality_id已经是str类型，直接使用
+            personality = self.personality_registry.get_personality(personality_id)
             
             if personality and personality.ai.token_budget:
                 max_history_tokens = personality.ai.token_budget.max_history_tokens

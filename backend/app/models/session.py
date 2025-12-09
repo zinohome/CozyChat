@@ -73,16 +73,19 @@ class Session(SessionBase):
     
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
+        from typing import cast
+        from datetime import datetime
+        
         return {
             "id": str(self.id),
             "user_id": str(self.user_id),
             "personality_id": self.personality_id,
-            "title": str(self.title) if self.title else None,  # type: ignore[arg-type]
+            "title": cast(str, self.title) if self.title is not None else None,
             "metadata": self.session_metadata or {},
-            "message_count": int(self.message_count) if self.message_count is not None else 0,  # type: ignore[arg-type]
-            "total_tokens_used": int(self.total_tokens_used) if self.total_tokens_used is not None else 0,  # type: ignore[arg-type]
-            "created_at": self.created_at.isoformat() if self.created_at is not None else None,  # type: ignore[arg-type]
-            "updated_at": self.updated_at.isoformat() if self.updated_at is not None else None,  # type: ignore[arg-type]
-            "last_message_at": self.last_message_at.isoformat() if self.last_message_at is not None else None,  # type: ignore[arg-type]
+            "message_count": cast(int, self.message_count) if self.message_count is not None else 0,
+            "total_tokens_used": cast(int, self.total_tokens_used) if self.total_tokens_used is not None else 0,
+            "created_at": cast(datetime, self.created_at).isoformat() if self.created_at is not None else None,
+            "updated_at": cast(datetime, self.updated_at).isoformat() if self.updated_at is not None else None,
+            "last_message_at": cast(datetime, self.last_message_at).isoformat() if self.last_message_at is not None else None,
         }
 

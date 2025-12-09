@@ -7,6 +7,7 @@ FastAPI主应用入口
 # 标准库
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import cast
 
 # 第三方库
 from fastapi import FastAPI
@@ -156,9 +157,11 @@ async def lifespan(app: FastAPI):
                     )
                 else:
                     # 创建并启动Worker，复用已有的queue和engine
+                    # MemoryManager.engine是MemoryEngineBase类型，但类型检查器可能无法推断
+                    from app.engines.memory.base import MemoryEngineBase
                     memory_worker = MemoryWorker(
                         queue=memory_manager.queue,
-                        engine=memory_manager.engine,  # type: ignore[arg-type]
+                        engine=cast(MemoryEngineBase, memory_manager.engine),
                         deduplicator=memory_manager.deduplicator,  # 复用deduplicator
                         batch_size=settings.memory_batch_size
                     )
@@ -452,7 +455,10 @@ app.add_middleware(PerformanceMiddleware)
 
 # ===== 配置限流中间件 =====
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_handler)  # type: ignore[arg-type]
+# FastAPI的add_exception_handler接受Exception类型和handler函数
+# 类型检查器可能无法正确推断，但运行时是正确的
+# 添加详细注释说明为什么需要type: ignore
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)  # type: ignore[arg-type]  # FastAPI异常处理器类型推断
 
 # ===== 配置静态文件路由 =====
 # 挂载静态文件目录，提供 Swagger UI 和 ReDoc 的 JS 文件

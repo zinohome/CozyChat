@@ -99,19 +99,23 @@ class ContextService:
         )
         
         try:
-            # 并行获取各个组件
+            # 并行获取各个组件（性能优化：使用asyncio.gather并行执行独立任务）
+            # 注意：只并行执行真正独立的任务，避免None任务影响性能
             tasks = []
+            task_indices = {}  # 记录每个任务的索引，便于后续处理
             
-            # 1. 获取最近消息
+            # 1. 获取最近消息（总是需要）
             tasks.append(
                 self.message_retriever.get_recent_messages(session_id, recent_message_count)
             )
+            task_indices['recent_messages'] = 0
             
             # 2. 加载历史摘要（如果需要）
             if include_summaries:
                 tasks.append(self.summary_loader.load_history_summaries(session_id))
+                task_indices['summaries'] = len(tasks) - 1
             else:
-                tasks.append(None)
+                task_indices['summaries'] = None
             
             # 3. 检索记忆（如果需要）
             if include_memories:
@@ -123,20 +127,42 @@ class ContextService:
                         personality_config=personality_config
                     )
                 )
+                task_indices['memories'] = len(tasks) - 1
             else:
-                tasks.append(None)
+                task_indices['memories'] = None
             
-            # 4. 加载用户画像
+            # 4. 加载用户画像（总是需要）
             tasks.append(self.user_profile_loader.load_user_profile(user_id))
+            task_indices['user_profile'] = len(tasks) - 1
             
-            # 等待所有任务完成
+            # 等待所有任务完成（并行执行，提升性能）
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # 处理结果
-            recent_messages = results[0] if not isinstance(results[0], Exception) else []
-            summaries = results[1] if len(results) > 1 and not isinstance(results[1], Exception) and results[1] is not None else []
-            memories = results[2] if len(results) > 2 and not isinstance(results[2], Exception) and results[2] is not None else []
-            user_profile = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else None
+            # 处理结果（使用task_indices映射，更清晰）
+            recent_messages = (
+                results[task_indices['recent_messages']]
+                if not isinstance(results[task_indices['recent_messages']], Exception)
+                else []
+            )
+            summaries = (
+                results[task_indices['summaries']]
+                if task_indices['summaries'] is not None
+                and not isinstance(results[task_indices['summaries']], Exception)
+                and results[task_indices['summaries']] is not None
+                else []
+            )
+            memories = (
+                results[task_indices['memories']]
+                if task_indices['memories'] is not None
+                and not isinstance(results[task_indices['memories']], Exception)
+                and results[task_indices['memories']] is not None
+                else []
+            )
+            user_profile = (
+                results[task_indices['user_profile']]
+                if not isinstance(results[task_indices['user_profile']], Exception)
+                else None
+            )
             
             # 记录异常（如果有）
             for i, result in enumerate(results):

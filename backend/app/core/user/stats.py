@@ -16,6 +16,14 @@ from sqlalchemy import func, and_, select
 from app.models.user import User
 from app.models.user_profile import UserProfile
 from app.utils.logger import logger
+from app.utils.type_helpers import (
+    get_user_status,
+    get_user_role,
+    safe_int,
+    safe_str
+)
+from typing import cast
+from datetime import datetime
 
 
 # ============================================================================
@@ -77,15 +85,15 @@ class UserStatsManager:
             
             return {
                 "user_id": str(user.id),
-                "username": str(user.username),  # type: ignore[arg-type]
-                "email": str(user.email),  # type: ignore[arg-type]
-                "display_name": str(user.display_name) if user.display_name else None,  # type: ignore[arg-type]
-                "role": str(user.role),  # type: ignore[arg-type]
-                "status": str(user.status),  # type: ignore[arg-type]
-                "total_sessions": int(user.total_sessions) if user.total_sessions else 0,  # type: ignore[arg-type]
-                "total_messages": int(user.total_messages) if user.total_messages else 0,  # type: ignore[arg-type]
-                "total_tokens_used": int(user.total_tokens_used) if user.total_tokens_used else 0,  # type: ignore[arg-type]
-                "last_login_at": user.last_login_at.isoformat() if user.last_login_at is not None else None,  # type: ignore[arg-type]
+                "username": safe_str(user.username),
+                "email": safe_str(user.email),
+                "display_name": safe_str(user.display_name) if user.display_name else None,
+                "role": get_user_role(user),
+                "status": get_user_status(user),
+                "total_sessions": safe_int(user.total_sessions),
+                "total_messages": safe_int(user.total_messages),
+                "total_tokens_used": safe_int(user.total_tokens_used),
+                "last_login_at": cast(datetime, user.last_login_at).isoformat() if user.last_login_at is not None else None,
                 "created_at": user.created_at.isoformat(),
                 "profile": {
                     "interests": profile.interests if profile else [],
@@ -127,9 +135,9 @@ class UserStatsManager:
             
             # 这里应该查询会话和消息表，但表还未创建
             # 简化实现：返回基础统计
-            total_sessions = int(user.total_sessions) if user.total_sessions else 0  # type: ignore[arg-type]
-            total_messages = int(user.total_messages) if user.total_messages else 0  # type: ignore[arg-type]
-            total_tokens_used = int(user.total_tokens_used) if user.total_tokens_used else 0  # type: ignore[arg-type]
+            total_sessions = safe_int(user.total_sessions)
+            total_messages = safe_int(user.total_messages)
+            total_tokens_used = safe_int(user.total_tokens_used)
             
             return {
                 "user_id": str(user.id),
@@ -166,10 +174,12 @@ class UserStatsManager:
             total_users = result.scalar_one() or 0
             
             # 统计活跃用户（最近30天登录）
+            # 注意：SQLAlchemy Column类型在查询中可以直接与值比较，这是SQLAlchemy的正常用法
+            # 类型检查器无法理解这一点，因此需要type: ignore
             stmt = select(func.count(User.id)).where(
                 and_(
-                    User.status == "active",  # type: ignore[arg-type]
-                    User.last_login_at >= datetime.utcnow() - timedelta(days=30)  # type: ignore[arg-type]
+                    User.status == "active",  # type: ignore[arg-type]  # SQLAlchemy查询语法
+                    User.last_login_at >= datetime.utcnow() - timedelta(days=30)  # type: ignore[arg-type]  # SQLAlchemy查询语法
                 )
             )
             result = await self.db.execute(stmt)
@@ -235,13 +245,17 @@ class UserStatsManager:
                 return False
             
             if sessions > 0:
-                user.total_sessions = (user.total_sessions or 0) + sessions  # type: ignore[assignment]
+                # SQLAlchemy ORM属性赋值，使用cast明确类型
+                current_sessions = safe_int(user.total_sessions)
+                user.total_sessions = cast(int, current_sessions + sessions)
             
             if messages > 0:
-                user.total_messages = (user.total_messages or 0) + messages  # type: ignore[assignment]
+                current_messages = safe_int(user.total_messages)
+                user.total_messages = cast(int, current_messages + messages)
             
             if tokens > 0:
-                user.total_tokens_used = (user.total_tokens_used or 0) + tokens  # type: ignore[assignment]
+                current_tokens = safe_int(user.total_tokens_used)
+                user.total_tokens_used = cast(int, current_tokens + tokens)
             
             await self.db.commit()
             

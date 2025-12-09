@@ -97,8 +97,10 @@ class UserProfileManager:
                 self.db.add(profile)
             
             # 更新字段
+            # SQLAlchemy ORM属性赋值，使用cast明确类型
+            from typing import cast, List
             if interests is not None:
-                profile.interests = interests  # type: ignore[assignment]
+                profile.interests = cast(List[str], interests)
             
             if habits is not None:
                 profile.update_habits(habits)

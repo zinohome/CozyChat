@@ -63,7 +63,9 @@ class OllamaEngine(AIEngineBase):
                     for model_item in models_config 
                     if isinstance(model_item, dict) and "name" in model_item and model_item.get("name")
                 ]
-                self._supported_models = model_names if model_names else None  # type: ignore[assignment]
+                # 使用cast明确类型，避免类型检查器误报
+                from typing import cast
+                self._supported_models = cast(Optional[List[str]], model_names if model_names else None)
         except Exception as e:
             logger.warning(f"Failed to load model list from config: {e}")
             self._supported_models = None
@@ -165,7 +167,7 @@ class OllamaEngine(AIEngineBase):
                 "Ollama API call completed",
                 extra={
                     "response_id": response_id,
-                    "tokens": chat_response.usage["total_tokens"] if chat_response.usage else 0  # type: ignore[index]
+                    "tokens": (chat_response.usage.get("total_tokens", 0) if isinstance(chat_response.usage, dict) else (chat_response.usage.total_tokens if hasattr(chat_response.usage, 'total_tokens') else 0)) if chat_response.usage else 0
                 }
             )
             

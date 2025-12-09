@@ -115,7 +115,8 @@ class TencentSTTEngine(STTEngineBase):
             )
         
         # 创建凭证
-        from tencent_speech_sdk import credential  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import credential
         self.credential = credential.Credential(self.secret_id, self.secret_key)
         
         # 配置参数
@@ -292,7 +293,8 @@ class TencentSTTEngine(STTEngineBase):
         Returns:
             str: 识别的文本
         """
-        from tencent_speech_sdk import flash_recognizer  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import flash_recognizer
         
         # 创建识别器
         recognizer = flash_recognizer.FlashRecognizer(
@@ -364,7 +366,8 @@ class TencentSTTEngine(STTEngineBase):
         Returns:
             str: 识别的文本
         """
-        from tencent_speech_sdk import speech_recognizer  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import speech_recognizer
         
         # 创建结果收集器
         collector = ResultCollector()
@@ -455,7 +458,8 @@ class TencentSTTEngine(STTEngineBase):
                 return False
             
             # 尝试创建一个简单的识别器来验证凭证
-            from tencent_speech_sdk import flash_recognizer  # type: ignore[import-untyped]
+            # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+            from tencent_speech_sdk import flash_recognizer
             recognizer = flash_recognizer.FlashRecognizer(
                 self.app_id,
                 self.credential

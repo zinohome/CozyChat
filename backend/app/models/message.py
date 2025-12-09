@@ -90,6 +90,6 @@ class Message(MessageBase):
             "tool_calls": self.tool_calls or [],
             "memories_used": self.memories_used or [],
             "metadata": self.message_metadata or {},
-            "created_at": self.created_at.isoformat() if self.created_at is not None else None,  # type: ignore[arg-type]
+            "created_at": self.created_at.isoformat() if self.created_at is not None else None,
         }
 

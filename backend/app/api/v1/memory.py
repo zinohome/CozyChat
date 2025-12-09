@@ -28,6 +28,7 @@ from app.schemas.memory import (
     MemoryStatsResponse,
 )
 from app.utils.logger import logger
+from app.utils.type_helpers import get_user_role, is_admin_user
 
 router = APIRouter()
 
@@ -62,7 +63,7 @@ async def create_memory(
         memory_user_id = memory.user_id
         if memory_user_id:
             memory_user_uuid = uuid.UUID(str(memory_user_id))
-            if memory_user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+            if memory_user_uuid != current_user.id and not is_admin_user(current_user):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="无权为其他用户创建记忆"
@@ -113,7 +114,7 @@ async def search_memories(
         search_user_id = data.user_id
         if search_user_id:
             search_user_uuid = uuid.UUID(str(search_user_id))
-            if search_user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+            if search_user_uuid != current_user.id and not is_admin_user(current_user):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="无权搜索其他用户的记忆"
@@ -178,7 +179,7 @@ async def get_memory_stats(
     try:
         # 验证用户权限：只能查看自己的统计（除非是管理员）
         stats_user_uuid = uuid.UUID(str(user_id))
-        if stats_user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+        if stats_user_uuid != current_user.id and not is_admin_user(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权查看其他用户的统计信息"
@@ -214,7 +215,7 @@ async def delete_memory(
     try:
         # 验证用户权限：只能删除自己的记忆（除非是管理员）
         delete_user_uuid = uuid.UUID(str(user_id))
-        if delete_user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+        if delete_user_uuid != current_user.id and not is_admin_user(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权删除其他用户的记忆"
@@ -259,7 +260,7 @@ async def delete_session_memories(
     try:
         # 验证用户权限：只能删除自己的会话记忆（除非是管理员）
         delete_user_uuid = uuid.UUID(str(user_id))
-        if delete_user_uuid != current_user.id and str(current_user.role) != "admin":  # type: ignore[arg-type]
+        if delete_user_uuid != current_user.id and not is_admin_user(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权删除其他用户的会话记忆"

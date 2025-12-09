@@ -8,7 +8,7 @@ Qdrant记忆引擎实现
 import threading
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast, Union
 
 # 第三方库
 from qdrant_client import QdrantClient
@@ -182,12 +182,13 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 collection = self.client.get_collection(self.user_collection_name)
                 vectors_config = collection.config.params.vectors
                 # 处理不同的向量配置类型
+                # 使用类型注释和cast明确类型
                 if hasattr(vectors_config, 'size'):
-                    current_dim = vectors_config.size  # type: ignore
+                    current_dim = cast(int, getattr(vectors_config, 'size', None))
                 elif isinstance(vectors_config, dict):
                     # 如果是字典类型，取第一个向量的size
                     first_vector = next(iter(vectors_config.values())) if vectors_config else None
-                    current_dim = first_vector.size if first_vector and hasattr(first_vector, 'size') else None  # type: ignore
+                    current_dim = cast(int, getattr(first_vector, 'size', None)) if first_vector and hasattr(first_vector, 'size') else None
                 else:
                     current_dim = None
                 
@@ -220,12 +221,13 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 collection = self.client.get_collection(self.assistant_collection_name)
                 vectors_config = collection.config.params.vectors
                 # 处理不同的向量配置类型
+                # 使用类型注释和cast明确类型
                 if hasattr(vectors_config, 'size'):
-                    current_dim = vectors_config.size  # type: ignore
+                    current_dim = cast(int, getattr(vectors_config, 'size', None))
                 elif isinstance(vectors_config, dict):
                     # 如果是字典类型，取第一个向量的size
                     first_vector = next(iter(vectors_config.values())) if vectors_config else None
-                    current_dim = first_vector.size if first_vector and hasattr(first_vector, 'size') else None  # type: ignore
+                    current_dim = cast(int, getattr(first_vector, 'size', None)) if first_vector and hasattr(first_vector, 'size') else None
                 else:
                     current_dim = None
                 
@@ -380,10 +382,11 @@ class QdrantMemoryEngine(MemoryEngineBase):
                 embedding = model.encode(memory.content, convert_to_numpy=False, convert_to_tensor=True)
                 # 将tensor移到CPU并直接转换为list（跳过numpy）
                 # 类型检查：embedding 可能是 tensor 或 numpy array
+                # 使用类型注释明确类型
                 if hasattr(embedding, 'cpu') and callable(getattr(embedding, 'cpu', None)):
-                    embedding_raw = embedding.cpu().tolist()  # type: ignore
+                    embedding_raw = cast(List[float], getattr(embedding, 'cpu')().tolist())
                 elif hasattr(embedding, 'tolist') and callable(getattr(embedding, 'tolist', None)):
-                    embedding_raw = embedding.tolist()  # type: ignore
+                    embedding_raw = cast(List[float], getattr(embedding, 'tolist')())
                 elif isinstance(embedding, list):
                     embedding_raw = embedding
                 else:
@@ -486,9 +489,9 @@ class QdrantMemoryEngine(MemoryEngineBase):
                         embedding = model.encode(memory.content, convert_to_numpy=False, convert_to_tensor=True)
                         
                         if hasattr(embedding, 'cpu') and callable(getattr(embedding, 'cpu', None)):
-                            embedding_raw = embedding.cpu().tolist()  # type: ignore
+                            embedding_raw = cast(List[float], getattr(embedding, 'cpu')().tolist())
                         elif hasattr(embedding, 'tolist') and callable(getattr(embedding, 'tolist', None)):
-                            embedding_raw = embedding.tolist()  # type: ignore
+                            embedding_raw = cast(List[float], getattr(embedding, 'tolist')())
                         elif isinstance(embedding, list):
                             embedding_raw = embedding
                         else:
@@ -580,9 +583,9 @@ class QdrantMemoryEngine(MemoryEngineBase):
             # 将tensor移到CPU并直接转换为list（跳过numpy）
             # 类型检查：query_embedding 可能是 tensor 或 numpy array
             if hasattr(query_embedding, 'cpu') and callable(getattr(query_embedding, 'cpu', None)):
-                query_vector_raw = query_embedding.cpu().tolist()  # type: ignore
+                query_vector_raw = cast(List[float], getattr(query_embedding, 'cpu')().tolist())
             elif hasattr(query_embedding, 'tolist') and callable(getattr(query_embedding, 'tolist', None)):
-                query_vector_raw = query_embedding.tolist()  # type: ignore
+                query_vector_raw = cast(List[float], getattr(query_embedding, 'tolist')())
             elif isinstance(query_embedding, list):
                 query_vector_raw = query_embedding
             else:
@@ -656,7 +659,8 @@ class QdrantMemoryEngine(MemoryEngineBase):
             # 类型转换：将 list[FieldCondition] 转换为 List[Condition]
             from qdrant_client.models import Condition
             query_filter: Optional[Filter] = (
-                Filter(must=list(all_filter_conditions)) if all_filter_conditions else None  # type: ignore
+                # Filter构造函数接受Condition列表，使用cast明确类型
+                cast(Optional[Filter], Filter(must=list(all_filter_conditions)) if all_filter_conditions else None)
             )
             
             # 搜索每个集合

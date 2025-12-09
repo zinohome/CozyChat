@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # 本地库
 from app.models.user import User
 from app.utils.logger import logger
+from app.utils.type_helpers import get_user_username
+from typing import cast, Dict, Any
 
 
 class UserProfileLoader:
@@ -54,9 +56,9 @@ class UserProfileLoader:
                 return None
             
             # 构建用户画像
-            profile = {
-                "username": str(user.username),  # type: ignore[arg-type]
-                "preferences": user.preferences or {},  # type: ignore[arg-type]
+            profile: Dict[str, Any] = {
+                "username": get_user_username(user),
+                "preferences": cast(Dict[str, Any], user.preferences) if user.preferences else {},
             }
             
             logger.debug(

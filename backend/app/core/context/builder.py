@@ -182,16 +182,19 @@ class ContextBuilder:
             
             # 转换为响应模型并反转顺序（从旧到新）
             # 注意：SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
-            # 类型检查器可能报错，但运行时不会有问题
+            # 使用cast明确类型，避免type: ignore
+            from typing import cast
+            from datetime import datetime
+            
             message_responses = [
                 MessageSchema(
-                    id=msg.id,  # type: ignore[arg-type]
-                    session_id=msg.session_id,  # type: ignore[arg-type]
-                    role=msg.role,  # type: ignore[arg-type]
-                    content=msg.content,  # type: ignore[arg-type]
+                    id=cast(str, msg.id),
+                    session_id=cast(str, msg.session_id),
+                    role=cast(str, msg.role),
+                    content=cast(str, msg.content),
                     tokens=getattr(msg, 'tokens', None),  # tokens 可能不存在
-                    model=msg.model,  # type: ignore[arg-type]
-                    created_at=msg.created_at  # type: ignore[arg-type]
+                    model=cast(str | None, msg.model),
+                    created_at=cast(datetime, msg.created_at)
                 )
                 for msg in reversed(messages)
             ]
@@ -230,9 +233,10 @@ class ContextBuilder:
             result = await self.db.execute(stmt)
             summaries = result.scalars().all()
             
-            # 注意：SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
-            # 类型检查器可能报错，但运行时不会有问题
-            return [str(s.content) for s in summaries]  # type: ignore[misc]
+            # SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
+            # 使用cast明确类型，避免类型检查器误报
+            from typing import cast
+            return [cast(str, s.content) for s in summaries]
             
         except Exception as e:
             logger.error(f"Failed to load history summaries: {e}", exc_info=True)

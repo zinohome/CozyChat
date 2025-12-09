@@ -19,6 +19,9 @@ from app.models.session import Session as SessionModel
 from app.models.message import Message as MessageModel
 from app.utils.config_loader import get_config_loader
 from app.utils.logger import logger
+from app.utils.type_helpers import get_session_title, get_message_role, safe_str
+from typing import cast
+from datetime import datetime
 
 
 # ============================================================================
@@ -136,7 +139,7 @@ class SessionTitleGenerator:
                 return None
             
             # 如果标题已经是自动生成的（不是默认的"新会话"），跳过
-            session_title = str(session.title) if session.title is not None else ""  # type: ignore[arg-type]
+            session_title = get_session_title(session) or ""
             if session_title and session_title != "新会话":
                 logger.debug(
                     f"Session already has a custom title: {session_title}",
@@ -147,8 +150,8 @@ class SessionTitleGenerator:
             # 构建消息内容摘要（只取前10条消息，避免token过多）
             message_texts = []
             for msg in messages[:10]:
-                msg_role = str(msg.role)  # type: ignore[arg-type]
-                msg_content = str(msg.content)  # type: ignore[arg-type]
+                msg_role = get_message_role(msg)
+                msg_content = safe_str(msg.content)
                 role_name = "用户" if msg_role == "user" else "助手"
                 content = msg_content[:200] if len(msg_content) > 200 else msg_content  # 每条消息最多200字符
                 message_texts.append(f"{role_name}: {content}")
@@ -284,7 +287,7 @@ class SessionTitleGenerator:
                 return False
             
             # 如果标题已经是自动生成的（不是默认的"新会话"），跳过
-            session_title = str(session.title) if session.title is not None else ""  # type: ignore[arg-type]
+            session_title = get_session_title(session) or ""
             if session_title and session_title != "新会话":
                 return False
             
@@ -293,9 +296,9 @@ class SessionTitleGenerator:
             
             if title:
                 # 更新会话标题
-                session.title = title  # type: ignore[assignment]
-                from datetime import datetime
-                session.updated_at = datetime.utcnow()  # type: ignore[assignment]
+                # SQLAlchemy ORM属性赋值，使用cast明确类型
+                session.title = cast(str, title)
+                session.updated_at = cast(datetime, datetime.utcnow())
                 await self.db.commit()
                 await self.db.refresh(session)
                 

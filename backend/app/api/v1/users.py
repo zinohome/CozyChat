@@ -23,6 +23,14 @@ from app.core.user.stats import UserStatsManager
 from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
+from app.utils.type_helpers import (
+    get_user_username,
+    get_user_email,
+    get_user_role,
+    get_user_display_name,
+    get_user_avatar_url,
+    get_user_bio
+)
 
 router = APIRouter(tags=["users"])
 
@@ -225,12 +233,12 @@ async def get_current_user_info(
     """
     return UserResponse(
         id=str(current_user.id),
-        username=str(current_user.username),  # type: ignore[arg-type]
-        email=str(current_user.email),  # type: ignore[arg-type]
-        role=str(current_user.role),  # type: ignore[arg-type]
-        display_name=current_user.display_name if current_user.display_name else None,  # type: ignore[arg-type]
-        avatar_url=current_user.avatar_url if current_user.avatar_url else None,  # type: ignore[arg-type]
-        bio=current_user.bio if current_user.bio else None,  # type: ignore[arg-type]
+        username=get_user_username(current_user),
+        email=get_user_email(current_user),
+        role=get_user_role(current_user),
+        display_name=get_user_display_name(current_user),
+        avatar_url=get_user_avatar_url(current_user),
+        bio=get_user_bio(current_user),
         preferences=current_user.get_preferences(),
         created_at=current_user.created_at.isoformat()
     )
@@ -399,9 +407,9 @@ async def get_user_profile(
         # 构建用户资料响应，包含用户基本信息和画像
         result: Dict[str, Any] = {
             "user_id": str(current_user.id),
-            "display_name": current_user.display_name if current_user.display_name else None,  # type: ignore[arg-type]
-            "avatar_url": current_user.avatar_url if current_user.avatar_url else None,  # type: ignore[arg-type]
-            "bio": current_user.bio if current_user.bio else None,  # type: ignore[arg-type]
+            "display_name": get_user_display_name(current_user),
+            "avatar_url": get_user_avatar_url(current_user),
+            "bio": get_user_bio(current_user),
         }
         
         # 添加用户画像信息
@@ -498,9 +506,9 @@ async def update_user_profile(
         # 构建响应
         result: Dict[str, Any] = {
             "user_id": str(current_user.id),
-            "display_name": user.display_name if user.display_name else None,  # type: ignore[arg-type]
-            "avatar_url": user.avatar_url if user.avatar_url else None,  # type: ignore[arg-type]
-            "bio": user.bio if user.bio else None,  # type: ignore[arg-type]
+            "display_name": get_user_display_name(user),
+            "avatar_url": get_user_avatar_url(user),
+            "bio": get_user_bio(user),
         }
         
         if profile:

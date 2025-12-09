@@ -84,11 +84,8 @@ async def list_models(
                 engine = engine_pool.get_engine(provider=engine_name, model=default_model)
                 
                 # 获取引擎支持的模型列表
-                if hasattr(engine, 'list_models'):
-                    engine_models = engine.list_models()  # type: ignore[attr-defined]
-                else:
-                    # 默认模型（从引擎配置获取）
-                    engine_models = [engine.model] if engine.model else []
+                # 使用getattr处理动态属性，避免type: ignore
+                engine_models = getattr(engine, 'list_models', lambda: [engine.model] if engine.model else [])()
                 
                 # 为每个模型创建ModelInfo
                 for model_id in engine_models:
@@ -163,16 +160,13 @@ async def get_model(
                 engine = engine_pool.get_engine(provider=engine_name, model=default_model)
                 
                 # 检查模型是否属于此引擎
-                if hasattr(engine, 'list_models'):
-                    engine_models = engine.list_models()  # type: ignore[attr-defined]
-                else:
-                    engine_models = [engine.model] if engine.model else []
+                # 使用getattr处理动态属性，避免type: ignore
+                engine_models = getattr(engine, 'list_models', lambda: [engine.model] if engine.model else [])()
                 
                 if model_id in engine_models:
                     # 获取定价信息（如果有）
-                    pricing = None
-                    if hasattr(engine, 'get_pricing'):
-                        pricing = engine.get_pricing(model_id)  # type: ignore[attr-defined]
+                    # 使用getattr处理动态属性，避免type: ignore
+                    pricing = getattr(engine, 'get_pricing', lambda _: None)(model_id)
                     
                     model_info = ModelDetail(
                         id=model_id,

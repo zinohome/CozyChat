@@ -29,6 +29,16 @@ from app.models.user import User
 from app.models.session import Session as SessionModel
 from app.models.message import Message as MessageModel
 from app.utils.logger import logger
+from app.utils.type_helpers import (
+    get_session_title,
+    get_session_personality_id,
+    get_session_message_count,
+    get_message_role,
+    get_message_content,
+    safe_int
+)
+from typing import cast
+from datetime import datetime
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -172,8 +182,11 @@ async def create_session(
             )
             db.add(welcome_message)
             # 更新会话统计信息
-            session.message_count = 1  # type: ignore[assignment]
-            session.last_message_at = welcome_message.created_at  # type: ignore[assignment]
+            # SQLAlchemy ORM属性赋值，使用cast明确类型
+            from typing import cast
+            from datetime import datetime
+            session.message_count = cast(int, 1)
+            session.last_message_at = cast(datetime, welcome_message.created_at)
             await db.commit()
             
             logger.info(
@@ -197,8 +210,8 @@ async def create_session(
         
         return CreateSessionResponse(
             session_id=str(session.id),
-            personality_id=str(session.personality_id),  # type: ignore[arg-type]
-            title=str(session.title),  # type: ignore[arg-type]
+            personality_id=get_session_personality_id(session),
+            title=get_session_title(session) or "",
             created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
@@ -283,14 +296,14 @@ async def list_sessions(
         # 构建响应
         items = []
         for session in sessions:
-            personality = personality_registry.get_personality(str(session.personality_id))  # type: ignore[arg-type]
+            personality = personality_registry.get_personality(get_session_personality_id(session))
             items.append(SessionListItem(
                 session_id=str(session.id),
-                personality_id=str(session.personality_id),  # type: ignore[arg-type]
-                personality_name=str(personality.name) if personality else None,  # type: ignore[arg-type]
-                title=str(session.title),  # type: ignore[arg-type]
-                message_count=int(session.message_count),  # type: ignore[arg-type]
-                last_message_at=session.last_message_at.replace(tzinfo=timezone.utc).isoformat() if session.last_message_at is not None else None,  # type: ignore[arg-type]
+                personality_id=get_session_personality_id(session),
+                personality_name=cast(str, personality.name) if personality else None,
+                title=get_session_title(session) or "",
+                message_count=get_session_message_count(session),
+                last_message_at=cast(datetime, session.last_message_at).replace(tzinfo=timezone.utc).isoformat() if session.last_message_at is not None else None,
                 created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
             ))
         
@@ -382,7 +395,10 @@ async def get_session(
         for msg in messages:
             # 注意：Message 模型中有 metadata = Base.metadata（SQLAlchemy 元数据对象）
             # 实际的 JSONB 字段是 message_metadata，必须使用 message_metadata 而不是 metadata
-            msg_metadata = msg.message_metadata if msg.message_metadata is not None else {}  # type: ignore[comparison-overlap]
+            # 使用is not None检查，避免comparison-overlap错误
+            msg_metadata: Dict[str, Any] = {}
+            if msg.message_metadata is not None:
+                msg_metadata = cast(Dict[str, Any], msg.message_metadata)
             
             # 确保 metadata 是字典类型
             if not isinstance(msg_metadata, dict):
@@ -391,8 +407,8 @@ async def get_session(
             message_items.append(
                 MessageInfo(
                     id=str(msg.id),
-                    role=str(msg.role),  # type: ignore[arg-type]
-                    content=str(msg.content),  # type: ignore[arg-type]
+                    role=get_message_role(msg),
+                    content=get_message_content(msg),
                     created_at=msg.created_at.replace(tzinfo=timezone.utc).isoformat(),
                     metadata=msg_metadata
                 )
@@ -405,8 +421,8 @@ async def get_session(
         
         return SessionDetailResponse(
             session_id=str(session.id),
-            personality_id=str(session.personality_id),  # type: ignore[arg-type]
-            title=str(session.title),  # type: ignore[arg-type]
+            personality_id=get_session_personality_id(session),
+            title=get_session_title(session) or "",
             messages=message_items,
             total_messages=len(message_items),
             created_at=session.created_at.replace(tzinfo=timezone.utc).isoformat()
@@ -463,10 +479,13 @@ async def update_session(
             )
         
         # 更新
+        # SQLAlchemy ORM属性赋值，使用cast明确类型
+        from typing import cast
+        from datetime import datetime
         if request.title is not None:
-            session.title = request.title  # type: ignore[assignment]
+            session.title = cast(str, request.title)
         
-        session.updated_at = datetime.utcnow()  # type: ignore[assignment]
+        session.updated_at = cast(datetime, datetime.utcnow())
         await db.commit()
         await db.refresh(session)
         
@@ -477,7 +496,7 @@ async def update_session(
         
         return UpdateSessionResponse(
             session_id=str(session.id),
-            title=str(session.title),  # type: ignore[arg-type]
+            title=get_session_title(session) or "",
             updated_at=session.updated_at.replace(tzinfo=timezone.utc).isoformat()
         )
         
@@ -548,7 +567,7 @@ async def generate_session_title(
         
         # 优先使用session.message_count字段（性能更好，避免时序问题）
         # 如果字段为None或0，再查询实际消息数
-        session_msg_count = int(session.message_count) if session.message_count is not None else 0  # type: ignore[arg-type]
+        session_msg_count = get_session_message_count(session)
         if session_msg_count > 0:
             message_count = session_msg_count
         else:
@@ -575,9 +594,9 @@ async def generate_session_title(
             if session.title_generated_at is not None:
                 return GenerateTitleResponse(
                     session_id=session_id,
-                    title=str(session.title),  # type: ignore[arg-type]
+                    title=get_session_title(session) or "",
                     generated_at=session.title_generated_at.replace(tzinfo=timezone.utc).isoformat(),
-                    used_message_count=int(message_count)  # type: ignore[arg-type]
+                    used_message_count=safe_int(message_count)
                 )
         
         # 生成标题
@@ -599,8 +618,8 @@ async def generate_session_title(
         # 构建消息文本
         message_texts = []
         for msg in messages_for_title:
-            msg_role = str(msg.role)  # type: ignore[arg-type]
-            msg_content = str(msg.content)  # type: ignore[arg-type]
+            msg_role = get_message_role(msg)
+            msg_content = get_message_content(msg)
             role_name = "用户" if msg_role == "user" else "助手"
             content = msg_content[:200] if len(msg_content) > 200 else msg_content
             message_texts.append(f"{role_name}: {content}")
@@ -646,9 +665,12 @@ async def generate_session_title(
                 title = title[:50]
             
             # 更新会话标题
-            session.title = title  # type: ignore[assignment]
-            session.title_generated_at = datetime.utcnow()  # type: ignore[assignment]
-            session.updated_at = datetime.utcnow()  # type: ignore[assignment]
+            # SQLAlchemy ORM属性赋值，使用cast明确类型
+            from typing import cast
+            from datetime import datetime
+            session.title = cast(str, title)
+            session.title_generated_at = cast(datetime, datetime.utcnow())
+            session.updated_at = cast(datetime, datetime.utcnow())
             await db.commit()
             db.refresh(session)
             
@@ -732,7 +754,10 @@ async def delete_session(
             )
         
         # 软删除会话
-        session.deleted_at = datetime.utcnow()  # type: ignore[assignment]
+        # SQLAlchemy ORM属性赋值，使用cast明确类型
+        from typing import cast
+        from datetime import datetime
+        session.deleted_at = cast(datetime, datetime.utcnow())
         
         # 删除该会话的所有消息（物理删除，因为消息通常不需要恢复）
         # 注意：虽然 Message 表有 CASCADE，但软删除不会触发，需要手动删除

@@ -17,6 +17,14 @@ from sqlalchemy import or_, func, select
 from app.models.user import User
 from app.models import UserProfile  # 从__init__导入，确保模型已初始化
 from app.utils.logger import logger
+from app.utils.type_helpers import (
+    get_user_status,
+    get_user_role,
+    get_user_password_hash,
+    is_active_user,
+    safe_str
+)
+from typing import cast
 from .auth import AuthService
 
 
@@ -169,11 +177,11 @@ class UserManager:
                 return None
             
             # 检查用户状态
-            if str(user.status) != "active":  # type: ignore[arg-type]
+            if not is_active_user(user):
                 return None
             
             # 验证密码
-            if not auth_service.verify_password(password, user.password_hash):  # type: ignore[arg-type]
+            if not auth_service.verify_password(password, get_user_password_hash(user)):
                 return None
             
             # 更新最后登录信息
@@ -183,13 +191,13 @@ class UserManager:
             # 生成token
             access_token = self.auth_service.create_access_token(
                 user_id=str(user.id),
-                username=str(user.username),  # type: ignore[arg-type]
-                role=str(user.role)  # type: ignore[arg-type]
+                username=safe_str(user.username),
+                role=get_user_role(user)
             )
             
             refresh_token = self.auth_service.create_refresh_token(
                 user_id=str(user.id),
-                username=str(user.username)  # type: ignore[arg-type]
+                username=safe_str(user.username)
             )
             
             logger.info(
@@ -304,7 +312,8 @@ class UserManager:
             
             # 更新密码（如果提供）
             if "password" in updates:
-                user.password_hash = self.auth_service.hash_password(updates["password"])  # type: ignore[assignment]
+                # SQLAlchemy ORM属性赋值，使用cast明确类型
+                user.password_hash = cast(str, self.auth_service.hash_password(updates["password"]))
             
             await self.db.commit()
             await self.db.refresh(user)
@@ -339,8 +348,9 @@ class UserManager:
             
             if soft_delete:
                 # 软删除
-                user.status = "deleted"  # type: ignore[assignment]
-                user.deleted_at = datetime.utcnow()  # type: ignore[assignment]
+                # SQLAlchemy ORM属性赋值，使用cast明确类型
+                user.status = cast(str, "deleted")
+                user.deleted_at = cast(datetime, datetime.utcnow())
             else:
                 # 硬删除
                 await self.db.delete(user)
@@ -475,7 +485,7 @@ class UserManager:
                 "total_sessions": user.total_sessions,
                 "total_messages": user.total_messages,
                 "total_tokens_used": user.total_tokens_used,
-                "last_login_at": user.last_login_at.isoformat() if user.last_login_at is not None else None,  # type: ignore[arg-type]
+                "last_login_at": cast(datetime, user.last_login_at).isoformat() if user.last_login_at is not None else None,
                 "created_at": user.created_at.isoformat(),
                 "profile": {
                     "interests": profile.interests if profile else [],

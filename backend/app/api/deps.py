@@ -160,7 +160,7 @@ async def get_current_user_async(
             )
         
         # 检查用户状态
-        if str(user.status) != "active":  # type: ignore[arg-type]
+        if not is_active_user(user):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户未激活",
@@ -342,7 +342,7 @@ async def get_current_user_async(
             )
         
         # 检查用户状态
-        if str(user.status) != "active":  # type: ignore[arg-type]
+        if not is_active_user(user):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户未激活",

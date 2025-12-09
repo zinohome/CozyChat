@@ -168,7 +168,8 @@ class TencentTTSEngine(TTSEngineBase):
             )
         
         # 创建凭证
-        from tencent_speech_sdk import credential  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import credential
         self.credential = credential.Credential(self.secret_id, self.secret_key)
         
         # 配置参数
@@ -321,7 +322,8 @@ class TencentTTSEngine(TTSEngineBase):
                 return b"".join(audio_chunks)
             
             # 基础音色使用HTTP流式合成收集所有音频
-            from tencent_speech_sdk import speech_synthesizer  # type: ignore[import-untyped]
+            # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+            from tencent_speech_sdk import speech_synthesizer
             
             # 创建音频收集器
             collector = AudioCollector()
@@ -430,7 +432,8 @@ class TencentTTSEngine(TTSEngineBase):
         **kwargs: Any
     ) -> AsyncIterator[bytes]:
         """HTTP流式合成"""
-        from tencent_speech_sdk import speech_synthesizer  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import speech_synthesizer
         
         # 创建音频队列
         audio_queue = asyncio.Queue()
@@ -521,7 +524,8 @@ class TencentTTSEngine(TTSEngineBase):
         
         注意：SSL证书配置已在tencent_speech_sdk包装器中全局设置
         """
-        from tencent_speech_sdk import speech_synthesizer_ws  # type: ignore[import-untyped]
+        # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+        from tencent_speech_sdk import speech_synthesizer_ws
         
         # 创建音频队列
         audio_queue = asyncio.Queue()
@@ -608,7 +612,8 @@ class TencentTTSEngine(TTSEngineBase):
                 return False
             
             # 尝试创建一个简单的合成器来验证凭证
-            from tencent_speech_sdk import speech_synthesizer  # type: ignore[import-untyped]
+            # 类型存根文件位于 stubs/tencent_speech_sdk/__init__.pyi
+            from tencent_speech_sdk import speech_synthesizer
             
             class DummyCollector:
                 def on_message(self, response): pass

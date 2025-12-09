@@ -191,7 +191,9 @@ class QueryOptimizer:
             # 根据关系类型选择合适的加载策略
             # 这里简化实现，实际应该根据关系类型选择
             # selectinload 可以接受字符串（通过 getattr 内部处理），但类型检查器不识别
-            query = query.options(selectinload(rel))  # type: ignore[arg-type]
+            # SQLAlchemy的selectinload确实支持字符串参数，这是框架特性
+            # 添加详细注释说明为什么需要type: ignore
+            query = query.options(selectinload(rel))  # type: ignore[arg-type]  # SQLAlchemy支持字符串关系名
         
         return query
     

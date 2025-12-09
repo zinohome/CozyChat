@@ -147,17 +147,21 @@ class User(UserBase):
     @property
     def is_authenticated(self) -> bool:
         """用户是否已认证"""
-        return str(self.status) == "active"  # type: ignore[arg-type]
+        # SQLAlchemy ORM属性在运行时是str类型，使用cast明确类型
+        from typing import cast
+        return cast(str, self.status) == "active"
     
     @property
     def is_active(self) -> bool:
         """用户是否激活"""
-        return str(self.status) == "active"  # type: ignore[arg-type]
+        from typing import cast
+        return cast(str, self.status) == "active"
     
     @property
     def is_admin(self) -> bool:
         """用户是否为管理员"""
-        return str(self.role) == "admin"  # type: ignore[arg-type]
+        from typing import cast
+        return cast(str, self.role) == "admin"
     
     def update_last_login(self, ip_address: Optional[str] = None) -> None:
         """更新最后登录时间和IP

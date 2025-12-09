@@ -6,7 +6,7 @@ OpenAI引擎实现
 
 # 标准库
 import uuid
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, cast
 
 # 第三方库
 from openai import AsyncOpenAI, APIError, OpenAIError
@@ -69,7 +69,9 @@ class OpenAIEngine(AIEngineBase):
                     for model_item in models_config 
                     if isinstance(model_item, dict) and "name" in model_item and model_item.get("name")
                 ]
-                self._supported_models = model_names if model_names else None  # type: ignore[assignment]
+                # 使用cast明确类型，避免类型检查器误报
+                from typing import cast
+                self._supported_models = cast(Optional[List[str]], model_names if model_names else None)
         except Exception as e:
             logger.warning(f"Failed to load model list from config: {e}")
             self._supported_models = None
@@ -261,7 +263,7 @@ class OpenAIEngine(AIEngineBase):
                     "has_tools": bool(tools),
                     "tools_count": len(tools) if tools else 0,
                     "first_message_role": messages[0].role if messages else None,
-                    "system_prompt_length": len(messages[0].content) if messages and messages[0].role == "system" and messages[0].content else 0,  # type: ignore[arg-type]
+                    "system_prompt_length": len(cast(str, messages[0].content)) if messages and messages[0].role == "system" and messages[0].content else 0,
                     "tool_choice": "auto" if tools else None
                 }
             )

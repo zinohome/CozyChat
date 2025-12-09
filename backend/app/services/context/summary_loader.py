@@ -59,9 +59,10 @@ class SummaryLoader:
             result = await self.db.execute(stmt)
             summaries = result.scalars().all()
             
-            # 注意：SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
-            # 类型检查器可能报错，但运行时不会有问题
-            summary_texts = [str(s.content) for s in summaries]  # type: ignore[misc]
+            # SQLAlchemy模型实例的属性在运行时会被正确解析为实际值
+            # 使用cast明确类型，避免类型检查器误报
+            from typing import cast
+            summary_texts = [cast(str, s.content) for s in summaries]
             
             logger.debug(
                 f"Loaded {len(summary_texts)} history summaries",

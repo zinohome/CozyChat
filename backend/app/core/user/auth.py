@@ -22,6 +22,11 @@ from app.utils.security import (
     create_refresh_token,
     verify_token
 )
+from app.utils.type_helpers import (
+    get_user_status,
+    get_user_password_hash,
+    is_active_user
+)
 
 
 class AuthService:
@@ -145,12 +150,12 @@ class AuthService:
                 return None
             
             # 检查用户状态
-            if str(user.status) != "active":  # type: ignore[arg-type]
-                logger.warning(f"User is not active: {username}, status: {user.status}")
+            if not is_active_user(user):
+                logger.warning(f"User is not active: {username}, status: {get_user_status(user)}")
                 return None
             
             # 验证密码
-            if not self.verify_password(password, str(user.password_hash)):  # type: ignore[arg-type]
+            if not self.verify_password(password, get_user_password_hash(user)):
                 logger.warning(f"Invalid password for user: {username}")
                 return None
             
@@ -191,7 +196,7 @@ class AuthService:
                 return None
             
             # 检查用户状态
-            if str(user.status) != "active":  # type: ignore[arg-type]
+            if not is_active_user(user):
                 return None
             
             return user

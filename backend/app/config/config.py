@@ -463,6 +463,7 @@ class Settings(BaseSettings):
 # 创建全局配置实例
 # 注意：Pydantic Settings 会自动从环境变量加载必需参数
 # 类型检查器无法理解这一点，因此需要忽略此处的类型检查
-settings = Settings()  # type: ignore[call-arg]
+# 这是Pydantic Settings的设计特性，无法通过类型注解解决
+settings: Settings = Settings()  # type: ignore[call-arg]
 
 

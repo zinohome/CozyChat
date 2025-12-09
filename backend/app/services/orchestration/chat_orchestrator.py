@@ -13,7 +13,7 @@
 # 标准库
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Tuple, cast
 
 if TYPE_CHECKING:
     from app.core.personality.models import Personality
@@ -196,7 +196,7 @@ class ChatOrchestrator:
                     choices=[
                         ChatCompletionChoice(
                             index=0,
-                            message=chat_response.message.to_dict() if hasattr(chat_response.message, 'to_dict') else chat_response.message,  # type: ignore[arg-type]
+                            message=cast(Dict[str, Any], chat_response.message.to_dict() if hasattr(chat_response.message, 'to_dict') else chat_response.message),
                             finish_reason=chat_response.finish_reason
                         )
                     ],
@@ -248,7 +248,8 @@ class ChatOrchestrator:
         # 如果请求中指定了user_id，必须与当前用户匹配（除非是管理员）
         if user_id:
             user_uuid = uuid.UUID(str(user_id))
-            if user_uuid != user.id and str(user.role) != "admin":  # type: ignore[arg-type]
+            from app.utils.type_helpers import get_user_role, is_admin_user
+            if user_uuid != user.id and not is_admin_user(user):
                 raise ValidationError("无权访问其他用户的数据")
             user_id = str(user.id)  # 使用当前用户的ID
         else:
@@ -258,7 +259,11 @@ class ChatOrchestrator:
         if request.session_id:
             try:
                 session_uuid = uuid.UUID(request.session_id)
-                stmt = select(SessionModel).where(
+                # 使用selectinload优化，避免后续访问session属性时的额外查询
+                from sqlalchemy.orm import selectinload
+                stmt = select(SessionModel).options(
+                    selectinload(SessionModel.user)  # 预加载用户信息（如果需要）
+                ).where(
                     and_(
                         SessionModel.id == session_uuid,
                         SessionModel.user_id == user.id,  # 确保只能访问自己的会话
@@ -269,7 +274,8 @@ class ChatOrchestrator:
                 session = result.scalar_one_or_none()
                 if session:
                     if not personality_id:
-                        personality_id = str(session.personality_id)  # type: ignore[arg-type]
+                        from app.utils.type_helpers import get_session_personality_id
+                        personality_id = get_session_personality_id(session)
                     user_id = str(user.id)  # 使用当前用户的ID
                 else:
                     raise ResourceNotFoundError("会话不存在或无权访问")

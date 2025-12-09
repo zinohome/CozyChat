@@ -488,12 +488,16 @@ class Orchestrator:
             full_content = ""
             
             # chat_stream 返回 AsyncIterator[StreamChunk]，可以直接用于 async for
-            async for chunk in ai_engine.chat_stream(  # type: ignore[misc]
+            # 使用类型注释明确异步生成器的类型
+            from app.engines.ai.base import StreamChunk
+            from typing import AsyncIterator
+            stream: AsyncIterator[StreamChunk] = ai_engine.chat_stream(
                 messages=messages,
                 temperature=personality.ai.temperature,
                 max_tokens=personality.ai.max_tokens,
                 tools=tools if tools else None
-            ):
+            )
+            async for chunk in stream:
                 if chunk.content:
                     full_content += chunk.content
                     yield {

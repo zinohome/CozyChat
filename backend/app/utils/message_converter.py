@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from app.engines.ai import ChatMessage as EngineChatMessage
 from app.utils.message_utils import build_user_message_with_preferences
 from app.utils.logger import logger
+from app.utils.type_helpers import get_message_role, safe_str
 
 
 def convert_context_bundle_to_messages(
@@ -120,8 +121,8 @@ def convert_context_bundle_to_messages(
         for msg in context_bundle.recent_messages:
             # 处理不同的消息格式
             if hasattr(msg, 'role') and hasattr(msg, 'content'):
-                role = str(msg.role)  # type: ignore[arg-type]
-                content = str(msg.content)  # type: ignore[arg-type]
+                role = get_message_role(msg)
+                content = safe_str(msg.content)
             elif isinstance(msg, dict):
                 role = msg.get("role", "user")
                 content = msg.get("content", "")

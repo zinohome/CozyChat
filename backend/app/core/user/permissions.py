@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 # 本地库
 from app.models.user import User
 from app.utils.logger import logger
+from app.utils.type_helpers import get_user_role
 from .auth import AuthService
 
 # HTTP Bearer认证
@@ -96,7 +97,7 @@ class PermissionChecker:
                     detail="未认证或令牌无效"
                 )
             
-            user_role = str(user.role)  # type: ignore[arg-type]
+            user_role = get_user_role(user)
             if user_role not in allowed_roles:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -129,7 +130,7 @@ class PermissionChecker:
                     detail="未认证或令牌无效"
                 )
             
-            if not self.has_permission(str(user.role), permission):  # type: ignore[arg-type]
+            if not self.has_permission(get_user_role(user), permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"需要权限: {permission}"

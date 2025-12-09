@@ -111,8 +111,12 @@ class MessageSaver:
                 result = await self.db.execute(stmt)
                 session = result.scalar_one_or_none()
                 if session:
-                    session.message_count = (session.message_count or 0) + 2  # type: ignore[assignment]
-                    session.last_message_at = datetime.utcnow()  # type: ignore[assignment]
+                    # SQLAlchemy ORM属性赋值，使用cast明确类型
+                    from typing import cast
+                    from datetime import datetime
+                    current_count = cast(int, session.message_count) if session.message_count is not None else 0
+                    session.message_count = cast(int, current_count + 2)
+                    session.last_message_at = cast(datetime, datetime.utcnow())
                 
                 await self.db.commit()
                 

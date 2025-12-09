@@ -443,8 +443,9 @@ async def create_speech_stream(
         # 执行流式语音合成
         async def generate_audio_stream():
             # stream_synthesize 返回 AsyncIterator[bytes]，可以直接迭代
-            # 使用 type: ignore 忽略类型检查器的误报（stream_synthesize 确实是异步生成器）
-            stream: AsyncIterator[bytes] = tts_engine.stream_synthesize(  # type: ignore
+            # stream_synthesize 返回 AsyncIterator[bytes]，使用类型注释明确类型
+            tts_base: TTSEngineBase = cast(TTSEngineBase, tts_engine)
+            stream: AsyncIterator[bytes] = tts_base.stream_synthesize(
                 request.input,
                 voice=tts_config.get("voice", request.voice),
                 speed=tts_config.get("speed", request.speed)

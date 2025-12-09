@@ -115,7 +115,7 @@ async def refresh_token(
                 detail="User not found"
             )
         # 检查用户状态（避免SQLAlchemy ColumnElement类型检查问题）
-        if str(user.status) != "active":  # type: ignore[arg-type]
+        if not is_active_user(user):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User inactive"
@@ -124,13 +124,13 @@ async def refresh_token(
         # 生成新的访问令牌
         access_token = auth_service.create_access_token(
             user_id=str(user.id),
-            username=str(user.username),  # type: ignore[arg-type]
-            role=str(user.role)  # type: ignore[arg-type]
+            username=safe_str(user.username),
+            role=get_user_role(user)
         )
         
         logger.info(
             "Token refreshed",
-            extra={"user_id": str(user.id), "username": str(user.username)}  # type: ignore[arg-type]
+            extra={"user_id": str(user.id), "username": safe_str(user.username)}
         )
         
         return RefreshTokenResponse(

@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 # 第三方库
 from cachetools import TTLCache
@@ -354,7 +354,7 @@ class MemoryManager:
                     memory_id=memory.id,
                     user_id=user_id,
                     session_id=session_id,
-                    role=memory_type.value if memory_type != MemoryType.SYSTEM else "assistant",  # type: ignore[arg-type]
+                    role=cast(str, memory_type.value if memory_type != MemoryType.SYSTEM else "assistant"),
                     content=content,
                     importance=importance,
                     metadata=metadata,
@@ -394,7 +394,7 @@ class MemoryManager:
                         memory_id=memory.id,
                         user_id=user_id,
                         session_id=session_id,
-                        role=memory_type.value if memory_type != MemoryType.SYSTEM else "assistant",  # type: ignore[arg-type]
+                        role=cast(str, memory_type.value if memory_type != MemoryType.SYSTEM else "assistant"),
                         content=content,
                         importance=importance,
                         metadata=metadata,

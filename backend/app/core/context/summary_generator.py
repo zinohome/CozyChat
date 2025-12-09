@@ -194,14 +194,17 @@ class SummaryGenerator:
             
             if last_summary:
                 # 计算未摘要的消息数
-                end_index = int(last_summary.end_message_index) if last_summary.end_message_index is not None else 0  # type: ignore[arg-type]
+                from typing import cast
+                end_index = cast(int, last_summary.end_message_index) if last_summary.end_message_index is not None else 0
                 unsummarized_count = total_messages - end_index
             else:
                 # 没有任何摘要
                 unsummarized_count = total_messages
             
             # 判断是否达到阈值
-            return bool(unsummarized_count >= settings.context_summary_trigger_count)  # type: ignore[comparison-overlap]
+            # 明确类型转换，避免comparison-overlap错误
+            threshold: int = settings.context_summary_trigger_count
+            return bool(unsummarized_count >= threshold)
             
         except Exception as e:
             logger.error(f"Failed to check summary trigger: {e}", exc_info=True)
@@ -294,7 +297,8 @@ class SummaryGenerator:
         """
         lines = []
         for msg in messages:
-            msg_role = str(msg.role)  # type: ignore[arg-type]
+            from app.utils.type_helpers import get_message_role
+            msg_role = get_message_role(msg)
             role = "用户" if msg_role == "user" else "助手"
             lines.append(f"{role}: {msg.content}")
         
@@ -325,7 +329,12 @@ class SummaryGenerator:
             # 调用LLM
             from app.engines.ai import ChatMessage
             messages = [ChatMessage(role="user", content=prompt)]
-            response = await engine.chat(  # type: ignore[attr-defined]
+            # LLMEnginePool.get_engine返回AIEngineBase实例，但类型检查器可能无法推断
+            # 使用类型注释明确类型
+            from typing import cast
+            from app.engines.ai.base import AIEngineBase
+            ai_engine: AIEngineBase = cast(AIEngineBase, engine)
+            response = await ai_engine.chat(
                 messages=messages,
                 temperature=settings.context_summary_temperature,
                 max_tokens=300  # 限制摘要长度
