@@ -31,6 +31,7 @@ from app.models.user import User
 from app.core.user.auth import AuthService
 from app.utils.logger import logger
 from app.utils.security import decode_token
+from app.utils.type_helpers import is_active_user
 
 # 安全相关
 security = HTTPBearer(auto_error=False)

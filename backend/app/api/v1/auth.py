@@ -18,6 +18,11 @@ from app.core.user.auth import AuthService
 from app.middleware.rate_limit import rate_limit
 from app.models.user import User
 from app.utils.logger import logger
+from app.utils.type_helpers import (
+    is_active_user,
+    get_user_role,
+    safe_str
+)
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
