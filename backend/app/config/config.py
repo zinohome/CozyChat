@@ -184,132 +184,136 @@ class Settings(BaseSettings):
     # ===== Tavily搜索API配置 =====
     tavily_api_key: Optional[str] = Field(default=None, alias="TAVILY_API_KEY")
     
-    # ===== 会话标题生成配置 =====
+    # ===== 会话标题生成配置（已迁移到session.yaml）=====
+    # ⚠️ 已废弃：请使用 ConfigAdapter 从 session.yaml 读取配置
     session_title_trigger_length: int = Field(
         default=10,
         alias="SESSION_TITLE_TRIGGER_LENGTH",
-        description="触发标题生成的最小消息数"
+        description="触发标题生成的最小消息数（已废弃，使用session.yaml）"
     )
     session_title_max_messages: int = Field(
         default=20,
         alias="SESSION_TITLE_MAX_MESSAGES",
-        description="构造标题时参与的最大消息数"
+        description="构造标题时参与的最大消息数（已废弃，使用session.yaml）"
     )
     session_title_model: str = Field(
         default="gpt-4o-mini",
         alias="SESSION_TITLE_MODEL",
-        description="标题生成使用的模型"
+        description="标题生成使用的模型（已废弃，使用session.yaml）"
     )
     session_title_temperature: float = Field(
         default=0.3,
         alias="SESSION_TITLE_TEMPERATURE",
-        description="标题生成的温度参数"
+        description="标题生成的温度参数（已废弃，使用session.yaml）"
     )
     session_title_max_tokens: int = Field(
         default=100,
         alias="SESSION_TITLE_MAX_TOKENS",
-        description="标题生成的最大token数"
+        description="标题生成的最大token数（已废弃，使用session.yaml）"
     )
     
-    # ===== 记忆系统配置 =====
+    # ===== 记忆系统配置（已迁移到memory.yaml）=====
+    # ⚠️ 已废弃：请使用 ConfigAdapter 从 memory.yaml 读取配置
     memory_storage_mode: str = Field(
         default="hybrid",
         alias="MEMORY_STORAGE_MODE",
-        description="记忆存储模式: dual/unified/hybrid"
+        description="记忆存储模式: dual/unified/hybrid（已废弃，使用memory.yaml）"
     )
     memory_async_write: bool = Field(
         default=True,
         alias="MEMORY_ASYNC_WRITE",
-        description="是否异步写入记忆"
+        description="是否异步写入记忆（已废弃，使用memory.yaml）"
     )
     memory_batch_size: int = Field(
         default=10,
         alias="MEMORY_BATCH_SIZE",
-        description="批量写入的批次大小"
+        description="批量写入的批次大小（已废弃，使用memory.yaml）"
     )
     memory_dedup_enabled: bool = Field(
         default=True,
         alias="MEMORY_DEDUP_ENABLED",
-        description="是否启用记忆去重"
+        description="是否启用记忆去重（已废弃，使用memory.yaml）"
     )
     memory_dedup_mode: str = Field(
         default="async",
         alias="MEMORY_DEDUP_MODE",
-        description="去重模式: async/off"
+        description="去重模式: async/off（已废弃，使用memory.yaml）"
     )
     memory_dedup_content_threshold: int = Field(
         default=5,
         alias="MEMORY_DEDUP_CONTENT_THRESHOLD",
-        description="同一内容/主题的记忆数量阈值"
+        description="同一内容/主题的记忆数量阈值（已废弃，使用memory.yaml）"
     )
     memory_dedup_storage_threshold: float = Field(
         default=0.8,
         alias="MEMORY_DEDUP_STORAGE_THRESHOLD",
-        description="存储利用率阈值（0-1）"
+        description="存储利用率阈值（0-1）（已废弃，使用memory.yaml）"
     )
     memory_dedup_check_interval: int = Field(
         default=300,
         alias="MEMORY_DEDUP_CHECK_INTERVAL",
-        description="去重检查间隔（秒）"
+        description="去重检查间隔（秒）（已废弃，使用memory.yaml）"
     )
     
-    # ===== 智能上下文配置 =====
+    # ===== 智能上下文配置（已迁移到context.yaml）=====
+    # ⚠️ 已废弃：请使用 ConfigAdapter 从 context.yaml 读取配置
     context_intelligent_enabled: bool = Field(
         default=True,
         alias="CONTEXT_INTELLIGENT_ENABLED",
-        description="是否启用智能上下文管理（Phase 4功能）"
+        description="是否启用智能上下文管理（已废弃，使用context.yaml）"
     )
     context_recent_message_count: int = Field(
         default=6,
         alias="CONTEXT_RECENT_MESSAGE_COUNT",
-        description="保留的最近消息数量"
+        description="保留的最近消息数量（已废弃，使用context.yaml）"
     )
     context_max_tokens: int = Field(
         default=8000,
         alias="CONTEXT_MAX_TOKENS",
-        description="上下文最大token数"
+        description="上下文最大token数（已废弃，使用context.yaml）"
     )
     context_summary_weight: float = Field(
         default=0.3,
         alias="CONTEXT_SUMMARY_WEIGHT",
-        description="历史摘要权重"
+        description="历史摘要权重（已废弃，使用context.yaml）"
     )
     context_memory_weight: float = Field(
         default=0.2,
         alias="CONTEXT_MEMORY_WEIGHT",
-        description="记忆权重"
+        description="记忆权重（已废弃，使用context.yaml）"
     )
     context_summary_trigger_count: int = Field(
         default=50,
         alias="CONTEXT_SUMMARY_TRIGGER_COUNT",
-        description="触发摘要生成的消息数阈值"
+        description="触发摘要生成的消息数阈值（已废弃，使用context.yaml）"
     )
     context_summary_window_size: int = Field(
         default=20,
         alias="CONTEXT_SUMMARY_WINDOW_SIZE",
-        description="每次摘要的消息窗口大小"
+        description="每次摘要的消息窗口大小（已废弃，使用context.yaml）"
     )
     context_summary_model: str = Field(
         default="gpt-4o-mini",
         alias="CONTEXT_SUMMARY_MODEL",
-        description="摘要生成使用的模型"
+        description="摘要生成使用的模型（已废弃，使用context.yaml）"
     )
     context_summary_temperature: float = Field(
         default=0.3,
         alias="CONTEXT_SUMMARY_TEMPERATURE",
-        description="摘要生成的温度参数"
+        description="摘要生成的温度参数（已废弃，使用context.yaml）"
     )
     
-    # ===== 性能监控配置 =====
+    # ===== 性能监控配置（已迁移到performance.yaml）=====
+    # ⚠️ 已废弃：请使用 ConfigAdapter 从 performance.yaml 读取配置
     performance_slow_request_threshold: float = Field(
         default=0.2,
         alias="PERFORMANCE_SLOW_REQUEST_THRESHOLD",
-        description="慢请求阈值（秒），超过此时间的请求会记录为警告"
+        description="慢请求阈值（秒），超过此时间的请求会记录为警告（已废弃，使用performance.yaml）"
     )
     performance_slow_delete_threshold: float = Field(
         default=0.5,
         alias="PERFORMANCE_SLOW_DELETE_THRESHOLD",
-        description="DELETE操作的慢请求阈值（秒），通常需要更长时间"
+        description="DELETE操作的慢请求阈值（秒），通常需要更长时间（已废弃，使用performance.yaml）"
     )
     
     # ===== Sentry监控配置 =====

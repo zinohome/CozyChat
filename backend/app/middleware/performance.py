@@ -80,10 +80,16 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
             process_time: 处理时间（秒）
         """
         # 根据请求类型设置不同的慢请求阈值（从配置读取）
+        # 使用配置适配器获取性能配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        config_adapter = get_config_adapter()
+        performance_config = config_adapter.get_performance_config()
+        slow_request_config = performance_config.get("slow_request", {})
+        
         if request.method == "DELETE":
-            slow_threshold = settings.performance_slow_delete_threshold
+            slow_threshold = slow_request_config.get("delete_threshold", settings.performance_slow_delete_threshold)
         else:
-            slow_threshold = settings.performance_slow_request_threshold
+            slow_threshold = slow_request_config.get("threshold", settings.performance_slow_request_threshold)
         
         # 记录慢请求
         if process_time > slow_threshold:

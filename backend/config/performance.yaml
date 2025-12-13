@@ -1,0 +1,6 @@
+performance:
+  # 慢请求阈值配置
+  slow_request:
+    threshold: 0.2  # 秒，超过此时间的请求会记录为警告
+    delete_threshold: 0.5  # 秒，DELETE操作的慢请求阈值（通常需要更长时间）
+

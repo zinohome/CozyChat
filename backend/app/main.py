@@ -138,7 +138,13 @@ async def lifespan(app: FastAPI):
     
     # 5. 初始化并启动记忆写入Worker（Phase 3.2: Async Memory Queue）
     memory_worker = None
-    if settings.memory_async_write:
+    # 使用配置适配器获取记忆配置（优先YAML，回退到Settings）
+    from app.utils.config_adapter import get_config_adapter
+    config_adapter = get_config_adapter()
+    memory_config = config_adapter.get_memory_config()
+    memory_async_write = memory_config.get("async_write", settings.memory_async_write)
+    
+    if memory_async_write:
         try:
             from app.engines.memory import get_memory_manager
             from app.engines.memory.worker import MemoryWorker
@@ -159,11 +165,12 @@ async def lifespan(app: FastAPI):
                     # 创建并启动Worker，复用已有的queue和engine
                     # MemoryManager.engine是MemoryEngineBase类型，但类型检查器可能无法推断
                     from app.engines.memory.base import MemoryEngineBase
+                    memory_batch_size = memory_config.get("batch_size", settings.memory_batch_size)
                     memory_worker = MemoryWorker(
                         queue=memory_manager.queue,
                         engine=cast(MemoryEngineBase, memory_manager.engine),
                         deduplicator=memory_manager.deduplicator,  # 复用deduplicator
-                        batch_size=settings.memory_batch_size
+                        batch_size=memory_batch_size
                     )
                     await memory_worker.start()
                     logger.info("Memory worker started")

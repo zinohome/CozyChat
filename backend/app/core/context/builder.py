@@ -83,10 +83,15 @@ class ContextBuilder:
         start_time = asyncio.get_event_loop().time()
         
         # 使用配置中的默认值
+        # 使用配置适配器获取上下文配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        config_adapter = get_config_adapter()
+        context_config = config_adapter.get_context_config()
+        
         if recent_message_count is None:
-            recent_message_count = settings.context_recent_message_count
+            recent_message_count = context_config.get("recent", {}).get("message_count", settings.context_recent_message_count)
         if max_tokens is None:
-            max_tokens = settings.context_max_tokens
+            max_tokens = context_config.get("max_tokens", settings.context_max_tokens)
         
         logger.info(
             f"Building context for session {session_id}",

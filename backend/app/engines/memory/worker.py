@@ -12,6 +12,7 @@ from typing import Optional, Dict, List
 
 # 本地库
 from app.config.config import settings
+from app.utils.config_adapter import get_config_adapter
 from app.utils.logger import logger
 from .queue import MemoryQueue
 from .jobs import MemoryWriteJob, MemoryWriteJobStatus
@@ -49,15 +50,21 @@ class MemoryWorker:
         """
         self.queue = queue
         self.engine = engine
-        self.batch_size = batch_size or settings.memory_batch_size
+        
+        # 使用配置适配器获取记忆配置（优先YAML，回退到Settings）
+        config_adapter = get_config_adapter()
+        memory_config = config_adapter.get_memory_config()
+        
+        self.batch_size = batch_size or memory_config.get("batch_size", settings.memory_batch_size)
         self.poll_interval = poll_interval
         self.running = False
         self.task: Optional[asyncio.Task] = None
         
         # 去重器：复用传入的实例，避免重复初始化
         self.deduplicator = deduplicator or MemoryDeduplicator(engine=engine)
-        self.dedup_enabled = settings.memory_dedup_enabled
-        self.dedup_mode = settings.memory_dedup_mode
+        dedup_config = memory_config.get("dedup", {})
+        self.dedup_enabled = dedup_config.get("enabled", settings.memory_dedup_enabled)
+        self.dedup_mode = dedup_config.get("mode", settings.memory_dedup_mode)
         
         # 统计信息
         self.stats = {
@@ -304,7 +311,11 @@ class MemoryWorker:
             # 1. 检查内容计数阈值
             # TODO: 实现内容相似度聚类统计
             # 简化实现：定期触发
-            content_threshold = settings.memory_dedup_content_threshold
+            # 使用配置适配器获取记忆配置（优先YAML，回退到Settings）
+            config_adapter = get_config_adapter()
+            memory_config = config_adapter.get_memory_config()
+            dedup_config = memory_config.get("dedup", {})
+            content_threshold = dedup_config.get("content_threshold", settings.memory_dedup_content_threshold)
             
             # 2. 检查存储利用率阈值（简化实现：检查队列长度）
             queue_length = await self.queue.get_length()

@@ -2,6 +2,21 @@ memory:
   # 默认向量数据库引擎
   default_engine: "qdrant"  # chromadb / qdrant / cognee
   
+  # 存储模式（可通过环境变量 MEMORY_STORAGE_MODE 覆盖）
+  storage_mode: "hybrid"  # dual/unified/hybrid
+  
+  # 异步写入配置（可通过环境变量 MEMORY_ASYNC_WRITE 覆盖）
+  async_write: true
+  batch_size: 10
+  
+  # 去重配置（可通过环境变量 MEMORY_DEDUP_* 覆盖）
+  dedup:
+    enabled: true
+    mode: "async"  # async/off
+    content_threshold: 5
+    storage_threshold: 0.8
+    check_interval_seconds: 300
+  
   # 跨Session记忆配置
   cross_session_memory:
     enabled: true  # 是否启用跨Session记忆检索

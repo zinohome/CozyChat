@@ -563,7 +563,12 @@ async def generate_session_title(
             )
         
         # 检查是否应该生成标题
-        trigger_length = settings.session_title_trigger_length
+        # 使用配置适配器获取会话配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        config_adapter = get_config_adapter()
+        session_config = config_adapter.get_session_config()
+        title_config = session_config.get("title", {})
+        trigger_length = title_config.get("trigger_length", settings.session_title_trigger_length)
         
         # 优先使用session.message_count字段（性能更好，避免时序问题）
         # 如果字段为None或0，再查询实际消息数
@@ -604,7 +609,12 @@ async def generate_session_title(
         
         # 查询消息内容（用于生成标题）
         # 构建消息内容（限制消息数量）
-        max_messages = request.max_messages or settings.session_title_max_messages
+        # 使用配置适配器获取会话配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        config_adapter = get_config_adapter()
+        session_config = config_adapter.get_session_config()
+        title_config = session_config.get("title", {})
+        max_messages = request.max_messages or title_config.get("max_messages", settings.session_title_max_messages)
         stmt = select(MessageModel).where(
             and_(
                 MessageModel.session_id == session_uuid,
@@ -637,15 +647,21 @@ async def generate_session_title(
         # 创建AI引擎生成标题
         from app.engines.ai import ChatMessage as EngineChatMessage
         
+        # 使用配置适配器获取会话配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        config_adapter = get_config_adapter()
+        session_config = config_adapter.get_session_config()
+        title_config = session_config.get("title", {})
+        
         engine = engine_pool.get_engine(
             provider="openai",
-            model=settings.session_title_model
+            model=title_config.get("model", settings.session_title_model)
         )
         
         response = await engine.chat(
             messages=[EngineChatMessage(role="user", content=prompt)],
-            temperature=settings.session_title_temperature,
-            max_tokens=settings.session_title_max_tokens
+            temperature=title_config.get("temperature", settings.session_title_temperature),
+            max_tokens=title_config.get("max_tokens", settings.session_title_max_tokens)
         )
         
         # 提取标题

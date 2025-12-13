@@ -24,6 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 # 本地库
 from app.config.config import settings
+from app.utils.config_adapter import get_config_adapter
 from app.utils.logger import logger
 from .base import MemoryEngineBase
 from .models import Memory, MemorySearchResult, MemoryType
@@ -89,7 +90,10 @@ class QdrantMemoryEngine(MemoryEngineBase):
         self.mixed_collection_name = f"{collection_prefix}mixed_memories"
         
         # 存储模式配置 (hybrid/dual/unified)
-        self.storage_mode = settings.memory_storage_mode
+        # 使用配置适配器获取记忆配置（优先YAML，回退到Settings）
+        config_adapter = get_config_adapter()
+        memory_config = config_adapter.get_memory_config()
+        self.storage_mode = memory_config.get("storage_mode", settings.memory_storage_mode)
         
         # 向量配置
         embedding_config = self.config.get("embedding", {})

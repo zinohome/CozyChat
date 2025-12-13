@@ -1,0 +1,23 @@
+context:
+  # 是否启用智能上下文管理
+  intelligent_enabled: true
+  
+  # 最近消息配置
+  recent:
+    message_count: 6
+  
+  # Token限制
+  max_tokens: 8000
+  
+  # 权重配置
+  weights:
+    summary: 0.3
+    memory: 0.2
+  
+  # 摘要生成配置
+  summary:
+    trigger_count: 50
+    window_size: 20
+    model: "gpt-4o-mini"
+    temperature: 0.3
+

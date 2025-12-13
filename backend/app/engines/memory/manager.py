@@ -186,7 +186,12 @@ class MemoryManager:
         self.pending_saves: List[Memory] = []
         
         # 异步写入配置
-        self.async_write_enabled = settings.memory_async_write
+        # 使用配置适配器获取记忆配置（优先YAML，回退到Settings）
+        from app.utils.config_adapter import get_config_adapter
+        from app.config.config import settings as app_settings
+        config_adapter = get_config_adapter()
+        memory_config = config_adapter.get_memory_config()
+        self.async_write_enabled = memory_config.get("async_write", app_settings.memory_async_write)
         self.queue: Optional[MemoryQueue] = None
         if self.async_write_enabled:
             try:

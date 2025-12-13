@@ -203,7 +203,12 @@ class SummaryGenerator:
             
             # 判断是否达到阈值
             # 明确类型转换，避免comparison-overlap错误
-            threshold: int = settings.context_summary_trigger_count
+            # 使用配置适配器获取上下文配置（优先YAML，回退到Settings）
+            from app.utils.config_adapter import get_config_adapter
+            config_adapter = get_config_adapter()
+            context_config = config_adapter.get_context_config()
+            summary_config = context_config.get("summary", {})
+            threshold: int = summary_config.get("trigger_count", settings.context_summary_trigger_count)
             return bool(unsummarized_count >= threshold)
             
         except Exception as e:
@@ -320,10 +325,16 @@ class SummaryGenerator:
             # 构建prompt
             prompt = SUMMARY_PROMPT_TEMPLATE.format(conversation=conversation_text)
             
+            # 使用配置适配器获取上下文配置（优先YAML，回退到Settings）
+            from app.utils.config_adapter import get_config_adapter
+            config_adapter = get_config_adapter()
+            context_config = config_adapter.get_context_config()
+            summary_config = context_config.get("summary", {})
+            
             # 获取LLM引擎
             engine = self.engine_pool.get_engine(
                 provider="openai",
-                model=settings.context_summary_model
+                model=summary_config.get("model", settings.context_summary_model)
             )
             
             # 调用LLM
@@ -336,7 +347,7 @@ class SummaryGenerator:
             ai_engine: AIEngineBase = cast(AIEngineBase, engine)
             response = await ai_engine.chat(
                 messages=messages,
-                temperature=settings.context_summary_temperature,
+                temperature=summary_config.get("temperature", settings.context_summary_temperature),
                 max_tokens=300  # 限制摘要长度
             )
             

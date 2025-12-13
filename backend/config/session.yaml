@@ -20,4 +20,18 @@ session:
         {messages}
         
         请只返回标题，不要包含其他内容。
+  
+  # 标题生成触发配置
+  title:
+    # 触发标题生成的最小消息数
+    trigger_length: 10
+    # 构造标题时参与的最大消息数
+    max_messages: 20
+    # 标题生成使用的模型
+    model: "gpt-4o-mini"
+    # 标题生成的温度参数
+    temperature: 0.3
+    # 标题生成的最大token数
+    max_tokens: 100
+
 
