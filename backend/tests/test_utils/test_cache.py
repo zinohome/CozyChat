@@ -20,17 +20,24 @@ class TestCacheManager:
     def cache_manager(self, mock_redis):
         """创建缓存管理器（使用Mock Redis）"""
         from unittest.mock import patch, MagicMock
-        # patch redis模块的Redis类和ConnectionPool.from_url（在cache.py中导入的）
-        with patch('redis.Redis', return_value=mock_redis):
-            with patch('redis.connection.ConnectionPool.from_url') as mock_pool_from_url:
-                # Mock连接池实例
-                mock_pool_instance = MagicMock()
-                mock_pool_from_url.return_value = mock_pool_instance
-                # 创建CacheManager实例
-                manager = CacheManager()
-                # 确保client是mock_redis
-                manager.client = mock_redis
-                return manager
+        # 方法1：patch _connect方法，让它在__init__时不会真正连接Redis
+        original_connect = CacheManager._connect
+        
+        def mock_connect(self):
+            """Mock _connect方法，不真正连接Redis"""
+            self.pool = MagicMock()
+            self.client = mock_redis
+        
+        # 临时替换_connect方法
+        CacheManager._connect = mock_connect
+        try:
+            manager = CacheManager()
+            # 确保client是mock_redis
+            manager.client = mock_redis
+            return manager
+        finally:
+            # 恢复原始方法
+            CacheManager._connect = original_connect
     
     def test_get_cache_hit(self, cache_manager, mock_redis):
         """测试：缓存命中"""
