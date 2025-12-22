@@ -19,12 +19,17 @@ class TestCacheManager:
     @pytest.fixture
     def cache_manager(self, mock_redis):
         """创建缓存管理器（使用Mock Redis）"""
-        from unittest.mock import patch
-        with patch('app.utils.cache.redis.Redis') as mock_redis_class:
-            mock_redis_class.return_value = mock_redis
-            manager = CacheManager()
-            manager.client = mock_redis
-            return manager
+        from unittest.mock import patch, MagicMock
+        # patch redis模块的Redis类和ConnectionPool
+        with patch('redis.Redis', return_value=mock_redis):
+            with patch('redis.connection.ConnectionPool.from_url') as mock_pool:
+                # Mock连接池
+                mock_pool_instance = MagicMock()
+                mock_pool.return_value = mock_pool_instance
+                manager = CacheManager()
+                # 直接设置client为mock_redis
+                manager.client = mock_redis
+                return manager
     
     def test_get_cache_hit(self, cache_manager, mock_redis):
         """测试：缓存命中"""
