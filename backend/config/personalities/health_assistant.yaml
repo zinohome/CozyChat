@@ -94,9 +94,18 @@ personality:
       max_memory_tokens: 1000
       max_tool_tokens: 500
   
+  # ============================================================================
+  # ⚠️ DEPRECATED: 记忆配置（已废弃）
+  # ============================================================================
+  # 此memory配置块已废弃，将在v2.0移除
+  # 请升级到v1.1配置：personalization_engines（三大引擎）
+  # 迁移指南：PERSONALITY_CONFIG_MIGRATION.md
+  # 新配置示例：config/personalities/default_v1.1.yaml
+  # ============================================================================
+  
   # 记忆配置
   memory:
-    enabled: true
+    enabled: true  # ⚠️ 旧配置，建议迁移到personalization_engines
     vector_db: "qdrant"  # chromadb / qdrant / cognee
     save_mode: "both"      # both / user_only / assistant_only
     
