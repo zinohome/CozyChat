@@ -69,3 +69,39 @@ async def root() -> Dict[str, str]:
     }
 
 
+@router.get("/health/engines", response_model=Dict[str, Any])
+async def check_engines_health() -> Dict[str, Any]:
+    """检查三大人格化引擎健康状态
+    
+    Returns:
+        Dict: 三大引擎健康状态
+    """
+    try:
+        from app.services.context.context_service_new import ContextServiceNew
+        
+        # 获取ContextService实例
+        context_service = ContextServiceNew.get_instance()
+        
+        # 执行健康检查
+        health_status = await context_service.health_check()
+        
+        # 添加时间戳
+        health_status["timestamp"] = datetime.utcnow().isoformat()
+        health_status["status"] = "healthy" if health_status.get("overall") else "degraded"
+        
+        logger.info("Engines health check completed", extra=health_status)
+        return health_status
+        
+    except Exception as e:
+        logger.error(f"Engines health check failed: {e}", exc_info=True)
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+            "knowledge": False,
+            "userprofile": False,
+            "chatmemory": False,
+            "overall": False
+        }
+
+
