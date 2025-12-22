@@ -66,7 +66,7 @@ class TestChatAPI:
         data = {"sub": test_user_id, "username": "testuser", "role": "user"}
         return create_access_token(data)
     
-    def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token, mocker):
+    def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token):
         """测试：创建聊天完成成功"""
         # Mock AI引擎工厂的create_engine类方法
         with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
@@ -94,7 +94,7 @@ class TestChatAPI:
             data = response.json()
             assert "choices" in data or "message" in data or "content" in data
     
-    def test_create_chat_completion_stream(self, client, mock_openai_engine, auth_token, mocker):
+    def test_create_chat_completion_stream(self, client, mock_openai_engine, auth_token):
         """测试：创建流式聊天完成"""
         # Mock AI引擎工厂
         with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
@@ -122,7 +122,7 @@ class TestChatAPI:
             assert response.status_code == 200
             assert "text/event-stream" in response.headers.get("content-type", "")
     
-    def test_create_chat_completion_stream_error(self, client, mock_openai_engine, auth_token, mocker):
+    def test_create_chat_completion_stream_error(self, client, mock_openai_engine, auth_token):
         """测试：流式聊天完成错误处理"""
         with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
             # 设置流式响应抛出异常
@@ -145,7 +145,7 @@ class TestChatAPI:
             # 流式响应即使有错误也会返回200，但内容包含错误信息
             assert response.status_code == 200
     
-    def test_create_chat_completion_with_personality(self, client, mock_openai_engine, auth_token, mocker):
+    def test_create_chat_completion_with_personality(self, client, mock_openai_engine, auth_token):
         """测试：带人格的聊天完成（当前chat.py不支持personality_id，暂时跳过）"""
         # 注意：当前chat.py API不支持personality_id参数
         # 这个测试暂时跳过，等chat.py支持personality后再启用
@@ -161,7 +161,7 @@ class TestChatAPI:
         
         assert response.status_code == 422  # 验证错误
     
-    def test_create_chat_completion_engine_error(self, client, auth_token, mocker):
+    def test_create_chat_completion_engine_error(self, client, auth_token):
         """测试：引擎创建错误"""
         with patch.object(AIEngineFactory, 'create_engine', side_effect=ValueError("Invalid engine")):
             response = client.post(
