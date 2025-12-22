@@ -260,21 +260,14 @@ API Key: (可选)
 
 ---
 
-#### Qdrant向量数据库测试
+#### ~~Qdrant向量数据库测试~~ ❌ **已废弃**
 
-**需要**: Qdrant
+**状态**: ⚠️ **已废弃** - 不需要测试
 
-**测试文件**: `test_qdrant_memory.py` (待创建)
-
-**测试内容**:
-```python
-# QdrantMemoryEngine测试
-- 向量存储测试
-- 向量检索测试
-- 集合管理测试
-```
-
-**预计提升**: +1-2%
+**说明**: 
+- QdrantMemoryEngine已废弃
+- 将在v2.0移除
+- 不需要创建Qdrant测试
 
 ---
 
@@ -353,9 +346,10 @@ API Key: (可选)
 2. **Redis** - 必需，影响CacheManager测试
 3. **三大引擎** - 已部署 ✅，只需验证连接
 
-### P1 - 短期部署（重要功能）
+### ~~P1 - 短期部署（已废弃）~~
 
-4. **Qdrant** - 影响旧Memory引擎测试
+~~4. **Qdrant** - 影响旧Memory引擎测试~~  
+**注意**: Qdrant已废弃，旧的Memory引擎将在v2.0移除，**不需要部署Qdrant进行测试**
 
 ### P2 - 可选部署（兼容性测试）
 
@@ -391,14 +385,9 @@ else
     echo "❌ 连接失败"
 fi
 
-# Qdrant
-echo -n "Qdrant: "
-curl -s http://192.168.66.10:6333/health > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    echo "✅ 连接成功"
-else
-    echo "❌ 连接失败"
-fi
+# Qdrant (已废弃，不需要验证)
+# echo -n "Qdrant: "
+# echo "❌ 已废弃，不需要"
 
 # Cognee
 echo -n "Cognee: "
@@ -444,11 +433,11 @@ fi
 |------|----------|----------|
 | PostgreSQL | ~40个 | +3-5% |
 | Redis | ~20个 | +2-3% |
-| Qdrant | ~10个 | +1-2% |
+| ~~Qdrant~~ | ~~~10个~~ | ~~+1-2%~~ ❌ **已废弃** |
 | 三大引擎 | ~30个 | +1.5-3% |
-| **总计** | **~100个** | **+8-13%** |
+| **总计** | **~90个** | **+7-11%** |
 
-**最终预期**: 27% → **35-40%**
+**最终预期**: 27% → **34-38%** (移除Qdrant后)
 
 **要达到80%**: 还需要更多测试和优化
 
@@ -529,7 +518,7 @@ pytest tests/test_three_engines_full.py -v
 |------|------|--------|------|
 | PostgreSQL | 192.168.66.10:5432 | P0 | ⏳ 待部署 |
 | Redis | 192.168.66.10:6379 | P0 | ⏳ 待部署 |
-| Qdrant | 192.168.66.10:6333 | P1 | ⏳ 待部署 |
+| ~~Qdrant~~ | ~~192.168.66.10:6333~~ | ~~P1~~ | ❌ **已废弃，不需要** |
 
 ---
 
@@ -546,10 +535,7 @@ pytest tests/test_three_engines_full.py -v
    docker run -d --name redis-test -p 6379:6379 redis:7-alpine redis-server --requirepass redis_passw0rd
    ```
 
-3. **部署Qdrant测试实例**
-   ```bash
-   docker run -d --name qdrant-test -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.15
-   ```
+3. ~~**部署Qdrant测试实例**~~ ❌ **已废弃，不需要**
 
 4. **验证服务连接**
    ```bash

@@ -61,11 +61,11 @@
    - 影响测试: ~20个
    - 预计提升: +2-3%
 
-#### P1 - 短期部署
+#### ~~P1 - 已废弃~~
 
-3. **Qdrant** (192.168.66.10:6333)
-   - 影响测试: ~10个
-   - 预计提升: +1-2%
+~~3. **Qdrant**~~ ❌ **已废弃，不需要部署**
+   - 旧的Memory引擎已废弃，将在v2.0移除
+   - 新的三大引擎系统不使用Qdrant
 
 #### 已部署 ✅
 
@@ -160,7 +160,7 @@
 
 1. `test_models_comprehensive.py` - 数据库模型测试
 2. `test_cache_redis.py` - Redis缓存测试
-3. `test_qdrant_memory.py` - Qdrant测试
+3. ~~`test_qdrant_memory.py`~~ ❌ **已废弃，不需要**
 4. `test_context_service_integration.py` - ContextService集成测试
 5. `test_chat_orchestrator.py` - ChatOrchestrator测试
 
