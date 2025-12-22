@@ -86,3 +86,7 @@ class MultiLevelCache:
         self._l1_cache.clear()
         logger.info("Cache cleared")
 
+
+# 全局缓存实例
+cache = MultiLevelCache()
+

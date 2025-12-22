@@ -15,7 +15,26 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # 本地库
 from app.config.config import settings
 from app.utils.logger import logger
-from app.utils.cache import cache_manager
+
+# 导入旧的cache_manager（直接从cache.py）
+try:
+    # 由于cache/目录和cache.py文件冲突，需要特殊导入
+    import sys
+    from pathlib import Path
+    cache_py_path = Path(__file__).parent.parent / "utils" / "cache.py"
+    
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("app.utils.cache_legacy", cache_py_path)
+    if spec and spec.loader:
+        cache_legacy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cache_legacy)
+        cache_manager = cache_legacy.cache_manager
+    else:
+        cache_manager = None
+except Exception as e:
+    import warnings
+    warnings.warn(f"Failed to import cache_manager: {e}")
+    cache_manager = None
 
 
 class PerformanceMiddleware(BaseHTTPMiddleware):

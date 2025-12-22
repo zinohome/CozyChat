@@ -14,7 +14,7 @@ from app.engines.knowledge.factory import KnowledgeEngineFactory
 from app.engines.userprofile.factory import UserProfileEngineFactory
 from app.engines.chatmemory.factory import ChatMemoryEngineFactory
 from app.services.context.intent_analyzer import IntentAnalyzer
-from app.utils.cache.multi_level_cache import MultiLevelCache
+from app.utils.cache_new.multi_level_cache import MultiLevelCache
 from app.utils.logger import logger
 
 
