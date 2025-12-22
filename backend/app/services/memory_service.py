@@ -2,6 +2,22 @@
 记忆服务
 
 统一处理记忆相关的所有操作，包括保存、检索、删除等
+
+============================================================================
+⚠️ DEPRECATED: MemoryService（已废弃）
+============================================================================
+状态：已废弃，将在 v2.0 移除
+废弃时间：2024-12-22
+移除时间：2025-Q1
+
+替代方案：使用三大人格化引擎系统
+  - Knowledge Engine: backend/app/engines/knowledge/
+  - UserProfile Engine: backend/app/engines/userprofile/
+  - ChatMemory Engine: backend/app/engines/chatmemory/
+  - ContextServiceNew: backend/app/services/context/context_service_new.py
+
+迁移指南：docs/reports/三大人格化引擎系统架构重构方案.md
+============================================================================
 """
 
 # 标准库
