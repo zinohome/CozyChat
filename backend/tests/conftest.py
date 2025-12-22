@@ -43,7 +43,8 @@ except Exception as e:
     warnings.warn(f"Mapper configuration warning in tests: {e}", UserWarning)
 
 # 使用测试PostgreSQL数据库
-TEST_DATABASE_URL = "postgresql://cozychat:passw0rd@192.168.66.10:5432/cozychat_test"
+# 注意：用户名为cozychat_test（不是cozychat）
+TEST_DATABASE_URL = "postgresql://cozychat_test:passw0rd@192.168.66.10:5432/cozychat_test"
 TEST_DATABASE_URL_ASYNC = TEST_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
 # 同步测试引擎
@@ -318,8 +319,8 @@ def setup_test_env(monkeypatch):
     # 测试数据库配置
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     
-    # Redis配置（测试时使用Mock）
-    monkeypatch.setenv("REDIS_URL", "redis://192.168.66.10:6379/0")
+    # Redis配置（使用实际Redis服务）
+    monkeypatch.setenv("REDIS_URL", "redis://:redis_passw0rd@192.168.66.10:6379/0")
     monkeypatch.setenv("REDIS_PASSWORD", "redis_passw0rd")
     
     # Qdrant配置
