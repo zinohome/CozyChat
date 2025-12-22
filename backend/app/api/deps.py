@@ -498,17 +498,18 @@ async def get_context_service(
     db: AsyncSession = Depends(get_db),
     memory_manager: "MemoryManager" = Depends(get_memory_manager),
 ) -> "ContextService":
-    """获取上下文服务依赖
+    """获取上下文服务依赖（使用新的三大引擎）
     
     Args:
         db: 异步数据库会话
-        memory_manager: 记忆管理器
+        memory_manager: 记忆管理器（旧版，保留以兼容）
     
     Returns:
         ContextService: 上下文服务实例
     """
-    from app.services.context.context_service import ContextService
-    return ContextService(db=db, memory_manager=memory_manager)
+    # 使用新的ContextServiceNew（三大引擎）
+    from app.services.context.context_service_new import ContextServiceNew
+    return ContextServiceNew.get_instance()  # type: ignore[return-value]
 
 
 async def get_chat_orchestrator(

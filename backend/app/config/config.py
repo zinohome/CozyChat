@@ -170,6 +170,58 @@ class Settings(BaseSettings):
     qdrant_url: Optional[str] = Field(default=None, alias="QDRANT_URL")
     qdrant_api_key: Optional[str] = Field(default=None, alias="QDRANT_API_KEY")
     
+    # ===== 三大人格化引擎配置 =====
+    # Knowledge Engine (Cognee)
+    knowledge_engine_provider: str = Field(
+        default="cognee",
+        alias="KNOWLEDGE_ENGINE_PROVIDER",
+        description="知识引擎提供商: cognee"
+    )
+    cognee_api_url: str = Field(
+        default="http://localhost:8000",
+        alias="COGNEE_API_URL",
+        description="Cognee API服务地址"
+    )
+    cognee_api_token: Optional[str] = Field(
+        default=None,
+        alias="COGNEE_API_TOKEN",
+        description="Cognee API Token"
+    )
+    
+    # UserProfile Engine (Memobase)
+    userprofile_engine_provider: str = Field(
+        default="memobase",
+        alias="USERPROFILE_ENGINE_PROVIDER",
+        description="用户画像引擎提供商: memobase"
+    )
+    memobase_project_url: str = Field(
+        default="http://localhost:8019",
+        alias="MEMOBASE_PROJECT_URL",
+        description="Memobase项目URL"
+    )
+    memobase_api_key: str = Field(
+        default="secret",
+        alias="MEMOBASE_API_KEY",
+        description="Memobase API Key"
+    )
+    
+    # ChatMemory Engine (Mem0)
+    chatmemory_engine_provider: str = Field(
+        default="mem0",
+        alias="CHATMEMORY_ENGINE_PROVIDER",
+        description="会话记忆引擎提供商: mem0"
+    )
+    mem0_api_url: str = Field(
+        default="http://localhost:8888",
+        alias="MEM0_API_URL",
+        description="Mem0 API服务地址"
+    )
+    mem0_api_key: Optional[str] = Field(
+        default=None,
+        alias="MEM0_API_KEY",
+        description="Mem0 API Key"
+    )
+    
     # ===== 腾讯云配置 =====
     tencent_secret_id: Optional[str] = Field(default=None, alias="TENCENT_SECRET_ID")
     tencent_secret_key: Optional[str] = Field(default=None, alias="TENCENT_SECRET_KEY")

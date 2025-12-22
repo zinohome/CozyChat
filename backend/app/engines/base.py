@@ -24,7 +24,10 @@ class EngineStatus(str, Enum):
 class EngineType(str, Enum):
     """引擎类型枚举"""
     AI = "ai"
-    MEMORY = "memory"
+    MEMORY = "memory"  # 旧的记忆引擎（待删除）
+    KNOWLEDGE = "knowledge"  # 知识引擎（Cognee）
+    USERPROFILE = "userprofile"  # 用户画像引擎（Memobase）
+    CHATMEMORY = "chatmemory"  # 会话记忆引擎（Mem0）
     TTS = "tts"
     STT = "stt"
     REALTIME = "realtime"
