@@ -14,6 +14,7 @@ from memobase import MemoBaseClient, ChatBlob
 
 # 本地库
 from app.engines.userprofile.base import UserProfileEngineBase
+from app.utils.user_id_normalizer import UserIDNormalizer
 from app.utils.logger import logger
 
 
@@ -158,9 +159,20 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
         # 确保引擎已初始化
         await self.initialize()
         
-        # 使用CozyChat的User.id（UUID），不需要转换
-        # Memobase API接受UUID格式，直接使用
-        uuid_user_id = user_id  # 现在保证是CozyChat User.id（UUID字符串）
+        # 验证user_id是UUID格式（Memobase API要求UUID v4或v5）
+        if not UserIDNormalizer.is_uuid(user_id):
+            logger.error(
+                f"Invalid user_id format for Memobase: {user_id} (must be UUID v4 or v5)",
+                extra={"user_id": user_id}
+            )
+            raise ValueError(
+                f"user_id must be UUID format for Memobase API, got: {user_id}"
+            )
+        
+        # 使用CozyChat的User.id（UUID v4），符合Memobase要求
+        # Memobase API要求user_id必须是UUID v4或v5格式
+        # CozyChat的User.id是UUID v4格式，可以直接使用
+        uuid_user_id = user_id
         
         start_time = time.time()
         
@@ -236,8 +248,18 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
         # 确保引擎已初始化
         await self.initialize()
         
-        # 使用CozyChat的User.id（UUID），不需要转换
-        uuid_user_id = user_id  # 现在保证是CozyChat User.id（UUID字符串）
+        # 验证user_id是UUID格式（Memobase API要求UUID v4或v5）
+        if not UserIDNormalizer.is_uuid(user_id):
+            logger.error(
+                f"Invalid user_id format for Memobase: {user_id} (must be UUID v4 or v5)",
+                extra={"user_id": user_id}
+            )
+            raise ValueError(
+                f"user_id must be UUID format for Memobase API, got: {user_id}"
+            )
+        
+        # 使用CozyChat的User.id（UUID v4），符合Memobase要求
+        uuid_user_id = user_id
         
         start_time = time.time()
         
