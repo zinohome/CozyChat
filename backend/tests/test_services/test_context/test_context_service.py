@@ -16,7 +16,8 @@ from typing import List, Dict, Any
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)
     try:
-        from app.services.context.context_service import ContextService
+        # 尝试导入旧的legacy实现
+        from app.services.context.context_service_legacy import ContextService
         from app.services.context.message_retriever import MessageRetriever
         from app.services.context.summary_loader import SummaryLoader
         from app.services.context.user_profile_loader import UserProfileLoader
