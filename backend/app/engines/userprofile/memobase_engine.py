@@ -158,8 +158,9 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
         # 确保引擎已初始化
         await self.initialize()
         
-        # 转换用户ID为UUID格式
-        uuid_user_id = user_id_to_uuid(user_id)
+        # 使用CozyChat的User.id（UUID），不需要转换
+        # Memobase API接受UUID格式，直接使用
+        uuid_user_id = user_id  # 现在保证是CozyChat User.id（UUID字符串）
         
         start_time = time.time()
         
@@ -235,8 +236,8 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
         # 确保引擎已初始化
         await self.initialize()
         
-        # 转换用户ID为UUID格式
-        uuid_user_id = user_id_to_uuid(user_id)
+        # 使用CozyChat的User.id（UUID），不需要转换
+        uuid_user_id = user_id  # 现在保证是CozyChat User.id（UUID字符串）
         
         start_time = time.time()
         
