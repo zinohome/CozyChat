@@ -15,6 +15,7 @@ from app.engines.userprofile.factory import UserProfileEngineFactory
 from app.engines.chatmemory.factory import ChatMemoryEngineFactory
 from app.services.context.intent_analyzer import IntentAnalyzer
 from app.utils.cache_new.multi_level_cache import MultiLevelCache
+from app.utils.user_id_normalizer import UserIDNormalizer
 from app.utils.logger import logger
 
 
@@ -115,15 +116,17 @@ class ContextServiceNew:
         session_id: str,
         query: str,
         dataset_names: Optional[List[str]] = None,
+        db_session: Optional[Any] = None,  # 数据库会话（用于用户ID标准化）
         **kwargs
     ) -> Dict[str, Any]:
         """构建个性化上下文
         
         Args:
-            user_id: 用户ID
+            user_id: 用户ID（可能是UUID、username或email）
             session_id: 会话ID
             query: 查询文本
             dataset_names: 知识库数据集名称列表
+            db_session: 数据库会话（用于用户ID标准化，可选）
             **kwargs: 其他参数
         
         Returns:
@@ -134,6 +137,28 @@ class ContextServiceNew:
         
         start_time = asyncio.get_event_loop().time()
         
+        # 0. 标准化用户ID（如果提供了数据库会话）
+        normalized_user_id = user_id
+        if db_session:
+            normalized_user_id = await UserIDNormalizer.normalize_user_id(
+                user_id, db_session
+            )
+            if not normalized_user_id:
+                logger.warning(
+                    f"User not found: {user_id}, using original user_id",
+                    extra={"user_id": user_id}
+                )
+                # 如果标准化失败，使用原始user_id（可能是UUID格式）
+                normalized_user_id = user_id
+        else:
+            # 没有数据库会话，尝试标准化UUID格式
+            normalized_user_id = UserIDNormalizer.normalize_uuid_string(user_id) or user_id
+            if normalized_user_id != user_id:
+                logger.debug(
+                    f"Normalized UUID format: {user_id} -> {normalized_user_id}",
+                    extra={"original": user_id, "normalized": normalized_user_id}
+                )
+        
         # 1. 分析意图
         intent = self.intent_analyzer.analyze_intent(query)
         engine_config = self.intent_analyzer.get_engine_config(intent)
@@ -141,7 +166,8 @@ class ContextServiceNew:
         logger.info(
             f"Building context with intent: {intent.value}",
             extra={
-                "user_id": user_id,
+                "user_id": normalized_user_id,
+                "original_user_id": user_id,
                 "session_id": session_id,
                 "query": query[:50]
             }
@@ -171,7 +197,7 @@ class ContextServiceNew:
             tasks.append(
                 self._safe_call(
                     self.userprofile_engine.get_profile(
-                        user_id=user_id,
+                        user_id=normalized_user_id,  # 使用标准化的user_id
                         max_token_size=engine_config["userprofile"].get("max_tokens", 300)
                     ),
                     timeout=0.3
@@ -185,7 +211,7 @@ class ContextServiceNew:
                 self._safe_call(
                     self.chatmemory_engine.search_memories(
                         query=query,
-                        user_id=user_id,
+                        user_id=normalized_user_id,  # 使用标准化的user_id
                         session_id=session_id,
                         top_k=engine_config["chatmemory"].get("top_k", 5)
                     ),

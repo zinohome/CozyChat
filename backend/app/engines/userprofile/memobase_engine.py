@@ -17,11 +17,16 @@ from app.engines.userprofile.base import UserProfileEngineBase
 from app.utils.logger import logger
 
 
+# ⚠️ 已废弃：user_id_to_uuid函数
+# 现在所有引擎都使用CozyChat的User.id（UUID），不需要转换
+# 此函数保留仅用于向后兼容，但不应再使用
 def user_id_to_uuid(user_id: str) -> str:
-    """将任意用户ID转换为UUID v5格式
+    """⚠️ 已废弃：将任意用户ID转换为UUID v5格式
     
-    Memobase API要求user_id必须是UUID格式。
-    使用UUID v5确保同一user_id总是生成相同的UUID。
+    注意：此函数已废弃，不应再使用。
+    现在所有引擎都使用CozyChat的User.id（UUID），不需要转换。
+    
+    保留此函数仅用于向后兼容。
     
     Args:
         user_id: 原始用户ID
@@ -29,6 +34,12 @@ def user_id_to_uuid(user_id: str) -> str:
     Returns:
         UUID v5格式的字符串
     """
+    import warnings
+    warnings.warn(
+        "user_id_to_uuid is deprecated. Use CozyChat User.id (UUID) directly.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, user_id))
 
 
