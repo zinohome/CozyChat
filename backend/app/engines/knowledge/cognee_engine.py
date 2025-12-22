@@ -102,10 +102,11 @@ class CogneeKnowledgeEngine(KnowledgeEngineBase):
         try:
             # Cognee SDK的health_check方法
             health = await self.client.health_check()
-            is_healthy = health.status == "ok"
+            # Cognee返回的status可能是 "ok" 或 "ready"，都视为健康
+            is_healthy = health.status in ("ok", "ready")
             
             if is_healthy:
-                logger.debug("Cognee health check passed")
+                logger.debug(f"Cognee health check passed (status: {health.status})")
             else:
                 logger.warning(
                     f"Cognee health check failed: {health.status}",
