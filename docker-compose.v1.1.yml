@@ -1,0 +1,180 @@
+# CozyChat v1.1.0 - 完整部署配置（包含三大引擎）
+version: '3.8'
+
+# ============================================================================
+# 网络配置
+# ============================================================================
+networks:
+  cozychat-network:
+    driver: bridge
+
+# ============================================================================
+# 卷配置
+# ============================================================================
+volumes:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  backend-logs:
+  backend-data:
+
+# ============================================================================
+# 服务配置
+# ============================================================================
+services:
+  # ==========================================================================
+  # 1. PostgreSQL - 主数据库
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: cozychat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cozychat
+      POSTGRES_USER: cozychat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cozychat_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - cozychat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cozychat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # 2. Redis - 缓存和会话
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: cozychat-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis-data:/data
+    networks:
+      - cozychat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # 3. Qdrant - 向量数据库（通过三大引擎使用）
+  # ==========================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.15
+    container_name: cozychat-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - cozychat-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # 4. CozyChat Backend - 主应用（v1.1.0）
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.v1.1
+    image: cozychat/backend:v1.1.0
+    container_name: cozychat-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-9800}:8000"
+    environment:
+      # 应用配置
+      APP_ENV: production
+      APP_NAME: CozyChat
+      LOG_LEVEL: INFO
+      
+      # 数据库配置
+      DATABASE_URL: postgresql://cozychat:${POSTGRES_PASSWORD:-cozychat_password}@postgres:5432/cozychat
+      
+      # Redis配置
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+      
+      # OpenAI配置
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      
+      # 🆕 三大人格化引擎配置
+      # Knowledge Engine (Cognee)
+      KNOWLEDGE_ENGINE_PROVIDER: cognee
+      COGNEE_API_URL: ${COGNEE_API_URL:-http://cognee:8000}
+      COGNEE_API_TOKEN: ${COGNEE_API_TOKEN:-}
+      
+      # UserProfile Engine (Memobase)
+      USERPROFILE_ENGINE_PROVIDER: memobase
+      MEMOBASE_PROJECT_URL: ${MEMOBASE_PROJECT_URL:-http://memobase:8019}
+      MEMOBASE_API_KEY: ${MEMOBASE_API_KEY:-secret}
+      
+      # ChatMemory Engine (Mem0)
+      CHATMEMORY_ENGINE_PROVIDER: mem0
+      MEM0_API_URL: ${MEM0_API_URL:-http://mem0:8888}
+      MEM0_API_KEY: ${MEM0_API_KEY:-}
+      
+      # Qdrant配置（旧引擎兼容）
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+    volumes:
+      - backend-logs:/app/logs
+      - backend-data:/app/data
+      - ./backend/config:/app/config:ro
+    networks:
+      - cozychat-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==========================================================================
+  # 可选：Frontend（如果需要）
+  # ==========================================================================
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   image: cozychat/frontend:v1.1.0
+  #   container_name: cozychat-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${FRONTEND_PORT:-8000}:5173"
+  #   environment:
+  #     VITE_API_BASE_URL: http://backend:8000
+  #   networks:
+  #     - cozychat-network
+  #   depends_on:
+  #     - backend
+
+# ============================================================================
+# 注意事项
+# ============================================================================
+# 1. 三大引擎服务（Cognee/Memobase/Mem0）需要单独部署在其他服务器
+# 2. 通过环境变量配置引擎URL：
+#    - COGNEE_API_URL
+#    - MEMOBASE_PROJECT_URL
+#    - MEM0_API_URL
+# 3. 如需本地部署三大引擎，请参考 docker-compose.engines.yml
+
