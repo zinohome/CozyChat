@@ -24,12 +24,17 @@ CozyChat 后端服务，基于 FastAPI 构建的现代化 AI 对话平台。
 ### 数据库
 - **PostgreSQL** - 主数据库，存储业务数据
 - **Redis** - 缓存和会话存储
-- **ChromaDB/Qdrant** - 向量数据库，存储记忆嵌入
+- **Qdrant** - 向量数据库（通过三大引擎）
 
 ### AI引擎
 - **OpenAI API** - GPT系列模型
 - **Ollama** - 本地LLM部署
 - **LM Studio** - 本地模型管理
+
+### 🆕 三大人格化引擎（v1.1+）
+- **Knowledge Engine (Cognee)** - 知识图谱构建和检索
+- **UserProfile Engine (Memobase)** - 用户画像管理
+- **ChatMemory Engine (Mem0)** - 会话记忆搜索
 
 ### 监控与日志
 - **Sentry** - 错误追踪和性能监控
@@ -55,10 +60,13 @@ backend/
 │   │   ├── memory/          # 记忆服务
 │   │   └── prompt/          # 提示词服务
 │   ├── engines/             # 引擎层
-│   │   ├── ai/              # AI引擎
-│   │   ├── memory/          # 记忆引擎
-│   │   ├── tools/           # 工具引擎
-│   │   └── voice/           # 语音引擎
+│   │   ├── ai/              # AI引擎（OpenAI/Ollama/LMStudio）
+│   │   ├── knowledge/       # 🆕 知识引擎（Cognee）
+│   │   ├── userprofile/     # 🆕 用户画像引擎（Memobase）
+│   │   ├── chatmemory/      # 🆕 会话记忆引擎（Mem0）
+│   │   ├── memory/          # ⚠️ 旧记忆引擎（已废弃，v2.0移除）
+│   │   ├── tools/           # 工具引擎（MCP）
+│   │   └── voice/           # 语音引擎（STT/TTS/RealTime）
 │   ├── models/              # 数据库模型
 │   │   ├── user.py
 │   │   ├── session.py
