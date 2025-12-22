@@ -177,7 +177,7 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
         start_time = time.time()
         
         try:
-            # 获取用户
+            # 尝试获取用户
             user = self.client.get_user(uuid_user_id, no_get=False)  # type: ignore[union-attr]
             
             # 获取画像
@@ -207,27 +207,73 @@ class MemobaseUserProfileEngine(UserProfileEngineBase):
             
         except Exception as e:
             processing_time = time.time() - start_time
-            self.update_metrics(success=False, processing_time=processing_time)
-            
-            # 判断是否是用户不存在错误
             error_msg = str(e)
-            if "422" in error_msg or "404" in error_msg or "Unprocessable Entity" in error_msg:
-                logger.debug(
-                    f"User {user_id} (UUID: {uuid_user_id}) not found (normal for new users)",
+            
+            # 判断是否是用户不存在错误，如果是则自动创建用户
+            if "422" in error_msg or "404" in error_msg or "Unprocessable Entity" in error_msg or "not found" in error_msg.lower():
+                logger.info(
+                    f"User not found, auto-creating: {user_id} (UUID: {uuid_user_id})",
                     extra={"user_id": user_id}
                 )
+                
+                try:
+                    # 自动创建用户（与update_profile()中的逻辑一致）
+                    from memobase import User as MemobaseUser
+                    new_user = MemobaseUser(id=uuid_user_id)
+                    new_user.create(client=self.client)  # type: ignore[union-attr]
+                    
+                    # 重新获取用户
+                    user = self.client.get_user(uuid_user_id, no_get=False)  # type: ignore[union-attr]
+                    
+                    # 获取画像（新用户应该返回空画像）
+                    profile_text = user.profile(
+                        max_token_size=max_token_size,
+                        prefer_topics=["basic_info", "interest", "work"]
+                    )
+                    
+                    # 更新指标
+                    processing_time = time.time() - start_time
+                    self.update_metrics(success=True, processing_time=processing_time)
+                    
+                    logger.info(
+                        f"User auto-created and profile retrieved",
+                        extra={
+                            "user_id": user_id,
+                            "token_size": len(str(profile_text).split()) if profile_text else 0,
+                            "processing_time": processing_time
+                        }
+                    )
+                    
+                    return {
+                        "user_id": user_id,
+                        "profile_text": str(profile_text) if profile_text else "",
+                        "token_size": len(str(profile_text).split()) if profile_text else 0
+                    }
+                    
+                except Exception as create_error:
+                    # 创建失败，记录警告并返回空画像
+                    self.update_metrics(success=False, processing_time=processing_time)
+                    logger.warning(
+                        f"Failed to auto-create user: {create_error}",
+                        extra={"user_id": user_id}
+                    )
+                    return {
+                        "user_id": user_id,
+                        "profile_text": "",
+                        "token_size": 0
+                    }
             else:
+                # 其他错误，返回空画像
+                self.update_metrics(success=False, processing_time=processing_time)
                 logger.warning(
                     f"Error getting user profile: {e}",
                     extra={"user_id": user_id}
                 )
-            
-            # 返回空画像
-            return {
-                "user_id": user_id,
-                "profile_text": "",
-                "token_size": 0
-            }
+                return {
+                    "user_id": user_id,
+                    "profile_text": "",
+                    "token_size": 0
+                }
     
     async def update_profile(
         self,
