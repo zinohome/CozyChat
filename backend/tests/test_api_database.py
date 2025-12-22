@@ -28,10 +28,11 @@ class TestSessionAPIDatabase:
         try:
             # 先创建用户
             user_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="apiuser",
-                email="api@example.com",
+                username=f"apiuser_{unique_suffix}",
+                email=f"api_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -63,10 +64,11 @@ class TestSessionAPIDatabase:
             # 创建用户和会话
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="listuser",
-                email="list@example.com",
+                username=f"listuser_{unique_suffix}",
+                email=f"list_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -76,6 +78,7 @@ class TestSessionAPIDatabase:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test Session",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -104,10 +107,11 @@ class TestChatAPIDatabase:
             # 创建用户和会话
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="chatuser",
-                email="chat@example.com",
+                username=f"chatuser_{unique_suffix}",
+                email=f"chat_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -117,6 +121,7 @@ class TestChatAPIDatabase:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -155,10 +160,11 @@ class TestUserAPIDatabase:
         try:
             # 创建用户
             user_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="currentuser",
-                email="current@example.com",
+                username=f"currentuser_{unique_suffix}",
+                email=f"current_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()

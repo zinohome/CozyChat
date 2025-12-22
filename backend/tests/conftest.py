@@ -104,8 +104,10 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestAsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            # 测试成功时回滚，避免数据污染
+            await session.rollback()
         except Exception:
+            # 测试失败时也回滚
             await session.rollback()
             raise
         finally:

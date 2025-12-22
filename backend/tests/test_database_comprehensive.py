@@ -31,10 +31,12 @@ class TestUserModel:
         """测试：创建用户"""
         try:
             user_id = str(uuid.uuid4())
+            # 使用唯一的email和username避免冲突
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="testuser",
-                email="test@example.com",
+                username=f"testuser_{unique_suffix}",
+                email=f"test_{unique_suffix}@example.com",
                 password_hash="hashed_password",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -56,10 +58,11 @@ class TestUserModel:
         try:
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="testuser2",
-                email="test2@example.com",
+                username=f"testuser2_{unique_suffix}",
+                email=f"test2_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -71,6 +74,7 @@ class TestUserModel:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test Session",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -94,10 +98,11 @@ class TestSessionModel:
             # 先创建用户
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="sessionuser",
-                email="session@example.com",
+                username=f"sessionuser_{unique_suffix}",
+                email=f"session_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -109,6 +114,7 @@ class TestSessionModel:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test Session",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -135,10 +141,11 @@ class TestMessageModel:
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
             message_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="msguser",
-                email="msg@example.com",
+                username=f"msguser_{unique_suffix}",
+                email=f"msg_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -148,6 +155,7 @@ class TestMessageModel:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -194,10 +202,11 @@ class TestMessageSaverDatabase:
             # 创建用户和会话
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="saveruser",
-                email="saver@example.com",
+                username=f"saveruser_{unique_suffix}",
+                email=f"saver_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -207,6 +216,7 @@ class TestMessageSaverDatabase:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -255,10 +265,11 @@ class TestMessageServiceDatabase:
             # 创建用户和会话
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="serviceuser",
-                email="service@example.com",
+                username=f"serviceuser_{unique_suffix}",
+                email=f"service_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -268,6 +279,7 @@ class TestMessageServiceDatabase:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -301,10 +313,11 @@ class TestMessageServiceDatabase:
             # 创建用户和会话
             user_id = str(uuid.uuid4())
             session_id = str(uuid.uuid4())
+            unique_suffix = uuid.uuid4().hex[:8]
             user = User(
                 id=user_id,
-                username="msguser2",
-                email="msg2@example.com",
+                username=f"msguser2_{unique_suffix}",
+                email=f"msg2_{unique_suffix}@example.com",
                 password_hash="hashed",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -314,6 +327,7 @@ class TestMessageServiceDatabase:
             session = Session(
                 id=session_id,
                 user_id=user_id,
+                personality_id="default",  # 添加必需的personality_id
                 title="Test",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
