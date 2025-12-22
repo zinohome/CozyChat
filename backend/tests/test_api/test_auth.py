@@ -8,6 +8,7 @@
 """
 
 import pytest
+import uuid
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import Depends
@@ -28,7 +29,9 @@ class TestAuthAPI:
     @pytest.fixture
     def valid_refresh_token(self):
         """有效的刷新令牌"""
-        data = {"sub": "test-user-id", "username": "testuser"}
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        data = {"sub": test_user_id, "username": "testuser"}
         return create_refresh_token(data)
     
     @pytest.fixture
@@ -38,8 +41,10 @@ class TestAuthAPI:
         from jose import jwt
         from app.config.config import settings
         
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
         payload = {
-            "sub": "test-user-id",
+            "sub": test_user_id,
             "username": "testuser",
             "exp": datetime.utcnow() - timedelta(seconds=1),
             "type": "refresh"

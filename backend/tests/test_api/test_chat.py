@@ -10,6 +10,7 @@
 """
 
 import pytest
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
@@ -60,7 +61,9 @@ class TestChatAPI:
     def auth_token(self):
         """测试认证令牌"""
         from app.utils.security import create_access_token
-        data = {"sub": "test-user-id", "username": "testuser", "role": "user"}
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        data = {"sub": test_user_id, "username": "testuser", "role": "user"}
         return create_access_token(data)
     
     def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token, mocker):
