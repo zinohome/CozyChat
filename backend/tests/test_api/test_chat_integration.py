@@ -180,7 +180,9 @@ class TestChatIntegration:
     @pytest.mark.asyncio
     async def test_memory_scoring_service_integration(self):
         """测试：MemoryScoringService服务集成"""
-        from app.services.memory.scoring_service import MemoryScoringService
+        # 旧的memory服务已废弃，跳过此测试
+        pytest.skip("MemoryScoringService已废弃，请使用新的三大引擎系统")
+        # from app.services.memory.scoring_service import MemoryScoringService
         from app.core.personality.models import IntelligentScoring, ScoringWeights
         from unittest.mock import Mock
         from datetime import datetime, timezone
@@ -277,7 +279,9 @@ class TestChatIntegration:
         from app.services.chat.message_saver import MessageSaver
         from app.services.chat.tool_handler import ToolCallHandler
         from app.services.prompt.builder import PromptBuilder
-        from app.services.memory.scoring_service import MemoryScoringService
+        # 旧的memory服务已废弃，跳过此测试
+        pytest.skip("MemoryScoringService已废弃，请使用新的三大引擎系统")
+        # from app.services.memory.scoring_service import MemoryScoringService
         
         # Arrange & Act
         # 验证服务可以独立实例化

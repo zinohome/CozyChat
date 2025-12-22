@@ -1,24 +1,31 @@
 """
-ContextService单元测试
+ContextService单元测试（已废弃）
 
-测试上下文服务的所有功能，包括：
-- 构建完整上下文
-- 消息检索
-- 摘要加载
-- 记忆检索
-- 用户画像加载
+注意：此测试文件针对旧的ContextService，已在v1.1.0中被ContextServiceNew替代。
+新的测试应该使用ContextServiceNew，参考test_services_comprehensive.py中的TestContextServiceNewComprehensive。
+
+此文件保留用于向后兼容测试，但建议迁移到新的测试。
 """
 
 import pytest
+import warnings
 from unittest.mock import AsyncMock, MagicMock
 from typing import List, Dict, Any
 
-from app.services.context.context_service import ContextService
-from app.services.context.message_retriever import MessageRetriever
-from app.services.context.summary_loader import SummaryLoader
-from app.services.context.memory_retriever import MemoryRetriever
-from app.services.context.user_profile_loader import UserProfileLoader
-from app.services.context.context_assembler import ContextAssembler
+# 旧的ContextService已废弃，但保留用于向后兼容测试
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    try:
+        from app.services.context.context_service import ContextService
+        from app.services.context.message_retriever import MessageRetriever
+        from app.services.context.summary_loader import SummaryLoader
+        from app.services.context.user_profile_loader import UserProfileLoader
+        from app.services.context.context_assembler import ContextAssembler
+        # MemoryRetriever已废弃
+        # from app.services.context.memory_retriever import MemoryRetriever
+        HAS_OLD_SERVICE = True
+    except ImportError:
+        HAS_OLD_SERVICE = False
 
 
 class TestContextService:

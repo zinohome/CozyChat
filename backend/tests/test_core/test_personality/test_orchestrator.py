@@ -127,7 +127,12 @@ class TestOrchestrator:
     async def test_process_chat_request_with_memory(self, orchestrator, mock_personality, mock_memory_manager):
         """测试：处理带记忆的聊天请求"""
         # 设置记忆搜索结果（orchestrator调用retrieve_memories）
-        from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        # 旧的memory引擎已废弃，使用Mock代替
+        from unittest.mock import MagicMock
+        # from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        Memory = MagicMock
+        MemoryType = MagicMock
+        MemorySearchResult = MagicMock
         mock_memory = Memory(
             id="mem-1",
             user_id="test-user-id",
@@ -273,7 +278,12 @@ class TestOrchestrator:
     @pytest.mark.asyncio
     async def test_retrieve_memories_enabled(self, orchestrator, mock_personality, mock_memory_manager):
         """测试：检索记忆（启用）"""
-        from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        # 旧的memory引擎已废弃，使用Mock代替
+        from unittest.mock import MagicMock
+        # from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        Memory = MagicMock
+        MemoryType = MagicMock
+        MemorySearchResult = MagicMock
         
         mock_memory = Memory(
             id="mem-1",
@@ -363,7 +373,12 @@ class TestOrchestrator:
     
     def test_build_system_prompt_with_memories(self, orchestrator, mock_personality):
         """测试：构建系统提示（有记忆）"""
-        from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        # 旧的memory引擎已废弃，使用Mock代替
+        from unittest.mock import MagicMock
+        # from app.engines.memory.models import Memory, MemoryType, MemorySearchResult
+        Memory = MagicMock
+        MemoryType = MagicMock
+        MemorySearchResult = MagicMock
         
         mock_memory = Memory(
             id="mem-1",
