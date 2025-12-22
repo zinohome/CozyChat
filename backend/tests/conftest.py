@@ -345,7 +345,8 @@ def setup_test_env(monkeypatch):
 @pytest.fixture
 def chromadb_memory_engine():
     """ChromaDB记忆引擎fixture"""
-    from app.engines.memory.chromadb_engine import ChromaDBMemoryEngine
+    # 旧的memory引擎已废弃，不再导入
+    # from app.engines.memory.chromadb_engine import ChromaDBMemoryEngine
     temp_dir = tempfile.mkdtemp(prefix="test_chromadb_")
     engine = ChromaDBMemoryEngine(persist_directory=temp_dir)
     yield engine
