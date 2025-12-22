@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 并行调用优化
   - 智能超时控制
 
+- **🆕 Docker部署支持** (2024-12-22更新)
+  - 多阶段构建Dockerfile（优化镜像大小）
+  - 完整docker-compose编排（PostgreSQL + Redis + Qdrant + Backend）
+  - 三大引擎外部服务集成
+  - 健康检查和自动重启
+  - 数据持久化配置
+  - 完整部署文档（快速部署 + 详细指南）
+  - 生产环境就绪
+
 #### Changed
 - **⚠️ Memory引擎架构重构**
   - 从单一memory引擎升级为三大独立引擎
