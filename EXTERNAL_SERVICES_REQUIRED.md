@@ -76,38 +76,24 @@ docker run -d \
 
 ---
 
-### 3. Qdrant 向量数据库 ⚠️ 必需
+### ~~3. Qdrant 向量数据库~~ ❌ **已废弃，不需要**
 
-**用途**: 向量存储（旧Memory引擎使用）
+**状态**: ⚠️ **已废弃** - 旧的Memory引擎将在v2.0移除
 
-**配置要求**:
-```bash
-# Qdrant配置
-主机: 192.168.66.10
-端口: 6333 (HTTP), 6334 (gRPC)
-API Key: (可选)
-```
+**说明**: 
+- Qdrant是旧Memory引擎的一部分（`backend/app/engines/memory/qdrant_engine.py`）
+- 旧Memory引擎已标记为deprecated（见`DEPRECATED_FILES.md`）
+- 新的三大引擎系统不使用Qdrant：
+  - Knowledge Engine → 使用Cognee ✅
+  - ChatMemory Engine → 使用Mem0 ✅
+  - UserProfile Engine → 使用Memobase ✅
+- **不需要部署Qdrant进行测试**
 
-**部署命令**:
-```bash
-# 启动Qdrant（如果使用Docker）
-docker run -d \
-  --name qdrant-test \
-  -p 6333:6333 \
-  -p 6334:6334 \
-  qdrant/qdrant:v1.15
-```
-
-**需要的测试**:
-- ✅ QdrantMemoryEngine测试
-- ✅ 向量检索测试
-- ✅ 向量存储测试
-
-**预计提升覆盖率**: +1-2%
+**替代方案**: 使用新的三大引擎系统
 
 ---
 
-### 4. Cognee 知识引擎 🆕 必需
+### 3. Cognee 知识引擎 🆕 必需
 
 **用途**: 知识图谱检索
 
@@ -131,7 +117,7 @@ API Token: (可选)
 
 ---
 
-### 5. Memobase 用户画像引擎 🆕 必需
+### 4. Memobase 用户画像引擎 🆕 必需
 
 **用途**: 用户画像管理
 
@@ -155,7 +141,7 @@ API Key: secret
 
 ---
 
-### 6. Mem0 会话记忆引擎 🆕 必需
+### 5. Mem0 会话记忆引擎 🆕 必需
 
 **用途**: 会话记忆管理
 
