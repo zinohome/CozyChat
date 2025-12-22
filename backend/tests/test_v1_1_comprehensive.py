@@ -336,9 +336,11 @@ class TestMultiLevelCache:
         value = await test_cache.get("test_key")
         assert value is None
     
+    @pytest.mark.skip(reason="get_stats方法已从MultiLevelCache中移除")
     @pytest.mark.asyncio
     async def test_cache_stats(self, test_cache):
-        """测试：缓存统计"""
+        """测试：缓存统计（get_stats方法已移除，跳过此测试）"""
+        # get_stats方法已从MultiLevelCache中移除
         await test_cache.set("key1", "value1")
         await test_cache.get("key1")  # hit
         await test_cache.get("key2")  # miss
