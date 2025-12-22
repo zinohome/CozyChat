@@ -142,18 +142,7 @@ class TestCachedDecorator:
     
     def test_cached_decorator(self):
         """测试：缓存装饰器"""
-        # cached在app.utils.cache.py文件中（不是cache目录）
-        # 需要直接导入cache.py模块
-        import importlib.util
-        import sys
-        
-        # 直接导入cache.py文件
-        cache_file_path = sys.modules['app.utils.cache'].__file__
-        spec = importlib.util.spec_from_file_location("cache_module", cache_file_path)
-        cache_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cache_module)
-        
-        cached = cache_module.cached
+        # cached已在模块顶部导入（通过importlib直接加载cache.py）
         from app.utils.cache import CacheManager
         
         # 确保有CacheManager实例
