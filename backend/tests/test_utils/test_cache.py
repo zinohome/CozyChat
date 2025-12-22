@@ -19,6 +19,7 @@ class TestCacheManager:
     @pytest.fixture
     def cache_manager(self, mock_redis):
         """创建缓存管理器（使用Mock Redis）"""
+        from unittest.mock import patch
         with patch('app.utils.cache.redis.Redis') as mock_redis_class:
             mock_redis_class.return_value = mock_redis
             manager = CacheManager()

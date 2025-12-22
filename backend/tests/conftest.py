@@ -249,8 +249,8 @@ def mock_qdrant_client(mocker):
     return mock_client, mock_collection
 
 
-@pytest.fixture
-def mock_redis(mocker):
+  @pytest.fixture
+  def mock_redis():
     """Mock Redis客户端"""
     mock_client = MagicMock()
     mock_client.ping = Mock(return_value=True)
