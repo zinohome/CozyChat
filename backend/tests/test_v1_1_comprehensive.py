@@ -309,14 +309,11 @@ class TestMultiLevelCache:
     @pytest_asyncio.fixture
     async def test_cache(self):
         """创建测试缓存实例"""
-        cache_instance = MultiLevelCache(
-            l1_maxsize=10,
-            l1_ttl=5,
-            l2_ttl=10,
-            redis_url=None  # 不使用Redis，只测试L1
-        )
+        # MultiLevelCache不接受这些参数，使用默认初始化
+        cache_instance = MultiLevelCache()
         yield cache_instance
-        await cache_instance.clear()
+        # clear()是同步方法，不是async
+        cache_instance.clear()
     
     @pytest.mark.asyncio
     async def test_cache_set_get(self, test_cache):
