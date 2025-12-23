@@ -20,28 +20,39 @@ class TestSessionTitleGenerator:
     """测试会话标题生成器"""
     
     @pytest.fixture
-    def db_session(self, test_db):
-        """数据库会话"""
-        return test_db
-    
-    @pytest.fixture
-    def title_generator(self, db_session):
+    def title_generator(self, sync_db_session):
         """标题生成器实例"""
-        return SessionTitleGenerator(db_session)
+        return SessionTitleGenerator(sync_db_session)
     
     @pytest.fixture
-    def test_session(self, db_session):
+    def test_session(self, sync_db_session):
         """测试会话"""
+        from app.models.user import User as UserModel
+        
+        # 先创建用户（外键约束）
+        test_user = UserModel(
+            id=uuid.uuid4(),
+            username=f"testuser_{uuid.uuid4().hex[:8]}",
+            email=f"test_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash="hashed_password",
+            role="user",
+            status="active"
+        )
+        sync_db_session.add(test_user)
+        sync_db_session.commit()
+        
+        # 创建会话
         session = SessionModel(
             id=uuid.uuid4(),
-            user_id=uuid.uuid4(),
+            user_id=test_user.id,
+            personality_id="default",
             title="新会话",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-        db_session.add(session)
-        db_session.commit()
-        db_session.refresh(session)
+        sync_db_session.add(session)
+        sync_db_session.commit()
+        sync_db_session.refresh(session)
         return session
     
     def test_initialization(self, title_generator):

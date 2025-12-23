@@ -86,18 +86,17 @@ class TestOpenAIEngine:
         return OpenAIEngine(**engine_config)
     
     @pytest.mark.asyncio
-    async def test_chat_completion_success(self, openai_engine_async, mock_openai_response, test_messages, mocker):
+    async def test_chat_completion_success(self, openai_engine_async, mock_openai_response, test_messages):
         """测试：聊天完成成功"""
         # Mock OpenAI API调用
         mock_create = AsyncMock(return_value=mock_openai_response)
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试
-        result = await openai_engine_async.chat(test_messages)
+        ):
+            # 执行测试
+            result = await openai_engine_async.chat(test_messages)
         
         # 验证结果
         assert isinstance(result, ChatResponse)
@@ -116,7 +115,7 @@ class TestOpenAIEngine:
         assert call_args[1]["stream"] is False
     
     @pytest.mark.asyncio
-    async def test_chat_completion_with_tools(self, openai_engine_async, mock_openai_response, test_messages, mocker):
+    async def test_chat_completion_with_tools(self, openai_engine_async, mock_openai_response, test_messages):
         """测试：带工具调用的聊天完成"""
         # 设置工具调用响应
         from openai.types.chat import ChatCompletionMessageToolCall
@@ -144,30 +143,29 @@ class TestOpenAIEngine:
         
         # Mock OpenAI API调用
         mock_create = AsyncMock(return_value=mock_openai_response)
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search",
-                    "description": "Search the web",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string"}
+        ):
+            # 执行测试
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search",
+                        "description": "Search the web",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"}
+                            }
                         }
                     }
                 }
-            }
-        ]
-        
-        result = await openai_engine_async.chat(test_messages, tools=tools)
+            ]
+            
+            result = await openai_engine_async.chat(test_messages, tools=tools)
         
         # 验证结果
         assert result.message.tool_calls is not None
@@ -180,7 +178,7 @@ class TestOpenAIEngine:
         assert "tools" in call_args[1]
     
     @pytest.mark.asyncio
-    async def test_chat_completion_api_error(self, openai_engine_async, test_messages, mocker):
+    async def test_chat_completion_api_error(self, openai_engine_async, test_messages):
         """测试：API错误处理"""
         from openai import APIError
         from unittest.mock import Mock
@@ -193,54 +191,51 @@ class TestOpenAIEngine:
             request=mock_request,
             body=mock_body
         ))
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试并验证异常
-        with pytest.raises(APIError):
-            await openai_engine_async.chat(test_messages)
+        ):
+            # 执行测试并验证异常
+            with pytest.raises(APIError):
+                await openai_engine_async.chat(test_messages)
     
     @pytest.mark.asyncio
-    async def test_chat_completion_with_temperature(self, openai_engine_async, mock_openai_response, test_messages, mocker):
+    async def test_chat_completion_with_temperature(self, openai_engine_async, mock_openai_response, test_messages):
         """测试：带温度参数的聊天完成"""
         mock_create = AsyncMock(return_value=mock_openai_response)
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试
-        await openai_engine_async.chat(test_messages, temperature=0.9)
-        
-        # 验证温度参数传递
-        call_args = mock_create.call_args
-        assert call_args[1]["temperature"] == 0.9
+        ):
+            # 执行测试
+            await openai_engine_async.chat(test_messages, temperature=0.9)
+            
+            # 验证温度参数传递
+            call_args = mock_create.call_args
+            assert call_args[1]["temperature"] == 0.9
     
     @pytest.mark.asyncio
-    async def test_chat_completion_with_max_tokens(self, openai_engine_async, mock_openai_response, test_messages, mocker):
+    async def test_chat_completion_with_max_tokens(self, openai_engine_async, mock_openai_response, test_messages):
         """测试：带最大token数的聊天完成"""
         mock_create = AsyncMock(return_value=mock_openai_response)
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试
-        await openai_engine_async.chat(test_messages, max_tokens=100)
-        
-        # 验证max_tokens参数传递
-        call_args = mock_create.call_args
-        assert call_args[1]["max_tokens"] == 100
+        ):
+            # 执行测试
+            await openai_engine_async.chat(test_messages, max_tokens=100)
+            
+            # 验证max_tokens参数传递
+            call_args = mock_create.call_args
+            assert call_args[1]["max_tokens"] == 100
     
     # ========== 流式响应测试 ==========
     
     @pytest.mark.asyncio
-    async def test_chat_stream_success(self, openai_engine_async, test_messages, mocker):
+    async def test_chat_stream_success(self, openai_engine_async, test_messages):
         """测试：流式响应成功"""
         # Mock流式响应
         mock_chunk1 = MagicMock()
@@ -289,30 +284,29 @@ class TestOpenAIEngine:
         
         # Mock OpenAI API调用
         mock_create = AsyncMock(return_value=mock_stream())
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试
-        chunks = []
-        async for chunk in openai_engine_async.chat_stream(test_messages):
-            chunks.append(chunk)
-        
-        # 验证结果
-        assert len(chunks) == 3
-        assert chunks[0].delta["content"] == "Hello"
-        assert chunks[1].delta["content"] == " there"
-        assert chunks[2].delta["content"] == "!"
-        assert chunks[2].finish_reason == "stop"
-        
-        # 验证API调用
-        call_args = mock_create.call_args
-        assert call_args[1]["stream"] is True
+        ):
+            # 执行测试
+            chunks = []
+            async for chunk in openai_engine_async.chat_stream(test_messages):
+                chunks.append(chunk)
+            
+            # 验证结果
+            assert len(chunks) == 3
+            assert chunks[0].delta["content"] == "Hello"
+            assert chunks[1].delta["content"] == " there"
+            assert chunks[2].delta["content"] == "!"
+            assert chunks[2].finish_reason == "stop"
+            
+            # 验证API调用
+            call_args = mock_create.call_args
+            assert call_args[1]["stream"] is True
     
     @pytest.mark.asyncio
-    async def test_chat_stream_error(self, openai_engine_async, test_messages, mocker):
+    async def test_chat_stream_error(self, openai_engine_async, test_messages):
         """测试：流式响应错误处理"""
         from openai import OpenAIError
         
@@ -322,14 +316,13 @@ class TestOpenAIEngine:
             yield  # 永远不会执行
         
         mock_create = AsyncMock(return_value=mock_error_stream())
-        mocker.patch.object(
+        with patch.object(
             openai_engine_async.client.chat.completions,
             "create",
             mock_create
-        )
-        
-        # 执行测试并验证异常
-        with pytest.raises(OpenAIError):
-            async for chunk in openai_engine_async.chat_stream(test_messages):
-                pass
+        ):
+            # 执行测试并验证异常
+            with pytest.raises(OpenAIError):
+                async for chunk in openai_engine_async.chat_stream(test_messages):
+                    pass
 
