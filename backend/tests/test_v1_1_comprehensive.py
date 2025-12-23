@@ -210,8 +210,9 @@ class TestContextServiceIntegration:
     @pytest_asyncio.fixture
     async def context_service(self, db_session):
         """创建ContextService实例"""
-        service = ContextServiceNew(db_session)
-        await service.initialize()
+        # ContextServiceNew使用单例模式，通过get_instance()获取
+        service = ContextServiceNew.get_instance()
+        # 如果需要db_session，可以通过build_personalized_context传递
         yield service
     
     @pytest.mark.asyncio
@@ -243,10 +244,19 @@ class TestContextServiceIntegration:
             pytest.skip(f"ContextService不可用: {e}")
     
     @pytest.mark.asyncio
-    async def test_build_context_knowledge_query(self, context_service):
+    async def test_build_context_knowledge_query(self, context_service, db_session):
         """测试：知识查询意图的上下文构建"""
         try:
-            context = await context_service.build_context(
+            import uuid
+            # 使用UUID格式的user_id和session_id，符合PostgreSQL UUID类型要求
+            test_user_id = str(uuid.uuid4())
+            test_session_id = str(uuid.uuid4())
+            context = await context_service.build_personalized_context(
+                user_id=test_user_id,
+                session_id=test_session_id,
+                query="什么是人工智能？",
+                db=db_session  # 传递db_session用于user ID标准化
+            )
                 user_id="test_user",
                 session_id="test_session",
                 query="什么是Python？",
