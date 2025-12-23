@@ -43,16 +43,18 @@ class TestMockFixtures:
         assert hasattr(mock_openai_client, "chat")
         assert hasattr(mock_openai_client.chat, "completions")
     
+    @pytest.mark.skip(reason="ChromaDB已废弃，旧的memory引擎已移除")
     def test_mock_chromadb(self, mock_chromadb):
-        """测试ChromaDB Mock"""
+        """测试ChromaDB Mock（已废弃）"""
         mock_client, mock_collection = mock_chromadb
         assert mock_client is not None
         assert mock_collection is not None
         assert hasattr(mock_collection, "query")
         assert hasattr(mock_collection, "add")
     
+    @pytest.mark.skip(reason="Qdrant已废弃，旧的memory引擎已移除")
     def test_mock_qdrant_client(self, mock_qdrant_client):
-        """测试Qdrant Mock客户端"""
+        """测试Qdrant Mock客户端（已废弃）"""
         mock_client, mock_collection = mock_qdrant_client
         assert mock_client is not None
         assert mock_collection is not None

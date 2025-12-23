@@ -26,7 +26,7 @@ class TestOllamaEngine:
         )
     
     @pytest.fixture
-    def mock_httpx_client(self, mocker):
+    def mock_httpx_client(self):
         """Mock httpx客户端"""
         mock_client = MagicMock()
         mock_response = MagicMock()
