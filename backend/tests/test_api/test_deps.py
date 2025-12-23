@@ -142,7 +142,7 @@ class TestDeps:
         assert "未提供认证令牌" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_invalid_token(self, sync_db_session, mocker):
+    async def test_get_current_user_invalid_token(self, sync_db_session):
         """测试：获取当前用户（无效token）"""
         # Mock credentials
         mock_credentials = MagicMock(spec=HTTPAuthorizationCredentials)
@@ -151,19 +151,19 @@ class TestDeps:
         # Mock AuthService返回None
         mock_auth_service = MagicMock(spec=AuthService)
         mock_auth_service.get_current_user_from_token = MagicMock(return_value=None)
-        mocker.patch('app.api.deps.AuthService', return_value=mock_auth_service)
         
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(
-                credentials=mock_credentials,
-                db=sync_db_session
-            )
-        
-        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-        assert "无效的认证令牌" in exc_info.value.detail
+        with patch('app.api.deps.AuthService', return_value=mock_auth_service):
+            with pytest.raises(HTTPException) as exc_info:
+                await get_current_user(
+                    credentials=mock_credentials,
+                    db=sync_db_session
+                )
+            
+            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "无效的认证令牌" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_auth_error(self, sync_db_session, mocker):
+    async def test_get_current_user_auth_error(self, sync_db_session):
         """测试：获取当前用户（认证错误）"""
         # Mock credentials
         mock_credentials = MagicMock(spec=HTTPAuthorizationCredentials)
@@ -172,20 +172,20 @@ class TestDeps:
         # Mock AuthService抛出异常
         mock_auth_service = MagicMock(spec=AuthService)
         mock_auth_service.get_current_user_from_token = MagicMock(side_effect=Exception("Auth error"))
-        mocker.patch('app.api.deps.AuthService', return_value=mock_auth_service)
-        mocker.patch('app.api.deps.logger.error')
         
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(
-                credentials=mock_credentials,
-                db=sync_db_session
-            )
-        
-        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-        assert "认证失败" in exc_info.value.detail
+        with patch('app.api.deps.AuthService', return_value=mock_auth_service):
+            with patch('app.api.deps.logger.error'):
+                with pytest.raises(HTTPException) as exc_info:
+                    await get_current_user(
+                        credentials=mock_credentials,
+                        db=sync_db_session
+                    )
+                
+                assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+                assert "认证失败" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_from_token_success(self, test_user, sync_db_session, mocker):
+    async def test_get_current_user_from_token_success(self, test_user, sync_db_session):
         """测试：从token获取当前用户成功"""
         from app.utils.security import create_access_token
         
@@ -212,31 +212,29 @@ class TestDeps:
             assert result.username == test_user.username
     
     @pytest.mark.asyncio
-    async def test_get_current_user_from_token_invalid_token(self, mocker):
+    async def test_get_current_user_from_token_invalid_token(self):
         """测试：从token获取当前用户（无效token）"""
         # Mock decode_token返回None
-        mocker.patch('app.api.deps.decode_token', return_value=None)
-        
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_from_token("invalid_token")
-        
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        with patch('app.api.deps.decode_token', return_value=None):
+            with pytest.raises(HTTPException) as exc_info:
+                await get_current_user_from_token("invalid_token")
+            
+            assert exc_info.value.status_code == 401
+            assert "Invalid token" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_from_token_no_user_id(self, mocker):
+    async def test_get_current_user_from_token_no_user_id(self):
         """测试：从token获取当前用户（无user_id）"""
         # Mock decode_token返回无sub的payload
-        mocker.patch('app.api.deps.decode_token', return_value={"username": "test"})
-        
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_from_token("token")
-        
-        assert exc_info.value.status_code == 401
-        assert "Invalid token payload" in exc_info.value.detail
+        with patch('app.api.deps.decode_token', return_value={"username": "test"}):
+            with pytest.raises(HTTPException) as exc_info:
+                await get_current_user_from_token("token")
+            
+            assert exc_info.value.status_code == 401
+            assert "Invalid token payload" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_from_token_user_not_found(self, sync_db_session, mocker):
+    async def test_get_current_user_from_token_user_not_found(self, sync_db_session):
         """测试：从token获取当前用户（用户不存在）"""
         from app.utils.security import create_access_token
         
@@ -251,17 +249,16 @@ class TestDeps:
         assert "User not found" in exc_info.value.detail
     
     @pytest.mark.asyncio
-    async def test_get_current_user_from_token_error(self, mocker):
+    async def test_get_current_user_from_token_error(self):
         """测试：从token获取当前用户（错误处理）"""
         # Mock decode_token抛出异常
-        mocker.patch('app.api.deps.decode_token', side_effect=Exception("Decode error"))
-        mocker.patch('app.api.deps.logger.error')
-        
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_from_token("token")
-        
-        assert exc_info.value.status_code == 401
-        assert "Invalid token" in exc_info.value.detail
+        with patch('app.api.deps.decode_token', side_effect=Exception("Decode error")):
+            with patch('app.api.deps.logger.error'):
+                with pytest.raises(HTTPException) as exc_info:
+                    await get_current_user_from_token("token")
+                
+                assert exc_info.value.status_code == 401
+                assert "Invalid token" in exc_info.value.detail
     
     @pytest.mark.asyncio
     async def test_get_current_active_user_success(self, test_user):
