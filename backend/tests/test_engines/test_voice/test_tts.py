@@ -71,6 +71,7 @@ class TestOpenAITTSEngine:
             yield b"chunk2"
             yield b"chunk3"
         mock_response.iter_bytes = mock_iter_bytes
+        mock_response.content = b"chunk1chunk2chunk3"  # 非流式时使用
         
         mock_openai_client.audio.speech.create = AsyncMock(return_value=mock_response)
         
