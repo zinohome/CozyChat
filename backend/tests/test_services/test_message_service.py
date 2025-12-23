@@ -8,6 +8,7 @@ MessageService单元测试
 """
 
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 import uuid
 
@@ -18,21 +19,11 @@ from app.services.chat.message_saver import MessageSaver
 class TestMessageService:
     """MessageService单元测试类"""
     
-    @pytest.fixture
-    def mock_db(self):
-        """创建模拟数据库会话"""
-        return AsyncMock()
-    
-    @pytest.fixture
-    def message_service(self, mock_db, mocker):
+    @pytest_asyncio.fixture
+    async def message_service(self, db_session):
         """创建MessageService实例"""
-        # Mock MessageSaver的创建
-        mock_message_saver = MagicMock(spec=MessageSaver)
-        mock_message_saver.save_conversation_turn = AsyncMock(return_value=True)
-        mocker.patch('app.services.message_service.MessageSaver', return_value=mock_message_saver)
-        
-        service = MessageService(db=mock_db)
-        service.message_saver = mock_message_saver  # 替换为mock对象
+        # 使用真实的db_session，MessageSaver会使用它
+        service = MessageService(db=db_session)
         return service
     
     @pytest.mark.asyncio
