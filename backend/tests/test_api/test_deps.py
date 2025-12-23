@@ -108,7 +108,7 @@ class TestDeps:
             break
     
     @pytest.mark.asyncio
-    async def test_get_current_user_success(self, test_user, sync_db_session, mocker):
+    async def test_get_current_user_success(self, test_user, sync_db_session):
         """测试：获取当前用户成功"""
         # Mock credentials
         mock_credentials = MagicMock(spec=HTTPAuthorizationCredentials)
@@ -117,17 +117,17 @@ class TestDeps:
         # Mock AuthService
         mock_auth_service = MagicMock(spec=AuthService)
         mock_auth_service.get_current_user_from_token = MagicMock(return_value=test_user)
-        mocker.patch('app.api.deps.AuthService', return_value=mock_auth_service)
         
-        result = await get_current_user(
-            credentials=mock_credentials,
-            db=sync_db_session
-        )
-        
-        assert result == test_user
-        mock_auth_service.get_current_user_from_token.assert_called_once_with(
-            sync_db_session, "valid_token"
-        )
+        with patch('app.api.deps.AuthService', return_value=mock_auth_service):
+            result = await get_current_user(
+                credentials=mock_credentials,
+                db=sync_db_session
+            )
+            
+            assert result == test_user
+            mock_auth_service.get_current_user_from_token.assert_called_once_with(
+                sync_db_session, "valid_token"
+            )
     
     @pytest.mark.asyncio
     async def test_get_current_user_no_credentials(self, sync_db_session):
