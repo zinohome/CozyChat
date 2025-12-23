@@ -49,6 +49,7 @@ class TestMessageService:
             password_hash="hashed_password"
         )
         db_session.add(user)
+        await db_session.commit()  # 先提交User，确保外键约束满足
         
         session = Session(
             id=test_session_id,
@@ -59,7 +60,7 @@ class TestMessageService:
             updated_at=datetime.utcnow()
         )
         db_session.add(session)
-        await db_session.commit()
+        await db_session.commit()  # 再提交Session
         
         user_message = "Hello"
         assistant_message = "Hi there!"
@@ -115,6 +116,7 @@ class TestMessageService:
             password_hash="hashed_password"
         )
         db_session.add(user)
+        await db_session.commit()  # 先提交User，确保外键约束满足
         
         session = Session(
             id=test_session_id,
@@ -125,7 +127,7 @@ class TestMessageService:
             updated_at=datetime.utcnow()
         )
         db_session.add(session)
-        await db_session.commit()
+        await db_session.commit()  # 再提交Session
         
         user_message = "Hello"
         assistant_message = "Hi there!"
