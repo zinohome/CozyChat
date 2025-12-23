@@ -93,26 +93,31 @@ class TestAuthAPI:
         
         try:
             # 使用FastAPI的override机制来覆盖依赖
-            from app.api.deps import get_sync_session
+            # refresh_token端点使用get_db（异步会话），需要覆盖为异步会话
+            from app.api.deps import get_db
+            from sqlalchemy.ext.asyncio import AsyncSession
             
-            def override_get_sync_session():
-                yield sync_db_session
+            # 创建一个异步会话适配器
+            # 注意：refresh_token端点使用AsyncSession，但TestClient是同步的
+            # 我们需要创建一个异步会话的mock或者使用真实的异步会话
+            # 由于TestClient的限制，我们使用db_session fixture（异步）
+            # 但这里我们需要在测试中创建异步会话
+            # 简化：直接使用sync_db_session，但需要转换为AsyncSession
+            # 实际上，refresh_token端点会查询数据库，我们需要确保用户存在
+            # 最简单的方法是确保用户已经在数据库中，然后不覆盖依赖
             
-            # 覆盖依赖
-            app.dependency_overrides[get_sync_session] = override_get_sync_session
+            # 验证用户存在
+            verify_user_after = sync_db_session.query(UserModel).filter(UserModel.id == test_user.id).first()
+            assert verify_user_after is not None, "User should exist"
             
-            try:
-                # 再次验证用户存在（在override之后）
-                verify_user_after = sync_db_session.query(UserModel).filter(UserModel.id == test_user.id).first()
-                assert verify_user_after is not None, "User should exist after override"
-                
-                response = client.post(
-                    "/v1/auth/refresh",
-                    json={"refresh_token": refresh_token}
-                )
-            finally:
-                # 清理override
-                app.dependency_overrides.clear()
+            # 由于refresh_token使用AsyncSession，而TestClient是同步的
+            # 我们需要确保用户存在于异步会话也能访问
+            # 最简单的方法是不覆盖依赖，让端点使用真实的数据库
+            # 但我们需要确保用户存在
+            response = client.post(
+                "/v1/auth/refresh",
+                json={"refresh_token": refresh_token}
+            )
             
             # 如果失败，打印错误信息
             if response.status_code != 200:
