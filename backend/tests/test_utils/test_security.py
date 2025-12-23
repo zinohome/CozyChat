@@ -7,6 +7,7 @@
 """
 
 import pytest
+import uuid
 from datetime import timedelta
 
 from app.utils.security import (
@@ -50,7 +51,9 @@ class TestSecurityUtils:
     
     def test_create_access_token(self):
         """测试：创建访问令牌"""
-        data = {"sub": "test-user-id", "username": "testuser", "role": "user"}
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        data = {"sub": test_user_id, "username": "testuser", "role": "user"}
         token = create_access_token(data)
         
         assert token is not None
@@ -59,7 +62,9 @@ class TestSecurityUtils:
     
     def test_create_refresh_token(self):
         """测试：创建刷新令牌"""
-        data = {"sub": "test-user-id", "username": "testuser"}
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        data = {"sub": test_user_id, "username": "testuser"}
         token = create_refresh_token(data)
         
         assert token is not None
@@ -68,12 +73,14 @@ class TestSecurityUtils:
     
     def test_decode_token_success(self):
         """测试：解码令牌成功"""
-        data = {"sub": "test-user-id", "username": "testuser", "role": "user"}
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        data = {"sub": test_user_id, "username": "testuser", "role": "user"}
         token = create_access_token(data)
         
         payload = decode_token(token)
         assert payload is not None
-        assert payload.get("sub") == "test-user-id"
+        assert payload.get("sub") == test_user_id
         assert "exp" in payload
     
     def test_decode_token_expired(self):
@@ -82,8 +89,10 @@ class TestSecurityUtils:
         from datetime import datetime, timedelta
         from jose import jwt
         
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
         payload = {
-            "sub": "test-user-id",
+            "sub": test_user_id,
             "exp": datetime.utcnow() - timedelta(seconds=1)
         }
         token = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")

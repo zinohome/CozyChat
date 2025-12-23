@@ -51,7 +51,7 @@ class TestAuthAPI:
         }
         return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     
-    def test_refresh_token_success(self, client, valid_refresh_token, mocker, sync_db_session):
+    def test_refresh_token_success(self, client, valid_refresh_token, sync_db_session):
         """测试：刷新令牌成功"""
         import uuid
         from app.utils.security import create_refresh_token

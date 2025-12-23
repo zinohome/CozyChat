@@ -9,6 +9,7 @@ ChatOrchestrator单元测试
 """
 
 import pytest
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Dict, Any
 
@@ -30,7 +31,8 @@ class TestChatOrchestrator:
     def mock_user(self):
         """创建模拟用户"""
         user = MagicMock(spec=User)
-        user.id = "test-user-id"
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        user.id = str(uuid.uuid4())
         user.username = "testuser"
         return user
     
