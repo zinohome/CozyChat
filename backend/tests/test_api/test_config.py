@@ -64,29 +64,52 @@ class TestConfigAPI:
         """认证头"""
         return {"Authorization": f"Bearer {test_user_token}"}
     
-    def test_get_openai_config_success(self, client, auth_headers):
+    def test_get_openai_config_success(self, client, auth_headers, sync_db_session):
         """测试：获取OpenAI配置成功"""
-        with patch.object(settings, 'openai_api_key', 'test-key'):
-            with patch.object(settings, 'openai_base_url', 'https://api.openai.com/v1'):
+        from app.api.deps import get_sync_session
+        from app.main import app
+        
+        # 覆盖get_sync_session依赖，使用测试数据库会话
+        def override_get_sync_session():
+            yield sync_db_session
+        
+        app.dependency_overrides[get_sync_session] = override_get_sync_session
+        
+        try:
+            with patch.object(settings, 'openai_api_key', 'test-key'):
+                with patch.object(settings, 'openai_base_url', 'https://api.openai.com/v1'):
+                    response = client.get(
+                        "/v1/config/openai-config",
+                        headers=auth_headers
+                    )
+                    assert response.status_code == 200
+                    data = response.json()
+                    assert "api_key" in data
+                    assert "base_url" in data
+                    assert data["api_key"] == "test-key"
+                    assert data["base_url"] == "https://api.openai.com/v1"
+        finally:
+            app.dependency_overrides.clear()
+    
+    def test_get_openai_config_no_key(self, client, auth_headers, sync_db_session):
+        """测试：OpenAI API key未配置"""
+        from app.api.deps import get_sync_session
+        from app.main import app
+        
+        def override_get_sync_session():
+            yield sync_db_session
+        
+        app.dependency_overrides[get_sync_session] = override_get_sync_session
+        
+        try:
+            with patch.object(settings, 'openai_api_key', None):
                 response = client.get(
                     "/v1/config/openai-config",
                     headers=auth_headers
                 )
-                assert response.status_code == 200
-                data = response.json()
-                assert "api_key" in data
-                assert "base_url" in data
-                assert data["api_key"] == "test-key"
-                assert data["base_url"] == "https://api.openai.com/v1"
-    
-    def test_get_openai_config_no_key(self, client, auth_headers):
-        """测试：OpenAI API key未配置"""
-        with patch.object(settings, 'openai_api_key', None):
-            response = client.get(
-                "/v1/config/openai-config",
-                headers=auth_headers
-            )
-            assert response.status_code == 500
+                assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
     
     def test_get_openai_config_unauthorized(self, client):
         """测试：未授权访问"""
