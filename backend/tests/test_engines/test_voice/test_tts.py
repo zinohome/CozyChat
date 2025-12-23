@@ -41,8 +41,9 @@ class TestOpenAITTSEngine:
     @pytest.mark.asyncio
     async def test_synthesize_success(self, tts_engine, mock_openai_client):
         """测试：语音合成成功"""
-        # 模拟响应对象，支持iter_bytes方法
+        # 模拟响应对象，content属性返回bytes
         mock_response = MagicMock()
+        mock_response.content = b"fake audio content"
         async def mock_iter_bytes():
             yield b"fake audio content"
         mock_response.iter_bytes = mock_iter_bytes
