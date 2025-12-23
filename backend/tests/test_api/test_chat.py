@@ -149,7 +149,7 @@ class TestChatAPI:
         """测试：创建流式聊天完成"""
         from app.api.deps import get_chat_orchestrator, get_current_active_user_async
         from app.models.user import User as UserModel
-        from datetime import datetime
+        from fastapi.responses import StreamingResponse
         
         # 从token中获取user_id
         from app.utils.security import decode_token
@@ -160,16 +160,19 @@ class TestChatAPI:
         user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
         assert user is not None, "User should exist in database"
         
-        # Mock编排器
+        # Mock编排器 - process_request返回StreamingResponse
         mock_orchestrator = AsyncMock()
-        async def mock_stream():
-            from app.engines.ai.base import StreamChunk
-            yield StreamChunk(
-                id="chatcmpl-123",
-                delta={"content": "Hello"},
-                model="gpt-3.5-turbo"
-            )
-        mock_orchestrator.process_stream_request = AsyncMock(return_value=mock_stream())
+        async def mock_stream_generator():
+            """模拟流式响应生成器"""
+            yield b'data: {"id":"chatcmpl-123","choices":[{"delta":{"content":"Hello"}}]}\n\n'
+            yield b'data: [DONE]\n\n'
+        
+        # process_request返回StreamingResponse
+        mock_stream_response = StreamingResponse(
+            mock_stream_generator(),
+            media_type="text/event-stream"
+        )
+        mock_orchestrator.process_request = AsyncMock(return_value=mock_stream_response)
         
         # 使用app.dependency_overrides来覆盖依赖
         async def get_user():

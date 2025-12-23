@@ -10,6 +10,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 # 本地库
+from app.main import app
 from app.models.user import User
 
 
@@ -47,46 +48,89 @@ class TestPersonalitiesAPI:
             sync_db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_list_personalities_success(self, client, auth_token):
+    async def test_list_personalities_success(self, client, auth_token, sync_db_session):
         """测试：列出人格成功"""
-        response = client.get(
-            "/v1/personalities",
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         
-        # 如果返回401，可能是认证问题，至少验证API存在
-        assert response.status_code in [200, 401]
-        if response.status_code == 200:
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry
+        from unittest.mock import MagicMock
+        mock_registry = MagicMock()
+        mock_registry.list_personalities.return_value = []
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
+        
+        try:
+            response = client.get(
+                "/v1/personalities",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json() if response.status_code != 200 else ''}"
             data = response.json()
             assert "personalities" in data or "data" in data or isinstance(data, list)
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
-    async def test_get_personality_success(self, client, auth_token):
+    async def test_get_personality_success(self, client, auth_token, sync_db_session):
         """测试：获取人格成功"""
-        # 先列出人格，获取一个ID
-        list_response = client.get(
-            "/v1/personalities",
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         
-        if list_response.status_code == 200:
-            list_data = list_response.json()
-            personalities = list_data.get("personalities", []) or list_data.get("data", []) or list_data if isinstance(list_data, list) else []
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry
+        from unittest.mock import MagicMock
+        mock_personality = MagicMock()
+        mock_personality.id = "test_personality"
+        mock_personality.name = "Test Personality"
+        mock_personality.description = "Test description"
+        mock_personality.to_config.return_value = {"ai": {"provider": "openai"}}
+        mock_personality.metadata = {}
+        
+        mock_registry = MagicMock()
+        mock_registry.get_personality.return_value = mock_personality
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
+        
+        try:
+            response = client.get(
+                "/v1/personalities/test_personality",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
             
-            if len(personalities) > 0:
-                personality_id = personalities[0].get("id") if isinstance(personalities[0], dict) else personalities[0]
-                
-                response = client.get(
-                    f"/v1/personalities/{personality_id}",
-                    headers={"Authorization": f"Bearer {auth_token}"}
-                )
-                
-                # 如果端点存在，应该返回200
-                # 如果不存在，返回404也是正常的
-                assert response.status_code in [200, 404]
-                if response.status_code == 200:
-                    data = response.json()
-                    assert isinstance(data, dict)
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json() if response.status_code != 200 else ''}"
+            data = response.json()
+            assert isinstance(data, dict)
+            assert "id" in data
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
     async def test_list_personalities_unauthorized(self, client):
@@ -98,21 +142,63 @@ class TestPersonalitiesAPI:
         assert response.status_code in [200, 401]
     
     @pytest.mark.asyncio
-    async def test_get_personality_not_found(self, client, auth_token):
+    async def test_get_personality_not_found(self, client, auth_token, sync_db_session):
         """测试：获取人格（不存在）"""
-        response = client.get(
-            "/v1/personalities/nonexistent_personality",
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         
-        # 应该返回404
-        assert response.status_code in [404, 401]
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry - 返回None表示不存在
+        from unittest.mock import MagicMock
+        mock_registry = MagicMock()
+        mock_registry.get_personality.return_value = None
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
+        
+        try:
+            response = client.get(
+                "/v1/personalities/nonexistent_personality",
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            assert response.status_code == 404, f"Expected 404, got {response.status_code}: {response.json() if response.status_code != 404 else ''}"
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
-    async def test_create_personality_success(self, client, auth_token, tmp_path):
+    async def test_create_personality_success(self, client, auth_token, tmp_path, sync_db_session):
         """测试：创建人格成功"""
+        from app.api.deps import get_current_active_user
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         import os
-        import yaml
+        
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        app.dependency_overrides[get_current_active_user] = get_user
         
         # 创建临时人格目录
         temp_personality_dir = tmp_path / "personalities"
@@ -140,36 +226,88 @@ class TestPersonalitiesAPI:
             )
             
             # 如果端点存在，应该返回201
-            assert response.status_code in [201, 400, 401, 404, 422]
+            assert response.status_code in [201, 400, 404, 422], f"Expected 201, 400, 404, or 422, got {response.status_code}: {response.json() if response.status_code not in [201, 400, 404, 422] else ''}"
             if response.status_code == 201:
                 data = response.json()
                 assert "personality_id" in data or "id" in data
         finally:
+            app.dependency_overrides.clear()
             if original_personality_dir:
                 os.environ["PERSONALITY_CONFIG_DIR"] = original_personality_dir
             elif "PERSONALITY_CONFIG_DIR" in os.environ:
                 del os.environ["PERSONALITY_CONFIG_DIR"]
     
     @pytest.mark.asyncio
-    async def test_create_personality_invalid_config(self, client, auth_token):
+    async def test_create_personality_invalid_config(self, client, auth_token, sync_db_session):
         """测试：创建人格（无效配置）"""
-        response = client.post(
-            "/v1/personalities",
-            json={
-                "id": "test_personality",
-                "name": "Test",
-                "config": {}  # 缺少必需字段
-            },
-            headers={"Authorization": f"Bearer {auth_token}"}
-        )
+        from app.api.deps import get_current_active_user
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         
-        # 应该返回400或422
-        assert response.status_code in [400, 401, 404, 422]
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        
+        try:
+            response = client.post(
+                "/v1/personalities",
+                json={
+                    "id": "test_personality",
+                    "name": "Test",
+                    "config": {}  # 缺少必需字段
+                },
+                headers={"Authorization": f"Bearer {auth_token}"}
+            )
+            
+            # 应该返回400或422
+            assert response.status_code in [400, 422], f"Expected 400 or 422, got {response.status_code}: {response.json() if response.status_code not in [400, 422] else ''}"
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
-    async def test_update_personality_success(self, client, auth_token, tmp_path):
+    async def test_update_personality_success(self, client, auth_token, tmp_path, sync_db_session):
         """测试：更新人格成功"""
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         import os
+        
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry
+        from unittest.mock import MagicMock
+        mock_personality = MagicMock()
+        mock_personality.id = "test_personality"
+        mock_personality.name = "Test Personality"
+        mock_personality.description = "Test description"
+        mock_personality.to_config.return_value = {"ai": {"provider": "openai"}}
+        mock_personality.metadata = {}
+        
+        mock_registry = MagicMock()
+        mock_registry.get_personality.return_value = mock_personality
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
         
         # 创建临时人格目录和文件
         temp_personality_dir = tmp_path / "personalities"
@@ -203,8 +341,9 @@ personality:
             )
             
             # 如果端点存在，应该返回200
-            assert response.status_code in [200, 401, 404, 422]
+            assert response.status_code in [200, 404, 422], f"Expected 200, 404, or 422, got {response.status_code}: {response.json() if response.status_code not in [200, 404, 422] else ''}"
         finally:
+            app.dependency_overrides.clear()
             if original_personality_dir:
                 os.environ["PERSONALITY_CONFIG_DIR"] = original_personality_dir
             elif "PERSONALITY_CONFIG_DIR" in os.environ:

@@ -51,13 +51,14 @@ class TestAuthAPI:
         }
         return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     
-    def test_refresh_token_success(self, client, valid_refresh_token, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_refresh_token_success(self, client, sync_db_session, db_session):
         """测试：刷新令牌成功"""
         import uuid
-        from app.utils.security import create_refresh_token
-        from app.models.user import User
         from app.utils.security import hash_password
-        from app.api.deps import get_sync_session
+        from app.models.user import User
+        from app.api.deps import get_db
+        from app.core.user.auth import AuthService
         
         # 创建测试用户（使用唯一用户名）
         unique_id = str(uuid.uuid4())[:8]
@@ -72,67 +73,36 @@ class TestAuthAPI:
         sync_db_session.add(test_user)
         sync_db_session.commit()
         
-        # 验证用户已创建
-        from app.models.user import User as UserModel
-        verify_user = sync_db_session.query(UserModel).filter(UserModel.id == test_user.id).first()
-        assert verify_user is not None, "User should be created in database"
-        assert verify_user.status == "active", f"User status should be active, got {verify_user.status}"
+        # 同时添加到异步会话，确保异步查询能找到用户
+        async with db_session.begin():
+            # 检查用户是否已存在（避免重复）
+            from sqlalchemy import select
+            stmt = select(User).where(User.id == test_user.id)
+            result = await db_session.execute(stmt)
+            existing_user = result.scalar_one_or_none()
+            if not existing_user:
+                db_session.add(test_user)
+                await db_session.commit()
         
         # 创建有效的刷新令牌
-        from app.core.user.auth import AuthService
         auth_service = AuthService()
         refresh_token = auth_service.create_refresh_token(str(test_user.id), test_user.username)
         
-        # 验证token payload
-        from app.utils.security import decode_token
-        token_payload = decode_token(refresh_token)
-        print(f"Token payload: {token_payload}")
-        print(f"Token user_id: {token_payload.get('sub')}")
-        print(f"Token username: {token_payload.get('username')}")
-        print(f"Token type: {token_payload.get('type')}")
-        
         try:
-            # 使用FastAPI的override机制来覆盖依赖
-            # refresh_token端点使用get_db（异步会话），需要覆盖为异步会话
-            from app.api.deps import get_db
-            from sqlalchemy.ext.asyncio import AsyncSession
+            # 覆盖get_db依赖，返回包含用户的异步会话
+            app.dependency_overrides[get_db] = lambda: db_session
             
-            # 创建一个异步会话适配器
-            # 注意：refresh_token端点使用AsyncSession，但TestClient是同步的
-            # 我们需要创建一个异步会话的mock或者使用真实的异步会话
-            # 由于TestClient的限制，我们使用db_session fixture（异步）
-            # 但这里我们需要在测试中创建异步会话
-            # 简化：直接使用sync_db_session，但需要转换为AsyncSession
-            # 实际上，refresh_token端点会查询数据库，我们需要确保用户存在
-            # 最简单的方法是确保用户已经在数据库中，然后不覆盖依赖
-            
-            # 验证用户存在
-            verify_user_after = sync_db_session.query(UserModel).filter(UserModel.id == test_user.id).first()
-            assert verify_user_after is not None, "User should exist"
-            
-            # 由于refresh_token使用AsyncSession，而TestClient是同步的
-            # 我们需要确保用户存在于异步会话也能访问
-            # 最简单的方法是不覆盖依赖，让端点使用真实的数据库
-            # 但我们需要确保用户存在
             response = client.post(
                 "/v1/auth/refresh",
                 json={"refresh_token": refresh_token}
             )
             
-            # 如果失败，打印错误信息
-            if response.status_code != 200:
-                print(f"Response status: {response.status_code}")
-                print(f"Response body: {response.json()}")
-                print(f"Test user ID: {test_user.id}")
-                print(f"Test user status: {test_user.status}")
-                print(f"Token payload: {token_payload}")
-            
-            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json()}"
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json() if response.status_code != 200 else ''}"
             data = response.json()
             assert "access_token" in data
-            # 注意：refresh_token API可能不返回refresh_token，只返回access_token
-            # 根据实际API实现调整断言
         finally:
+            # 清理依赖覆盖
+            app.dependency_overrides.pop(get_db, None)
             # 清理测试用户
             try:
                 sync_db_session.delete(test_user)
