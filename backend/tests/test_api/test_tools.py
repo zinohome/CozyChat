@@ -8,8 +8,10 @@
 import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
+from fastapi.testclient import TestClient
 
 # 本地库
+from app.main import app
 from app.models.user import User
 
 
@@ -17,7 +19,12 @@ class TestToolsAPI:
     """测试工具API"""
     
     @pytest.fixture
-    def auth_token(self, client, sync_db_session):
+    def client(self):
+        """测试客户端"""
+        return TestClient(app)
+    
+    @pytest.fixture
+    def auth_token(self, sync_db_session):
         """创建认证令牌"""
         from app.utils.security import hash_password, create_access_token
         from app.models.user import User as UserModel
@@ -47,31 +54,48 @@ class TestToolsAPI:
             sync_db_session.rollback()
     
     @pytest.fixture
-    def mock_tool_manager(self, mocker):
+    def mock_tool_manager(self):
         """Mock工具管理器"""
-        with patch('app.api.v1.tools.ToolManager') as mock_manager_class:
-            mock_manager = MagicMock()
-            mock_manager.registry.list_tools = MagicMock(return_value=["calculator", "time", "weather"])
-            mock_manager.registry.get_tool_class = MagicMock(return_value=None)
-            mock_manager.get_available_tools = MagicMock(return_value=["calculator", "time", "weather"])
-            mock_manager.get_tools_for_openai = MagicMock(return_value=[
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "calculator",
-                        "description": "Perform calculations",
-                        "parameters": {}
-                    }
+        from app.main import app
+        from app.api.deps import get_tool_manager_factory
+        
+        # 创建mock manager
+        mock_manager = MagicMock()
+        mock_manager.registry = MagicMock()
+        mock_manager.registry.list_tools = MagicMock(return_value=["calculator", "time", "weather"])
+        mock_manager.registry.get_tool_class = MagicMock(return_value=None)
+        mock_manager.get_available_tools = MagicMock(return_value=["calculator", "time", "weather"])
+        mock_manager.get_tools_for_openai = MagicMock(return_value=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "description": "Perform calculations",
+                    "parameters": {}
                 }
-            ])
-            mock_manager.execute_tool = AsyncMock(return_value={
-                "success": True,
-                "result": "5",
-                "tool_name": "calculator"
-            })
-            mock_manager.create_tool = MagicMock(return_value=None)
-            mock_manager_class.return_value = mock_manager
-            yield mock_manager
+            }
+        ])
+        mock_manager.execute_tool = AsyncMock(return_value={
+            "success": True,
+            "result": "5",
+            "tool_name": "calculator"
+        })
+        mock_manager.create_tool = MagicMock(return_value=None)
+        
+        # 创建mock factory
+        mock_factory = MagicMock()
+        mock_factory.get_tool_manager = MagicMock(return_value=mock_manager)
+        
+        # 覆盖依赖
+        def override_get_tool_manager_factory():
+            return mock_factory
+        
+        app.dependency_overrides[get_tool_manager_factory] = override_get_tool_manager_factory
+        
+        yield mock_manager
+        
+        # 清理
+        app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
     async def test_list_tools_success(self, client, auth_token, mock_tool_manager):

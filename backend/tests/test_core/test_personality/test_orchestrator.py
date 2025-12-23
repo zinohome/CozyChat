@@ -261,20 +261,19 @@ class TestOrchestrator:
         assert result == mock_ai_engine
     
     @pytest.mark.asyncio
-    async def test_get_or_create_ai_engine_new(self, orchestrator, mock_personality, mocker):
+    async def test_get_or_create_ai_engine_new(self, orchestrator, mock_personality):
         """测试：创建新的AI引擎"""
         # 移除现有引擎
         orchestrator.ai_engines.clear()
         
         # Mock AIEngineFactory
-        mock_factory = mocker.patch('app.core.personality.orchestrator.AIEngineFactory.create_engine')
-        mock_factory.return_value = MagicMock()
-        
-        result = await orchestrator._get_or_create_ai_engine(mock_personality)
-        
-        assert result is not None
-        assert mock_personality.id in orchestrator.ai_engines
-        mock_factory.assert_called_once()
+        mock_engine = MagicMock()
+        with patch('app.core.personality.orchestrator.AIEngineFactory.create_engine', return_value=mock_engine) as mock_factory:
+            result = await orchestrator._get_or_create_ai_engine(mock_personality)
+            
+            assert result is not None
+            assert mock_personality.id in orchestrator.ai_engines
+            mock_factory.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_retrieve_memories_enabled(self, orchestrator, mock_personality, mock_memory_manager):
