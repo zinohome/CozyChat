@@ -6,20 +6,58 @@
 
 # 标准库
 import pytest
+import uuid
 from unittest.mock import patch, MagicMock
+from fastapi.testclient import TestClient
 
 # 本地库
+from app.main import app
 from app.api.v1.config import router
 from app.config.config import settings
+from app.utils.security import create_access_token
 
 
 class TestConfigAPI:
     """测试配置管理API"""
     
     @pytest.fixture
-    def client(self, test_client):
+    def client(self):
         """测试客户端"""
-        return test_client
+        return TestClient(app)
+    
+    @pytest.fixture
+    def test_user_token(self, sync_db_session):
+        """测试用户令牌（需要创建真实用户）"""
+        from app.models.user import User as UserModel
+        from app.utils.security import hash_password
+        
+        # 创建测试用户
+        test_user_id = uuid.uuid4()
+        unique_suffix = uuid.uuid4().hex[:8]
+        test_user = UserModel(
+            id=test_user_id,
+            username=f"testuser_{unique_suffix}",
+            email=f"test_{unique_suffix}@example.com",
+            password_hash=hash_password("TestPassword123!"),
+            role="user",
+            status="active"
+        )
+        sync_db_session.add(test_user)
+        sync_db_session.commit()
+        sync_db_session.refresh(test_user)
+        
+        # 创建访问令牌（使用真实的user_id）
+        data = {"sub": str(test_user.id), "username": test_user.username, "role": test_user.role}
+        token = create_access_token(data)
+        
+        yield token
+        
+        # 清理
+        try:
+            sync_db_session.delete(test_user)
+            sync_db_session.commit()
+        except Exception:
+            sync_db_session.rollback()
     
     @pytest.fixture
     def auth_headers(self, test_user_token):
@@ -57,6 +95,7 @@ class TestConfigAPI:
     
     @pytest.mark.asyncio
     async def test_get_realtime_token_success(self, client, auth_headers):
+        from unittest.mock import AsyncMock
         """测试：获取Realtime token成功"""
         with patch.object(settings, 'openai_api_key', 'test-key'):
             with patch.object(settings, 'openai_base_url', 'https://api.openai.com/v1'):
