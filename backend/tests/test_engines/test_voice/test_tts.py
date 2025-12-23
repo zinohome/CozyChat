@@ -94,7 +94,10 @@ class TestOpenAITTSEngine:
     @pytest.mark.asyncio
     async def test_synthesize_with_parameters(self, tts_engine, mock_openai_client):
         """测试：带参数的语音合成"""
+        from unittest.mock import PropertyMock
         mock_response = MagicMock()
+        # 使用PropertyMock让content属性返回bytes
+        type(mock_response).content = PropertyMock(return_value=b"audio")
         async def mock_iter_bytes():
             yield b"audio"
         mock_response.iter_bytes = mock_iter_bytes
