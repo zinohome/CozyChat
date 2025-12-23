@@ -65,13 +65,18 @@ class TestOpenAITTSEngine:
     async def test_synthesize_stream(self, tts_engine, mock_openai_client):
         """测试：流式语音合成"""
         # 模拟流式响应
+        # stream_synthesize会先检查hasattr(response, 'content')
+        # 如果有content，直接yield content；否则使用iter_bytes()
+        # 为了测试流式，我们让hasattr返回False，使用iter_bytes
         mock_response = MagicMock()
-        async def mock_iter_bytes():
+        # 移除content属性，让代码走iter_bytes路径
+        del mock_response.content
+        # iter_bytes是同步生成器，不是异步
+        def mock_iter_bytes():
             yield b"chunk1"
             yield b"chunk2"
             yield b"chunk3"
         mock_response.iter_bytes = mock_iter_bytes
-        mock_response.content = b"chunk1chunk2chunk3"  # 非流式时使用
         
         mock_openai_client.audio.speech.create = AsyncMock(return_value=mock_response)
         
