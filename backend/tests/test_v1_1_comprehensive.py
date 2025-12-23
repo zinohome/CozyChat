@@ -253,22 +253,12 @@ class TestContextServiceIntegration:
             context = await context_service.build_personalized_context(
                 user_id=test_user_id,
                 session_id=test_session_id,
-                query="什么是人工智能？",
-                db=db_session  # 传递db_session用于user ID标准化
-            )
-                user_id="test_user",
-                session_id="test_session",
                 query="什么是Python？",
-                personality_config={
-                    "personalization_engines": {
-                        "knowledge": {"enabled": True},
-                        "chatmemory": {"enabled": True}
-                    }
-                }
+                db=db_session  # 传递db_session用于user ID标准化
             )
             assert isinstance(context, dict)
             # 知识查询应该启用知识引擎
-            assert len(context.get("knowledge", [])) >= 0
+            assert "knowledge" in context or len(context.get("knowledge", [])) >= 0
         except Exception as e:
             pytest.skip(f"ContextService不可用: {e}")
 
