@@ -175,7 +175,7 @@ class TestChatAPI:
             
             assert response.status_code == 400
     
-    def test_create_chat_completion_chat_error(self, client, mock_openai_engine, auth_token, mocker):
+    def test_create_chat_completion_chat_error(self, client, mock_openai_engine, auth_token):
         """测试：聊天生成错误"""
         with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
             mock_openai_engine.chat = AsyncMock(side_effect=Exception("Chat error"))

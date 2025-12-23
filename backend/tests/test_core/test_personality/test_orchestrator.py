@@ -10,6 +10,7 @@
 """
 
 import pytest
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import List, Dict, Any
 
@@ -104,7 +105,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "Hello"}],
             "personality_id": "test-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id"
         }
         
@@ -135,7 +136,7 @@ class TestOrchestrator:
         MemorySearchResult = MagicMock
         mock_memory = Memory(
             id="mem-1",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             content="User likes Python",
             memory_type=MemoryType.USER,
@@ -155,7 +156,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "What do I like?"}],
             "personality_id": "test-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id"
         }
         
@@ -183,7 +184,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "Calculate 2+2"}],
             "personality_id": "test-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id"
         }
         
@@ -221,7 +222,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "Hello"}],
             "personality_id": "test-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id",
             "stream": True
         }
@@ -244,7 +245,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "Hello"}],
             "personality_id": "test-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id"
         }
         
@@ -287,7 +288,7 @@ class TestOrchestrator:
         
         mock_memory = Memory(
             id="mem-1",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             content="User likes Python",
             memory_type=MemoryType.USER,
@@ -307,7 +308,7 @@ class TestOrchestrator:
         result = await orchestrator._retrieve_memories(
             personality=mock_personality,
             messages=messages,
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id"
         )
         
@@ -326,7 +327,7 @@ class TestOrchestrator:
         result = await orchestrator._retrieve_memories(
             personality=mock_personality,
             messages=messages,
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id"
         )
         
@@ -339,7 +340,7 @@ class TestOrchestrator:
         result = await orchestrator._retrieve_memories(
             personality=mock_personality,
             messages=messages,
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id"
         )
         
@@ -356,7 +357,7 @@ class TestOrchestrator:
         result = await orchestrator._retrieve_memories(
             personality=mock_personality,
             messages=messages,
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id"
         )
         
@@ -382,7 +383,7 @@ class TestOrchestrator:
         
         mock_memory = Memory(
             id="mem-1",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             content="User likes Python",
             memory_type=MemoryType.USER,
@@ -465,7 +466,7 @@ class TestOrchestrator:
             ai_engine=mock_ai_engine,
             messages=messages,
             tools=[],
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             personality=mock_personality,
             start_time=0.0
@@ -494,7 +495,7 @@ class TestOrchestrator:
             ai_engine=mock_ai_engine,
             messages=messages,
             tools=[],
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             personality=mock_personality,
             start_time=0.0
@@ -517,7 +518,7 @@ class TestOrchestrator:
                 ai_engine=mock_ai_engine,
                 messages=messages,
                 tools=[],
-                user_id="test-user-id",
+                user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
                 session_id="test-session-id",
                 personality=mock_personality,
                 start_time=0.0
@@ -548,7 +549,7 @@ class TestOrchestrator:
             ai_engine=mock_ai_engine,
             messages=messages,
             tools=[],
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             personality=mock_personality,
             start_time=0.0
@@ -585,7 +586,7 @@ class TestOrchestrator:
             ai_engine=mock_ai_engine,
             messages=messages,
             tools=[],
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             personality=mock_personality,
             start_time=0.0
@@ -614,7 +615,7 @@ class TestOrchestrator:
             ai_engine=mock_ai_engine,
             messages=messages,
             tools=[],
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             session_id="test-session-id",
             personality=mock_personality,
             start_time=0.0
@@ -634,7 +635,7 @@ class TestOrchestrator:
         request = {
             "messages": [{"role": "user", "content": "Hello"}],
             "personality_id": "nonexistent-personality",
-            "user_id": "test-user-id",
+            "user_id": str(uuid.uuid4()),  # 使用UUID格式，符合PostgreSQL UUID类型要求
             "session_id": "test-session-id"
         }
         

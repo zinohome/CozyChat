@@ -8,6 +8,7 @@ ContextService单元测试（已废弃）
 """
 
 import pytest
+import uuid
 import warnings
 from unittest.mock import AsyncMock, MagicMock
 from typing import List, Dict, Any
@@ -108,8 +109,9 @@ class TestContextService:
     ):
         """测试：成功构建上下文"""
         # Arrange
-        user_id = "test-user-id"
-        session_id = "test-session-id"
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        user_id = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
         current_message = "Hello"
         personality = MagicMock()
         personality.id = "test-personality"
@@ -162,8 +164,9 @@ class TestContextService:
     ):
         """测试：构建包含记忆的上下文"""
         # Arrange
-        user_id = "test-user-id"
-        session_id = "test-session-id"
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        user_id = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
         current_message = "What did we talk about?"
         personality = MagicMock()
         max_tokens = 4096
@@ -211,8 +214,9 @@ class TestContextService:
     ):
         """测试：构建包含用户画像的上下文"""
         # Arrange
-        user_id = "test-user-id"
-        session_id = "test-session-id"
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        user_id = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
         current_message = "Hello"
         personality = MagicMock()
         personality.id = "test-personality"
@@ -266,8 +270,9 @@ class TestContextService:
     ):
         """测试：错误处理"""
         # Arrange
-        user_id = "test-user-id"
-        session_id = "test-session-id"
+        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
+        user_id = str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
         current_message = "Hello"
         personality = MagicMock()
         personality.id = "test-personality"
