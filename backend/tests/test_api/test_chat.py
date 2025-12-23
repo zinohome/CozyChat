@@ -58,29 +58,62 @@ class TestChatAPI:
         return engine
     
     @pytest.fixture
-    def auth_token(self):
-        """测试认证令牌"""
-        from app.utils.security import create_access_token
-        # 使用UUID格式的user_id，符合PostgreSQL UUID类型要求
-        test_user_id = str(uuid.uuid4())
-        data = {"sub": test_user_id, "username": "testuser", "role": "user"}
-        return create_access_token(data)
+    def auth_token(self, sync_db_session):
+        """测试认证令牌（需要创建真实用户）"""
+        from app.utils.security import create_access_token, hash_password
+        from app.models.user import User as UserModel
+        
+        # 创建测试用户
+        test_user_id = uuid.uuid4()
+        unique_suffix = uuid.uuid4().hex[:8]
+        test_user = UserModel(
+            id=test_user_id,
+            username=f"testuser_{unique_suffix}",
+            email=f"test_{unique_suffix}@example.com",
+            password_hash=hash_password("TestPassword123!"),
+            role="user",
+            status="active"
+        )
+        sync_db_session.add(test_user)
+        sync_db_session.commit()
+        sync_db_session.refresh(test_user)
+        
+        # 创建访问令牌（使用真实的user_id）
+        data = {"sub": str(test_user.id), "username": test_user.username, "role": test_user.role}
+        token = create_access_token(data)
+        
+        yield token
+        
+        # 清理
+        try:
+            sync_db_session.delete(test_user)
+            sync_db_session.commit()
+        except Exception:
+            sync_db_session.rollback()
     
     def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token):
         """测试：创建聊天完成成功"""
-        # Mock AI引擎工厂的create_engine类方法
-        with patch.object(AIEngineFactory, 'create_engine', return_value=mock_openai_engine):
-            # Mock OpenAI引擎的chat方法
-            from datetime import datetime
-            mock_openai_engine.chat = AsyncMock(return_value=ChatResponse(
-                id="chatcmpl-123",
-                created=int(datetime.now().timestamp()),
-                message=ChatMessage(role="assistant", content="Hello! How can I help you?"),
-                model="gpt-3.5-turbo",
-                finish_reason="stop",
-                usage={"prompt_tokens": 10, "completion_tokens": 40, "total_tokens": 50}
-            ))
-            
+        from datetime import datetime
+        from app.api.deps import get_chat_orchestrator
+        
+        # Mock编排器
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_request = AsyncMock(return_value={
+            "id": "chatcmpl-123",
+            "created": int(datetime.now().timestamp()),
+            "model": "gpt-3.5-turbo",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Hello! How can I help you?"},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 40, "total_tokens": 50}
+        })
+        
+        # 使用app.dependency_overrides来覆盖依赖
+        app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
+        
+        try:
             response = client.post(
                 "/v1/chat/completions",
                 json={
@@ -93,6 +126,9 @@ class TestChatAPI:
             assert response.status_code == 200
             data = response.json()
             assert "choices" in data or "message" in data or "content" in data
+        finally:
+            # 清理依赖覆盖
+            app.dependency_overrides.clear()
     
     def test_create_chat_completion_stream(self, client, mock_openai_engine, auth_token):
         """测试：创建流式聊天完成"""

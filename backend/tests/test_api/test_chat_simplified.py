@@ -11,7 +11,7 @@ import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.models.user import User
@@ -28,7 +28,12 @@ class TestChatAPISimplified:
     @pytest.fixture
     def async_client(self):
         """创建异步测试客户端"""
-        return AsyncClient(app=app, base_url="http://test")
+        # AsyncClient的正确初始化方式（使用ASGITransport）
+        # 注意：不能使用async fixture，因为测试函数需要直接使用client
+        return AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver"
+        )
     
     @pytest.fixture
     def mock_user(self):
@@ -59,9 +64,13 @@ class TestChatAPISimplified:
     ):
         """测试：成功创建聊天补全"""
         # Arrange
-        with patch('app.api.deps.get_current_active_user_async', return_value=mock_user), \
-             patch('app.api.deps.get_chat_orchestrator', return_value=mock_orchestrator):
-            
+        from app.api.deps import get_current_active_user_async, get_chat_orchestrator
+        
+        # 使用app.dependency_overrides来覆盖依赖
+        app.dependency_overrides[get_current_active_user_async] = lambda: mock_user
+        app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
+        
+        try:
             request_data = {
                 "messages": [{"role": "user", "content": "Hello"}],
                 "personality_id": "test-personality",
@@ -78,6 +87,9 @@ class TestChatAPISimplified:
             # Assert
             assert response.status_code == 200
             mock_orchestrator.process_request.assert_called_once()
+        finally:
+            # 清理依赖覆盖
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
     async def test_create_chat_completion_empty_messages(
