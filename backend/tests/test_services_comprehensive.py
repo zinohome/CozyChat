@@ -6,6 +6,7 @@
 
 import pytest
 import pytest_asyncio
+import uuid
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from typing import List, Dict, Any
 
@@ -48,6 +49,9 @@ class TestChatService:
     @pytest.mark.asyncio
     async def test_generate_response(self, chat_service, mock_ai_engine, db_session):
         """测试：生成回复"""
+        # 使用UUID格式的user_id和session_id，符合PostgreSQL UUID类型要求
+        test_user_id = str(uuid.uuid4())
+        test_session_id = str(uuid.uuid4())
         messages = [{"role": "user", "content": "Hello"}]
         tools = None
         actual_max_tokens = 100
@@ -60,8 +64,8 @@ class TestChatService:
             actual_max_tokens=actual_max_tokens,
             temperature=temperature,
             personality=None,
-            user_id="test_user",
-            session_id="test_session",
+            user_id=test_user_id,
+            session_id=test_session_id,
             use_memory=False,
             memory_manager=None
         )
@@ -121,9 +125,12 @@ class TestMessageService:
     async def test_save_conversation_turn(self, message_service):
         """测试：保存对话轮次"""
         try:
+            # 使用UUID格式的user_id和session_id，符合PostgreSQL UUID类型要求
+            test_user_id = str(uuid.uuid4())
+            test_session_id = str(uuid.uuid4())
             await message_service.save_conversation_turn(
-                session_id="test_session",
-                user_id="test_user",
+                session_id=test_session_id,
+                user_id=test_user_id,
                 user_message="Hello",
                 assistant_message="Hi",
                 assistant_model="gpt-3.5-turbo"
@@ -135,9 +142,12 @@ class TestMessageService:
     async def test_save_user_message(self, message_service):
         """测试：保存用户消息"""
         try:
+            # 使用UUID格式的user_id和session_id，符合PostgreSQL UUID类型要求
+            test_user_id = str(uuid.uuid4())
+            test_session_id = str(uuid.uuid4())
             message_id = await message_service.save_user_message(
-                session_id="test_session",
-                user_id="test_user",
+                session_id=test_session_id,
+                user_id=test_user_id,
                 content="Hello"
             )
             assert message_id is not None
