@@ -28,7 +28,7 @@ class TestOpenAISTTEngine:
         return OpenAISTTEngine(config)
     
     @pytest.fixture
-    def mock_openai_client(self, mocker):
+    def mock_openai_client(self):
         """Mock OpenAI客户端"""
         mock_client = MagicMock()
         # OpenAI API当response_format="text"时直接返回字符串

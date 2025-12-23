@@ -29,7 +29,7 @@ class TestOpenAITTSEngine:
         return OpenAITTSEngine(config)
     
     @pytest.fixture
-    def mock_openai_client(self, mocker):
+    def mock_openai_client(self):
         """Mock OpenAI客户端"""
         mock_client = MagicMock()
         # 模拟音频响应

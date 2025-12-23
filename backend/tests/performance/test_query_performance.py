@@ -19,17 +19,17 @@ from app.models.user import User
 class TestQueryPerformance:
     """查询性能测试类"""
     
-    def test_session_detail_query_performance(self, test_db_session):
+    def test_session_detail_query_performance(self, sync_db_session):
         """测试：会话详情查询性能（使用joinedload优化后应<50ms）"""
         # 注意：这是一个模拟测试，实际性能测试需要真实数据库
         # 这里主要验证查询逻辑的正确性
         pass
     
-    def test_session_list_query_performance(self, test_db_session):
+    def test_session_list_query_performance(self, sync_db_session):
         """测试：会话列表查询性能（应<100ms）"""
         pass
     
-    def test_message_query_with_session_performance(self, test_db_session):
+    def test_message_query_with_session_performance(self, sync_db_session):
         """测试：联合查询消息和会话性能"""
         pass
 

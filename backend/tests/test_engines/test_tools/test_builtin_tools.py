@@ -143,7 +143,7 @@ class TestWeatherTool:
         return WeatherTool()
     
     @pytest.fixture
-    def mock_weather_api(self, mocker):
+    def mock_weather_api(self):
         """Mock天气API"""
         with patch('app.engines.tools.builtin.weather_tool.httpx.AsyncClient') as mock_client:
             mock_response = MagicMock()

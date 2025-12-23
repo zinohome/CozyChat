@@ -176,7 +176,7 @@ async def async_client(db_session: AsyncSession):
 # ===== Mock外部服务 =====
 
 @pytest.fixture
-def mock_openai_client(mocker):
+def mock_openai_client():
     """Mock OpenAI客户端"""
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock()
