@@ -104,9 +104,7 @@ class TestAuthAPI:
             try:
                 # 再次验证用户存在（在override之后）
                 verify_user_after = sync_db_session.query(UserModel).filter(UserModel.id == test_user.id).first()
-                print(f"User exists after override: {verify_user_after is not None}")
-                if verify_user_after:
-                    print(f"User status: {verify_user_after.status}")
+                assert verify_user_after is not None, "User should exist after override"
                 
                 response = client.post(
                     "/v1/auth/refresh",
@@ -122,6 +120,7 @@ class TestAuthAPI:
                 print(f"Response body: {response.json()}")
                 print(f"Test user ID: {test_user.id}")
                 print(f"Test user status: {test_user.status}")
+                print(f"Token payload: {token_payload}")
             
             assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json()}"
             data = response.json()
