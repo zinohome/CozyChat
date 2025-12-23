@@ -91,10 +91,20 @@ class TestChatAPI:
         except Exception:
             sync_db_session.rollback()
     
-    def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token):
+    def test_create_chat_completion_success(self, client, mock_openai_engine, auth_token, sync_db_session):
         """测试：创建聊天完成成功"""
         from datetime import datetime
-        from app.api.deps import get_chat_orchestrator
+        from app.api.deps import get_chat_orchestrator, get_current_active_user_async
+        from app.models.user import User as UserModel
+        
+        # 从token中获取user_id（auth_token fixture已经创建了用户）
+        from app.utils.security import decode_token
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
         
         # Mock编排器
         mock_orchestrator = AsyncMock()
@@ -111,6 +121,11 @@ class TestChatAPI:
         })
         
         # 使用app.dependency_overrides来覆盖依赖
+        # 注意：get_current_active_user_async需要返回用户对象
+        async def get_user():
+            return user
+        
+        app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
         
         try:
