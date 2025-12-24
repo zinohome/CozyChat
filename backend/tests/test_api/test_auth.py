@@ -89,8 +89,11 @@ class TestAuthAPI:
         refresh_token = auth_service.create_refresh_token(str(test_user.id), test_user.username)
         
         try:
-            # 覆盖get_db依赖，返回包含用户的异步会话
-            app.dependency_overrides[get_db] = lambda: db_session
+            # 覆盖get_db依赖，返回包含用户的异步会话（异步生成器）
+            async def get_async_db():
+                yield db_session
+            
+            app.dependency_overrides[get_db] = get_async_db
             
             response = client.post(
                 "/v1/auth/refresh",

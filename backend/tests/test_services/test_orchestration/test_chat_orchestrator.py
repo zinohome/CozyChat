@@ -157,7 +157,7 @@ class TestChatOrchestrator:
         # Mock所有内部方法，避免真实数据库调用
         orchestrator._prepare_request = AsyncMock(return_value=MagicMock(
             personality_id="test-personality",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式
             session_id=None,
             session=None,
             user_obj=mock_user,
@@ -234,7 +234,7 @@ class TestChatOrchestrator:
         # Mock所有内部方法
         orchestrator._prepare_request = AsyncMock(return_value=MagicMock(
             personality_id="test-personality",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式
             session_id=None,
             session=None,
             user_obj=mock_user,
@@ -296,7 +296,7 @@ class TestChatOrchestrator:
         # Mock所有内部方法
         orchestrator._prepare_request = AsyncMock(return_value=MagicMock(
             personality_id="test-personality",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式
             session_id=None,
             session=None,
             user_obj=mock_user,

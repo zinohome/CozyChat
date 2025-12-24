@@ -86,7 +86,7 @@ class TestNewVsOldComparison:
         # Mock内部方法
         orchestrator._prepare_request = AsyncMock(return_value=MagicMock(
             personality_id="test-personality",
-            user_id="test-user-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式
             session_id=None,
             session=None,
             user_obj=mock_user,
@@ -172,8 +172,8 @@ class TestNewVsOldComparison:
         # Mock内部方法
         orchestrator._prepare_request = AsyncMock(return_value=MagicMock(
             personality_id="test-personality",
-            user_id="test-user-id",
-            session_id="test-session-id",
+            user_id=str(uuid.uuid4()),  # 使用UUID格式
+            session_id=str(uuid.uuid4()),  # 使用UUID格式
             session=None,
             user_obj=mock_user,
             personality=MagicMock(

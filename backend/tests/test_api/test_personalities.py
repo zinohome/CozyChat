@@ -350,8 +350,11 @@ personality:
                 del os.environ["PERSONALITY_CONFIG_DIR"]
     
     @pytest.mark.asyncio
-    async def test_delete_personality_success(self, client, auth_token, tmp_path):
+    async def test_delete_personality_success(self, client, auth_token, tmp_path, sync_db_session):
         """测试：删除人格成功"""
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
         import os
         
         # 创建临时人格目录和文件
@@ -372,6 +375,28 @@ personality:
 """
         (temp_personality_dir / "test_personality.yaml").write_text(yaml_content)
         
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry
+        from unittest.mock import MagicMock
+        mock_personality = MagicMock()
+        mock_personality.id = "test_personality"
+        mock_registry = MagicMock()
+        mock_registry.get_personality.return_value = mock_personality
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
+        
         original_personality_dir = os.environ.get("PERSONALITY_CONFIG_DIR")
         os.environ["PERSONALITY_CONFIG_DIR"] = str(temp_personality_dir)
         
@@ -383,27 +408,49 @@ personality:
             
             # 如果端点存在，应该返回200或204
             # 如果端点不存在，返回405（Method Not Allowed）也是正常的
-            assert response.status_code in [200, 204, 401, 404, 405]
+            assert response.status_code in [200, 204, 404, 405], f"Expected 200, 204, 404, or 405, got {response.status_code}: {response.json() if response.status_code not in [200, 204, 404, 405] else ''}"
         finally:
+            app.dependency_overrides.clear()
             if original_personality_dir:
                 os.environ["PERSONALITY_CONFIG_DIR"] = original_personality_dir
             elif "PERSONALITY_CONFIG_DIR" in os.environ:
                 del os.environ["PERSONALITY_CONFIG_DIR"]
     
     @pytest.mark.asyncio
-    async def test_list_personalities_error(self, client, auth_token):
+    async def test_list_personalities_error(self, client, auth_token, sync_db_session):
         """测试：列出人格（错误处理）"""
-        # Mock PersonalityManager抛出异常
-        with patch('app.api.v1.personalities.PersonalityManager') as mock_pm:
-            mock_manager = MagicMock()
-            mock_manager.list_personalities = MagicMock(side_effect=Exception("List error"))
-            mock_pm.return_value = mock_manager
-            
+        from app.api.deps import get_current_active_user, get_personality_registry
+        from app.utils.security import decode_token
+        from app.models.user import User as UserModel
+        
+        # 从token中获取user_id
+        token_payload = decode_token(auth_token)
+        user_id = token_payload.get("sub")
+        
+        # 从数据库获取用户
+        user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
+        assert user is not None, "User should exist in database"
+        
+        # 覆盖依赖
+        def get_user():
+            return user
+        
+        # Mock personality registry抛出异常
+        from unittest.mock import MagicMock
+        mock_registry = MagicMock()
+        mock_registry.list_personalities.side_effect = Exception("List error")
+        
+        app.dependency_overrides[get_current_active_user] = get_user
+        app.dependency_overrides[get_personality_registry] = lambda: mock_registry
+        
+        try:
             response = client.get(
                 "/v1/personalities",
                 headers={"Authorization": f"Bearer {auth_token}"}
             )
             
             # 应该返回500
-            assert response.status_code in [500, 401, 404]
+            assert response.status_code in [500, 404], f"Expected 500 or 404, got {response.status_code}: {response.json() if response.status_code not in [500, 404] else ''}"
+        finally:
+            app.dependency_overrides.clear()
 
