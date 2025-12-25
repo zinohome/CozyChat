@@ -67,7 +67,7 @@ class TestKnowledgeEngine:
         try:
             results = await knowledge_engine.search_knowledge(
                 query="什么是Python",
-                user_id="test_user",
+                dataset_names=["default"],
                 top_k=3
             )
             assert isinstance(results, list)
@@ -234,7 +234,7 @@ class TestContextServiceIntegration:
                 user_id=test_user_id,
                 session_id=test_session_id,
                 query="你好",
-                db=db_session  # 传递db_session用于user ID标准化
+                db_session=db_session  # 传递db_session用于user ID标准化
             )
             assert isinstance(context, dict)
             # 检查返回的上下文结构
@@ -254,7 +254,7 @@ class TestContextServiceIntegration:
                 user_id=test_user_id,
                 session_id=test_session_id,
                 query="什么是Python？",
-                db=db_session  # 传递db_session用于user ID标准化
+                db_session=db_session  # 传递db_session用于user ID标准化
             )
             assert isinstance(context, dict)
             # 知识查询应该启用知识引擎
@@ -415,7 +415,7 @@ class TestPerformance:
         """测试：上下文构建性能"""
         import time
         
-        service = ContextServiceNew(db_session)
+        service = ContextServiceNew.get_instance()
         await service.initialize()
         
         # 测试10次上下文构建
@@ -426,7 +426,7 @@ class TestPerformance:
                 await service.build_context(
                     user_id=f"test_user_{i}",
                     session_id=f"test_session_{i}",
-                    query="测试查询",
+                    current_message="测试查询",
                     personality_config={}
                 )
                 elapsed = time.time() - start
@@ -446,17 +446,17 @@ class TestPerformance:
         """测试：并行引擎调用"""
         import time
         
-        service = ContextServiceNew(db_session)
+        service = ContextServiceNew.get_instance()
         await service.initialize()
         
         start = time.time()
         try:
             # 并行调用三个引擎
             results = await asyncio.gather(
-                service.knowledge_engine.search_knowledge("Python", top_k=3),
+                service.knowledge_engine.search_knowledge("Python", dataset_names=["default"], top_k=3),
                 service.userprofile_engine.get_profile("test_user"),
                 service.chatmemory_engine.search_memories(
-                    "test_user", "test_session", "Python", top_k=3
+                    "Python", "test_user", "test_session", top_k=3
                 ),
                 return_exceptions=True
             )
@@ -520,14 +520,14 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_query(self, db_session):
         """测试：空查询"""
-        service = ContextServiceNew(db_session)
+        service = ContextServiceNew.get_instance()
         await service.initialize()
         
         try:
             context = await service.build_context(
                 user_id="test_user",
                 session_id="test_session",
-                query="",
+                current_message="",
                 personality_config={}
             )
             assert isinstance(context, dict)
@@ -538,7 +538,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_very_long_query(self, db_session):
         """测试：超长查询"""
-        service = ContextServiceNew(db_session)
+        service = ContextServiceNew.get_instance()
         await service.initialize()
         
         long_query = "测试" * 1000  # 4000字符
@@ -546,7 +546,7 @@ class TestEdgeCases:
             context = await service.build_context(
                 user_id="test_user",
                 session_id="test_session",
-                query=long_query,
+                current_message=long_query,
                 personality_config={}
             )
             assert isinstance(context, dict)

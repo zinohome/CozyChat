@@ -6,6 +6,7 @@
 
 # 标准库
 import pytest
+import pytest_asyncio
 import uuid
 from datetime import datetime, timedelta
 
@@ -20,12 +21,12 @@ from app.models.message import Message as MessageModel
 class TestUserStatsManager:
     """测试用户统计管理器"""
     
-    @pytest.fixture
-    def stats_manager(self, db_session):
+    @pytest_asyncio.fixture
+    async def stats_manager(self, db_session):
         """创建用户统计管理器"""
         return UserStatsManager(db_session)
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def test_user(self, db_session):
         """创建测试用户"""
         from app.utils.security import hash_password

@@ -6,6 +6,7 @@
 
 # 标准库
 import pytest
+import pytest_asyncio
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from datetime import datetime
@@ -20,12 +21,12 @@ class TestSessionTitleGenerator:
     """测试会话标题生成器"""
     
     @pytest.fixture
-    def title_generator(self, db_session):
+    def title_generator(self, sync_db_session):
         """标题生成器实例"""
-        return SessionTitleGenerator(db_session)
+        return SessionTitleGenerator(sync_db_session)
     
     @pytest.fixture
-    async def test_session(self, db_session):
+    def test_session(self, sync_db_session):
         """测试会话"""
         from app.models.user import User as UserModel
         
@@ -38,9 +39,9 @@ class TestSessionTitleGenerator:
             role="user",
             status="active"
         )
-        db_session.add(test_user)
-        await db_session.commit()
-        await db_session.refresh(test_user)
+        sync_db_session.add(test_user)
+        sync_db_session.commit()
+        sync_db_session.refresh(test_user)
         
         # 创建会话
         session = SessionModel(
@@ -51,9 +52,9 @@ class TestSessionTitleGenerator:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-        db_session.add(session)
-        await db_session.commit()
-        await db_session.refresh(session)
+        sync_db_session.add(session)
+        sync_db_session.commit()
+        sync_db_session.refresh(session)
         return session
     
     def test_initialization(self, title_generator):
@@ -108,13 +109,13 @@ class TestSessionTitleGenerator:
         assert result is None
     
     @pytest.mark.asyncio
-    async def test_generate_title_no_messages(self, title_generator, test_session, db_session):
+    async def test_generate_title_no_messages(self, title_generator, test_session, sync_db_session):
         """测试：没有消息"""
         result = await title_generator.generate_title(str(test_session.id))
         assert result is None
     
     @pytest.mark.asyncio
-    async def test_generate_title_below_threshold(self, title_generator, test_session, db_session):
+    async def test_generate_title_below_threshold(self, title_generator, test_session, sync_db_session):
         """测试：消息数量低于阈值"""
         # 添加少量消息
         for i in range(3):
@@ -125,8 +126,8 @@ class TestSessionTitleGenerator:
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
             )
-            db_session.add(message)
-        db_session.commit()
+            sync_db_session.add(message)
+        sync_db_session.commit()
         
         # Mock配置：阈值为6
         with patch.object(
@@ -147,11 +148,11 @@ class TestSessionTitleGenerator:
             assert result is None
     
     @pytest.mark.asyncio
-    async def test_generate_title_already_has_title(self, title_generator, test_session, db_session):
+    async def test_generate_title_already_has_title(self, title_generator, test_session, sync_db_session):
         """测试：会话已有标题"""
         # 设置已有标题
         test_session.title = "已有标题"
-        db_session.commit()
+        sync_db_session.commit()
         
         # 添加足够消息
         for i in range(10):
@@ -162,14 +163,14 @@ class TestSessionTitleGenerator:
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
             )
-            db_session.add(message)
-        db_session.commit()
+            sync_db_session.add(message)
+        sync_db_session.commit()
         
         result = await title_generator.generate_title(str(test_session.id))
         assert result is None
     
     @pytest.mark.asyncio
-    async def test_generate_title_success(self, title_generator, test_session, db_session):
+    async def test_generate_title_success(self, title_generator, test_session, sync_db_session):
         """测试：成功生成标题"""
         # 添加足够消息
         for i in range(10):
@@ -180,8 +181,8 @@ class TestSessionTitleGenerator:
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
             )
-            db_session.add(message)
-        await db_session.commit()
+            sync_db_session.add(message)
+        sync_db_session.commit()
         
         # Mock AI引擎响应
         from app.engines.ai.base import ChatResponse, ChatMessage
@@ -218,14 +219,14 @@ class TestSessionTitleGenerator:
             assert result == "测试标题"
     
     @pytest.mark.asyncio
-    async def test_update_session_title_if_needed_no_update(self, title_generator, test_session, db_session):
+    async def test_update_session_title_if_needed_no_update(self, title_generator, test_session, sync_db_session):
         """测试：不需要更新标题"""
         # 消息数量不足（test_session没有消息）
         result = await title_generator.update_session_title_if_needed(str(test_session.id))
         assert result is False
     
     @pytest.mark.asyncio
-    async def test_update_session_title_if_needed_success(self, title_generator, test_session, db_session):
+    async def test_update_session_title_if_needed_success(self, title_generator, test_session, sync_db_session):
         """测试：成功更新标题"""
         # 添加足够消息
         for i in range(10):
@@ -236,8 +237,8 @@ class TestSessionTitleGenerator:
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
             )
-            db_session.add(message)
-        await db_session.commit()
+            sync_db_session.add(message)
+        sync_db_session.commit()
         
         # Mock AI引擎响应
         from app.engines.ai.base import ChatResponse, ChatMessage
@@ -273,6 +274,6 @@ class TestSessionTitleGenerator:
             assert result is True
             
             # 验证标题已更新
-            await db_session.refresh(test_session)
+            sync_db_session.refresh(test_session)
             assert test_session.title == "新标题"
 

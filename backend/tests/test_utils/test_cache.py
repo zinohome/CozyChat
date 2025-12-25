@@ -184,16 +184,32 @@ class TestCachedDecorator:
     def test_cached_decorator_cache_hit(self, mock_cache_manager, mock_redis):
         """测试：@cached装饰器缓存命中"""
         # Mock缓存返回值（通过cache_manager.get）
-        mock_cache_manager.get.return_value = "cached_result"
+        # 第一次调用返回None（缓存未命中），第二次调用返回缓存值
+        call_count = [0]
+        def mock_get(key):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return None  # 第一次：缓存未命中
+            else:
+                return "cached_result"  # 后续：缓存命中
+        
+        mock_cache_manager.get.side_effect = mock_get
+        mock_cache_manager.set.return_value = True
         
         @cached("test_prefix", ttl=300)
         def test_function(arg1, arg2):
             return f"result_{arg1}_{arg2}"
         
-        result = test_function("a", "b")
+        # 第一次调用：缓存未命中，应该调用函数并设置缓存
+        result1 = test_function("a", "b")
+        assert result1 == "result_a_b"
+        assert mock_cache_manager.get.call_count >= 1
+        assert mock_cache_manager.set.call_count == 1
         
-        assert result == "cached_result"
-        mock_cache_manager.get.assert_called()
+        # 第二次调用：缓存命中，应该返回缓存值
+        result2 = test_function("a", "b")
+        assert result2 == "cached_result"
+        assert mock_cache_manager.get.call_count >= 2
     
     def test_cached_decorator_cache_miss(self, mock_cache_manager, mock_redis):
         """测试：@cached装饰器缓存未命中"""
@@ -209,13 +225,20 @@ class TestCachedDecorator:
         result = test_function("a", "b")
         
         assert result == "result_a_b"
-        # 应该设置缓存（通过cache_manager.set）
-        mock_cache_manager.set.assert_called()
+        # 应该先尝试获取缓存（通过cache_manager.get）
+        mock_cache_manager.get.assert_called()
+        # 然后设置缓存（通过cache_manager.set）
+        mock_cache_manager.set.assert_called_once()
+        # 验证set被调用时传入了正确的参数
+        call_args = mock_cache_manager.set.call_args
+        assert call_args is not None
+        assert "test_prefix" in call_args[0][0] or "test_prefix" in str(call_args)
     
     def test_cached_decorator_with_key_func(self, mock_cache_manager, mock_redis):
         """测试：@cached装饰器（自定义键函数）"""
         mock_redis.get.return_value = None
         mock_cache_manager.get.return_value = None
+        mock_cache_manager.set.return_value = True
         
         def custom_key_func(*args, **kwargs):
             return f"custom_key_{args[0]}"
@@ -228,5 +251,10 @@ class TestCachedDecorator:
         
         assert result == "result_test"
         # 验证使用了自定义键函数（通过cache_manager.get）
-        mock_cache_manager.get.assert_called()
+        mock_cache_manager.get.assert_called_once()
+        # 验证get被调用时使用了自定义键
+        get_call_args = mock_cache_manager.get.call_args[0][0]
+        assert get_call_args == "custom_key_test"
+        # 验证set被调用
+        mock_cache_manager.set.assert_called_once()
 

@@ -52,13 +52,14 @@ class TestAuthAPI:
         return jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     
     @pytest.mark.asyncio
-    async def test_refresh_token_success(self, client, sync_db_session, db_session):
+    async def test_refresh_token_success(self, client, sync_db_session):
         """测试：刷新令牌成功"""
         import uuid
         from app.utils.security import hash_password
         from app.models.user import User
         from app.api.deps import get_db
         from app.core.user.auth import AuthService
+        from app.models.base import get_async_db
         
         # 创建测试用户（使用唯一用户名）
         unique_id = str(uuid.uuid4())[:8]
@@ -73,26 +74,12 @@ class TestAuthAPI:
         sync_db_session.add(test_user)
         sync_db_session.commit()
         
-        # 同时添加到异步会话，确保异步查询能找到用户
-        async with db_session.begin():
-            # 检查用户是否已存在（避免重复）
-            from sqlalchemy import select
-            stmt = select(User).where(User.id == test_user.id)
-            result = await db_session.execute(stmt)
-            existing_user = result.scalar_one_or_none()
-            if not existing_user:
-                db_session.add(test_user)
-                await db_session.commit()
-        
         # 创建有效的刷新令牌
         auth_service = AuthService()
         refresh_token = auth_service.create_refresh_token(str(test_user.id), test_user.username)
         
         try:
-            # 覆盖get_db依赖，返回包含用户的异步会话（异步生成器）
-            async def get_async_db():
-                yield db_session
-            
+            # 覆盖get_db依赖，使用get_async_db创建新的会话
             app.dependency_overrides[get_db] = get_async_db
             
             response = client.post(

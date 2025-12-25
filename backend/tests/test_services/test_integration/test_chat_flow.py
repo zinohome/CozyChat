@@ -100,7 +100,7 @@ class TestChatFlowIntegration:
     @pytest.mark.asyncio
     async def test_stream_chat_flow(
         self,
-        client,
+        async_client,
         mock_user,
         mock_token
     ):
@@ -112,7 +112,9 @@ class TestChatFlowIntegration:
             "stream": True
         }
         
-        # Mock流式响应
+        # Mock流式响应（使用StreamingResponse）
+        from fastapi.responses import StreamingResponse
+        
         async def mock_stream():
             yield b'data: {"content": "Hello"}\n\n'
             yield b'data: {"content": " there"}\n\n'
@@ -126,14 +128,18 @@ class TestChatFlowIntegration:
             return mock_user
         
         mock_orchestrator = AsyncMock()
-        mock_orchestrator.process_request = AsyncMock(return_value=mock_stream())
+        # process_request应该返回StreamingResponse
+        mock_orchestrator.process_request = AsyncMock(return_value=StreamingResponse(
+            mock_stream(),
+            media_type="text/event-stream"
+        ))
         
         app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
         
         try:
-            # Act
-            response = client.post(
+            # Act - 使用async_client进行异步请求
+            response = await async_client.post(
                 "/v1/chat/completions",
                 json=request_data,
                 headers={"Authorization": f"Bearer {mock_token}"}
@@ -141,7 +147,7 @@ class TestChatFlowIntegration:
             
             # Assert
             assert response.status_code == 200
-            assert response.headers["content-type"] == "text/event-stream"
+            assert "text/event-stream" in response.headers.get("content-type", "")
         finally:
             app.dependency_overrides.clear()
     

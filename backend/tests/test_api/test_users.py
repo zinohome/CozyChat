@@ -82,11 +82,12 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
-    async def test_update_current_user_success(self, client, auth_token, sync_db_session, db_session):
+    async def test_update_current_user_success(self, client, auth_token, sync_db_session):
         """测试：更新当前用户成功"""
         from app.api.deps import get_current_active_user_async, get_db
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
+        from app.models.base import get_async_db
         
         # 从token中获取user_id
         token_payload = decode_token(auth_token)
@@ -99,9 +100,6 @@ class TestUsersAPI:
         # 覆盖依赖
         async def get_user():
             return user
-        
-        async def get_async_db():
-            yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_db] = get_async_db

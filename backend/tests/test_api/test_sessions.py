@@ -97,11 +97,12 @@ personality:
                 del os.environ["PERSONALITY_CONFIG_DIR"]
     
     @pytest.mark.asyncio
-    async def test_create_session_success(self, client, auth_token, test_personality, sync_db_session, db_session):
+    async def test_create_session_success(self, client, auth_token, test_personality, sync_db_session):
         """测试：创建会话成功"""
         from app.api.deps import get_current_active_user_async, get_db, get_personality_registry
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
+        from app.models.base import get_async_db
         
         # 从token中获取user_id
         token_payload = decode_token(auth_token)
@@ -114,9 +115,6 @@ personality:
         # 覆盖依赖
         async def get_user():
             return user
-        
-        async def get_async_db():
-            yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_db] = get_async_db
@@ -166,11 +164,12 @@ personality:
         assert response.status_code in [401, 404, 422]
     
     @pytest.mark.asyncio
-    async def test_list_sessions_success(self, client, auth_token, sync_db_session, db_session):
+    async def test_list_sessions_success(self, client, auth_token, sync_db_session):
         """测试：列出会话成功"""
         from app.api.deps import get_current_active_user_async, get_db, get_personality_registry
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
+        from app.models.base import get_async_db
         
         # 从token中获取user_id
         token_payload = decode_token(auth_token)
@@ -183,9 +182,6 @@ personality:
         # 覆盖依赖
         async def get_user():
             return user
-        
-        async def get_async_db():
-            yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_db] = get_async_db
@@ -210,11 +206,12 @@ personality:
             app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
-    async def test_list_sessions_with_pagination(self, client, auth_token, sync_db_session, db_session):
+    async def test_list_sessions_with_pagination(self, client, auth_token, sync_db_session):
         """测试：分页列出会话"""
         from app.api.deps import get_current_active_user_async, get_db, get_personality_registry
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
+        from app.models.base import get_async_db
         
         # 从token中获取user_id
         token_payload = decode_token(auth_token)
@@ -227,9 +224,6 @@ personality:
         # 覆盖依赖
         async def get_user():
             return user
-        
-        async def get_async_db():
-            yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
         app.dependency_overrides[get_db] = get_async_db

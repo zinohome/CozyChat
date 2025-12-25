@@ -6,6 +6,7 @@
 
 # 标准库
 import pytest
+import pytest_asyncio
 import uuid
 
 # 本地库
@@ -17,12 +18,12 @@ from app.models.user_profile import UserProfile
 class TestUserProfileManager:
     """测试用户画像管理器"""
     
-    @pytest.fixture
-    def profile_manager(self, db_session):
+    @pytest_asyncio.fixture
+    async def profile_manager(self, db_session):
         """创建用户画像管理器"""
         return UserProfileManager(db_session)
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def test_user(self, db_session):
         """创建测试用户"""
         from app.utils.security import hash_password

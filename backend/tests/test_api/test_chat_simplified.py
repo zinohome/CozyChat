@@ -8,6 +8,7 @@
 """
 
 import pytest
+import pytest_asyncio
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
@@ -25,7 +26,7 @@ class TestChatAPISimplified:
         """创建测试客户端"""
         return TestClient(app)
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def async_client(self):
         """创建异步测试客户端"""
         # AsyncClient的正确初始化方式（使用ASGITransport）
