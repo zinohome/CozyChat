@@ -62,8 +62,7 @@ class TestToolManager:
         # 清理
         ToolRegistry.unregister("mock_tool")
     
-    @pytest.mark.asyncio
-    async def test_create_tool_success(self, tool_manager, registered_tool):
+    def test_create_tool_success(self, tool_manager, registered_tool):
         """测试：创建工具成功"""
         tool = tool_manager.create_tool("mock_tool")
         
@@ -71,8 +70,7 @@ class TestToolManager:
         assert isinstance(tool, MockTool)
         assert tool.name == "mock_tool"
     
-    @pytest.mark.asyncio
-    async def test_create_tool_not_found(self, tool_manager):
+    def test_create_tool_not_found(self, tool_manager):
         """测试：创建不存在的工具"""
         tool = tool_manager.create_tool("non_existent_tool")
         
@@ -144,16 +142,14 @@ class TestToolManager:
         for result in results:
             assert result["success"] is True
     
-    @pytest.mark.asyncio
-    async def test_get_available_tools(self, tool_manager, registered_tool):
+    def test_get_available_tools(self, tool_manager, registered_tool):
         """测试：获取可用工具列表"""
         tools = tool_manager.get_available_tools()
         
         assert isinstance(tools, list)
         assert "mock_tool" in tools
     
-    @pytest.mark.asyncio
-    async def test_get_tools_for_openai(self, tool_manager, registered_tool):
+    def test_get_tools_for_openai(self, tool_manager, registered_tool):
         """测试：获取OpenAI格式的工具列表"""
         tools = tool_manager.get_tools_for_openai(tool_names=["mock_tool"])
         
@@ -163,8 +159,7 @@ class TestToolManager:
             assert "type" in tool or "function" in tool
             assert "name" in tool.get("function", {}) or "name" in tool
     
-    @pytest.mark.asyncio
-    async def test_get_tools_for_openai_all(self, tool_manager, registered_tool):
+    def test_get_tools_for_openai_all(self, tool_manager, registered_tool):
         """测试：获取所有工具的OpenAI格式"""
         tools = tool_manager.get_tools_for_openai()
         
@@ -200,8 +195,7 @@ class TestToolManager:
         finally:
             ToolRegistry.unregister("error_tool")
     
-    @pytest.mark.asyncio
-    async def test_get_tools_for_openai_with_filter(self, tool_manager, registered_tool):
+    def test_get_tools_for_openai_with_filter(self, tool_manager, registered_tool):
         """测试：获取OpenAI格式的工具列表（带过滤）"""
         # 注册另一个工具
         class AnotherTool(MockTool):

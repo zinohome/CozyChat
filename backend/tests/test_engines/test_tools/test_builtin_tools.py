@@ -188,12 +188,23 @@ class TestWeatherTool:
     @pytest.mark.asyncio
     async def test_get_weather_api_error(self, weather_tool, mock_weather_api):
         """测试：API错误"""
+        from unittest.mock import Mock
+        
         # 设置API密钥
         weather_tool.api_key = "test_key"
         
         # 设置mock抛出异常
         import httpx
-        mock_weather_api.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.HTTPStatusError("API Error", request=MagicMock(), response=MagicMock()))
+        try:
+            # 尝试创建httpx.HTTPStatusError实例
+            mock_request = MagicMock()
+            mock_response = MagicMock()
+            http_error = httpx.HTTPStatusError("API Error", request=mock_request, response=mock_response)
+        except (TypeError, AttributeError):
+            # 如果HTTPStatusError构造函数不接受这些参数，使用Exception
+            http_error = Exception("API Error")
+        
+        mock_weather_api.return_value.__aenter__.return_value.get = AsyncMock(side_effect=http_error)
         
         result = await weather_tool.execute(city="Beijing")
         

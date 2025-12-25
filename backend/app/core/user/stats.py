@@ -66,20 +66,28 @@ class UserStatsManager:
         """获取用户统计信息（异步版本）
         
         Args:
-            user_id: 用户ID
+            user_id: 用户ID（字符串格式，可以是UUID字符串）
             
         Returns:
             Dict[str, Any]: 统计信息字典
         """
         try:
-            stmt = select(User).where(User.id == user_id)
+            import uuid
+            # 将user_id转换为UUID对象（如果它是字符串）
+            try:
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except ValueError:
+                logger.warning(f"Invalid user_id format: {user_id}")
+                return {}
+            
+            stmt = select(User).where(User.id == user_uuid)
             result = await self.db.execute(stmt)
             user = result.scalar_one_or_none()
             
             if not user:
                 return {}
             
-            stmt = select(UserProfile).where(UserProfile.user_id == user_id)
+            stmt = select(UserProfile).where(UserProfile.user_id == user_uuid)
             result = await self.db.execute(stmt)
             profile = result.scalar_one_or_none()
             
@@ -122,7 +130,15 @@ class UserStatsManager:
             Dict[str, Any]: 活动统计字典
         """
         try:
-            stmt = select(User).where(User.id == user_id)
+            import uuid
+            # 将user_id转换为UUID对象（如果它是字符串）
+            try:
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except ValueError:
+                logger.warning(f"Invalid user_id format: {user_id}")
+                return {}
+            
+            stmt = select(User).where(User.id == user_uuid)
             result = await self.db.execute(stmt)
             user = result.scalar_one_or_none()
             
@@ -237,7 +253,15 @@ class UserStatsManager:
             bool: 是否更新成功
         """
         try:
-            stmt = select(User).where(User.id == user_id)
+            import uuid
+            # 将user_id转换为UUID对象（如果它是字符串）
+            try:
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except ValueError:
+                logger.error(f"Invalid user_id format: {user_id}")
+                return False
+            
+            stmt = select(User).where(User.id == user_uuid)
             result = await self.db.execute(stmt)
             user = result.scalar_one_or_none()
             

@@ -18,14 +18,15 @@ class TestUserProfileManager:
     """测试用户画像管理器"""
     
     @pytest.fixture
-    def profile_manager(self, sync_db_session):
+    def profile_manager(self, db_session):
         """创建用户画像管理器"""
-        return UserProfileManager(sync_db_session)
+        return UserProfileManager(db_session)
     
     @pytest.fixture
-    def test_user(self, sync_db_session):
+    async def test_user(self, db_session):
         """创建测试用户"""
         from app.utils.security import hash_password
+        from sqlalchemy import select
         
         user = User(
             id=uuid.uuid4(),
@@ -35,33 +36,35 @@ class TestUserProfileManager:
             role="user",
             status="active"
         )
-        sync_db_session.add(user)
-        sync_db_session.commit()
-        sync_db_session.refresh(user)
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         
         yield user
         
         # 清理
         try:
             # 先删除profile（如果存在）
-            profile = sync_db_session.query(UserProfile).filter(
-                UserProfile.user_id == user.id
-            ).first()
+            stmt = select(UserProfile).where(UserProfile.user_id == user.id)
+            result = await db_session.execute(stmt)
+            profile = result.scalar_one_or_none()
             if profile:
-                sync_db_session.delete(profile)
-            sync_db_session.delete(user)
-            sync_db_session.commit()
+                await db_session.delete(profile)
+            await db_session.delete(user)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_get_profile_not_exists(self, profile_manager, test_user):
+    @pytest.mark.asyncio
+    async def test_get_profile_not_exists(self, profile_manager, test_user):
         """测试：获取不存在的画像"""
-        profile = profile_manager.get_profile(str(test_user.id))
+        profile = await profile_manager.get_profile(str(test_user.id))
         assert profile is None
     
-    def test_create_profile(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_create_profile(self, profile_manager, test_user, db_session):
         """测试：创建画像"""
-        profile = profile_manager.create_or_update_profile(
+        profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI", "编程", "技术"]
         )
@@ -72,24 +75,27 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(profile)
-            sync_db_session.commit()
+            await db_session.delete(profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_update_profile(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_update_profile(self, profile_manager, test_user, db_session):
         """测试：更新画像"""
         # 先创建画像
-        profile = profile_manager.create_or_update_profile(
+        profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI", "编程"]
         )
+        await db_session.commit()
         
         # 更新画像
-        updated_profile = profile_manager.create_or_update_profile(
+        updated_profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI", "编程", "技术", "机器学习"]
         )
+        await db_session.commit()
         
         assert updated_profile is not None
         assert updated_profile.user_id == test_user.id
@@ -97,18 +103,20 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(updated_profile)
-            sync_db_session.commit()
+            await db_session.delete(updated_profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_create_or_update_profile_with_habits(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_create_or_update_profile_with_habits(self, profile_manager, test_user, db_session):
         """测试：创建或更新画像（包含习惯）"""
-        profile = profile_manager.create_or_update_profile(
+        profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI"],
             habits={"most_active_time": "morning", "avg_session_duration_minutes": 30}
         )
+        await db_session.commit()
         
         assert profile is not None
         assert profile.get_habits()["most_active_time"] == "morning"
@@ -116,18 +124,20 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(profile)
-            sync_db_session.commit()
+            await db_session.delete(profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_create_or_update_profile_with_insights(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_create_or_update_profile_with_insights(self, profile_manager, test_user, db_session):
         """测试：创建或更新画像（包含洞察）"""
-        profile = profile_manager.create_or_update_profile(
+        profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI"],
             personality_insights={"communication_style": "formal", "question_types": ["technical"]}
         )
+        await db_session.commit()
         
         assert profile is not None
         insights = profile.get_personality_insights()
@@ -136,18 +146,20 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(profile)
-            sync_db_session.commit()
+            await db_session.delete(profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_create_or_update_profile_with_statistics(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_create_or_update_profile_with_statistics(self, profile_manager, test_user, db_session):
         """测试：创建或更新画像（包含统计）"""
-        profile = profile_manager.create_or_update_profile(
+        profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI"],
             statistics={"total_sessions": 10, "total_messages": 100}
         )
+        await db_session.commit()
         
         assert profile is not None
         stats = profile.get_statistics()
@@ -156,21 +168,23 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(profile)
-            sync_db_session.commit()
+            await db_session.delete(profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
-    def test_get_profile_exists(self, profile_manager, test_user, sync_db_session):
+    @pytest.mark.asyncio
+    async def test_get_profile_exists(self, profile_manager, test_user, db_session):
         """测试：获取存在的画像"""
         # 先创建画像
-        created_profile = profile_manager.create_or_update_profile(
+        created_profile = await profile_manager.create_or_update_profile(
             user_id=str(test_user.id),
             interests=["AI", "编程"]
         )
+        await db_session.commit()
         
         # 获取画像
-        profile = profile_manager.get_profile(str(test_user.id))
+        profile = await profile_manager.get_profile(str(test_user.id))
         
         assert profile is not None
         assert profile.user_id == test_user.id
@@ -178,8 +192,8 @@ class TestUserProfileManager:
         
         # 清理
         try:
-            sync_db_session.delete(profile)
-            sync_db_session.commit()
+            await db_session.delete(profile)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
 

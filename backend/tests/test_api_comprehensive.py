@@ -18,7 +18,7 @@ class TestHealthAPI:
     """健康检查API测试"""
     
     @pytest.mark.asyncio
-    async def test_health_check(self, async_client: AsyncClient):
+    async def test_health_check(self, async_client):
         """测试：基础健康检查"""
         response = await async_client.get("/v1/health")
         assert response.status_code == 200
@@ -26,7 +26,7 @@ class TestHealthAPI:
         assert "status" in data
     
     @pytest.mark.asyncio
-    async def test_engines_health_check(self, async_client: AsyncClient):
+    async def test_engines_health_check(self, async_client):
         """测试：三大引擎健康检查"""
         try:
             response = await async_client.get("/v1/health/engines")
@@ -47,7 +47,7 @@ class TestChatAPI:
     """聊天API测试"""
     
     @pytest.mark.asyncio
-    async def test_chat_completions_basic(self, async_client: AsyncClient):
+    async def test_chat_completions_basic(self, async_client):
         """测试：基础聊天完成"""
         payload = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -66,7 +66,7 @@ class TestChatAPI:
             pytest.skip(f"Chat API test failed: {e}")
     
     @pytest.mark.asyncio
-    async def test_chat_completions_stream(self, async_client: AsyncClient):
+    async def test_chat_completions_stream(self, async_client):
         """测试：流式聊天完成"""
         payload = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -93,7 +93,7 @@ class TestPersonalityAPI:
     """Personality API测试"""
     
     @pytest.mark.asyncio
-    async def test_list_personalities(self, async_client: AsyncClient):
+    async def test_list_personalities(self, async_client):
         """测试：列出所有Personality"""
         try:
             response = await async_client.get("/v1/personalities")
@@ -105,7 +105,7 @@ class TestPersonalityAPI:
             pytest.skip(f"Personality API test failed: {e}")
     
     @pytest.mark.asyncio
-    async def test_get_personality(self, async_client: AsyncClient):
+    async def test_get_personality(self, async_client):
         """测试：获取Personality"""
         try:
             response = await async_client.get("/v1/personalities/default")
@@ -122,7 +122,7 @@ class TestSessionAPI:
     """Session API测试"""
     
     @pytest.mark.asyncio
-    async def test_create_session(self, async_client: AsyncClient):
+    async def test_create_session(self, async_client):
         """测试：创建会话"""
         payload = {
             "title": "Test Session",
@@ -139,7 +139,7 @@ class TestSessionAPI:
             pytest.skip(f"Session API test failed: {e}")
     
     @pytest.mark.asyncio
-    async def test_list_sessions(self, async_client: AsyncClient):
+    async def test_list_sessions(self, async_client):
         """测试：列出会话"""
         try:
             response = await async_client.get("/v1/sessions")
@@ -156,7 +156,7 @@ class TestUserAPI:
     """User API测试"""
     
     @pytest.mark.asyncio
-    async def test_get_current_user(self, async_client: AsyncClient):
+    async def test_get_current_user(self, async_client):
         """测试：获取当前用户"""
         try:
             response = await async_client.get("/v1/users/me")

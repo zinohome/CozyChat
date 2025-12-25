@@ -331,7 +331,7 @@ async def list_sessions(
 async def get_session(
     session_id: str,
     user: User = Depends(get_current_active_user_async),
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 修复：使用异步会话，因为使用了await db.execute()
 ) -> SessionDetailResponse:
     """获取会话详情
     
@@ -443,7 +443,7 @@ async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
     user: User = Depends(get_current_active_user_async),
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 修复：使用异步会话，因为后面使用了await db.commit()
 ) -> UpdateSessionResponse:
     """更新会话
     
@@ -451,7 +451,7 @@ async def update_session(
         session_id: 会话ID
         request: 更新会话请求
         user: 当前用户
-        db: 数据库会话
+        db: 数据库会话（异步）
         
     Returns:
         UpdateSessionResponse: 更新结果
@@ -461,16 +461,19 @@ async def update_session(
     """
     try:
         import uuid
+        from sqlalchemy import select
         session_uuid = uuid.UUID(session_id)
         
-        # 查询会话
-        session = db.query(SessionModel).filter(
+        # 查询会话（使用异步查询）
+        stmt = select(SessionModel).where(
             and_(
                 SessionModel.id == session_uuid,
                 SessionModel.user_id == user.id,
                 SessionModel.deleted_at.is_(None)
             )
-        ).first()
+        )
+        result = await db.execute(stmt)
+        session = result.scalar_one_or_none()
         
         if not session:
             raise HTTPException(
@@ -483,9 +486,9 @@ async def update_session(
         from typing import cast
         from datetime import datetime
         if request.title is not None:
-            session.title = cast(str, request.title)
+            session.title = cast(str, request.title)  # type: ignore[assignment]
         
-        session.updated_at = cast(datetime, datetime.utcnow())
+        session.updated_at = cast(datetime, datetime.utcnow())  # type: ignore[assignment]
         await db.commit()
         await db.refresh(session)
         
@@ -733,7 +736,7 @@ async def generate_session_title(
 async def delete_session(
     session_id: str,
     user: User = Depends(get_current_active_user_async),
-    db: Session = Depends(get_sync_session)
+    db: AsyncSession = Depends(get_db)  # 修复：使用异步会话，因为使用了await db.execute()
 ) -> DeleteSessionResponse:
     """删除会话（软删除）
     

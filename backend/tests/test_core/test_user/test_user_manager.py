@@ -18,9 +18,9 @@ class TestUserManager:
     """测试用户管理器"""
     
     @pytest.fixture
-    def user_manager(self, sync_db_session):
+    def user_manager(self, db_session):
         """创建用户管理器实例"""
-        return UserManager(db=sync_db_session)
+        return UserManager(db=db_session)
     
     @pytest.fixture
     def test_user_data(self):
@@ -34,7 +34,7 @@ class TestUserManager:
         }
     
     @pytest.mark.asyncio
-    async def test_create_user_success(self, user_manager, test_user_data, sync_db_session):
+    async def test_create_user_success(self, user_manager, test_user_data, db_session):
         """测试：创建用户成功"""
         user = await user_manager.register_user(
             username=test_user_data["username"],
@@ -42,6 +42,7 @@ class TestUserManager:
             password=test_user_data["password"],
             role=test_user_data["role"]
         )
+        await db_session.commit()
         
         assert user is not None
         assert user.username == test_user_data["username"]
@@ -50,13 +51,13 @@ class TestUserManager:
         
         # 清理
         try:
-            sync_db_session.delete(user)
-            sync_db_session.commit()
+            await db_session.delete(user)
+            await db_session.commit()
         except Exception:
-            sync_db_session.rollback()
+            await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_create_user_duplicate_username(self, user_manager, test_user_data, sync_db_session):
+    async def test_create_user_duplicate_username(self, user_manager, test_user_data, db_session):
         """测试：创建重复用户名的用户"""
         # 先创建一个用户
         user1 = await user_manager.register_user(
@@ -64,6 +65,7 @@ class TestUserManager:
             email=test_user_data["email"],
             password=test_user_data["password"]
         )
+        await db_session.commit()
         
         try:
             # 尝试创建相同用户名的用户
@@ -76,13 +78,13 @@ class TestUserManager:
         finally:
             # 清理
             try:
-                sync_db_session.delete(user1)
-                sync_db_session.commit()
+                await db_session.delete(user1)
+                await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_get_user_by_id(self, user_manager, test_user_data, sync_db_session):
+    async def test_get_user_by_id(self, user_manager, test_user_data, db_session):
         """测试：通过ID获取用户"""
         # 创建用户
         user = await user_manager.register_user(
@@ -90,10 +92,11 @@ class TestUserManager:
             email=test_user_data["email"],
             password=test_user_data["password"]
         )
+        await db_session.commit()
         
         try:
             # 获取用户（使用get_user方法）
-            found_user = user_manager.get_user(str(user.id))
+            found_user = await user_manager.get_user(str(user.id))
             
             assert found_user is not None
             assert found_user.id == user.id
@@ -101,13 +104,13 @@ class TestUserManager:
         finally:
             # 清理
             try:
-                sync_db_session.delete(user)
-                sync_db_session.commit()
+                await db_session.delete(user)
+                await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_get_user_by_username(self, user_manager, test_user_data, sync_db_session):
+    async def test_get_user_by_username(self, user_manager, test_user_data, db_session):
         """测试：通过用户名获取用户"""
         # 创建用户
         user = await user_manager.register_user(
@@ -115,23 +118,24 @@ class TestUserManager:
             email=test_user_data["email"],
             password=test_user_data["password"]
         )
+        await db_session.commit()
         
         try:
             # 获取用户
-            found_user = user_manager.get_user_by_username(test_user_data["username"])
+            found_user = await user_manager.get_user_by_username(test_user_data["username"])
             
             assert found_user is not None
             assert found_user.username == test_user_data["username"]
         finally:
             # 清理
             try:
-                sync_db_session.delete(user)
-                sync_db_session.commit()
+                await db_session.delete(user)
+                await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_update_user(self, user_manager, test_user_data, sync_db_session):
+    async def test_update_user(self, user_manager, test_user_data, db_session):
         """测试：更新用户"""
         # 创建用户
         user = await user_manager.register_user(
@@ -139,6 +143,7 @@ class TestUserManager:
             email=test_user_data["email"],
             password=test_user_data["password"]
         )
+        await db_session.commit()
         
         try:
             # 使用唯一的邮箱地址，避免唯一约束冲突
@@ -153,6 +158,7 @@ class TestUserManager:
                     "role": "admin"
                 }
             )
+            await db_session.commit()
             
             assert updated_user is not None
             assert updated_user.email == unique_email
@@ -160,13 +166,13 @@ class TestUserManager:
         finally:
             # 清理
             try:
-                sync_db_session.delete(user)
-                sync_db_session.commit()
+                await db_session.delete(user)
+                await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_delete_user(self, user_manager, test_user_data, sync_db_session):
+    async def test_delete_user(self, user_manager, test_user_data, db_session):
         """测试：删除用户（软删除）"""
         # 创建用户
         user = await user_manager.register_user(
@@ -174,16 +180,18 @@ class TestUserManager:
             email=test_user_data["email"],
             password=test_user_data["password"]
         )
+        await db_session.commit()
         
         user_id = str(user.id)
         
         # 软删除用户（默认）
         deleted = await user_manager.delete_user(user_id, soft_delete=True)
+        await db_session.commit()
         
         assert deleted is True
         
         # 验证用户已软删除（status变为deleted，但记录仍存在）
-        found_user = user_manager.get_user(user_id)
+        found_user = await user_manager.get_user(user_id)
         assert found_user is not None  # 软删除后记录仍存在
         assert found_user.status == "deleted"  # 状态变为deleted
         assert found_user.deleted_at is not None  # deleted_at已设置

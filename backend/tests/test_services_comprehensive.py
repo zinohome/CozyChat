@@ -162,23 +162,26 @@ class TestMessageService:
 class TestToolService:
     """ToolService测试"""
     
-    @pytest_asyncio.fixture
-    async def tool_service(self, db_session):
+    @pytest.fixture
+    def tool_service(self):
         """创建ToolService实例"""
-        return ToolService(db_session)
+        from app.engines.tools.factory import ToolManagerFactory
+        tool_factory = ToolManagerFactory()
+        return ToolService(tool_factory)
     
-    @pytest.mark.asyncio
-    async def test_get_available_tools(self, tool_service):
+    def test_get_available_tools(self, tool_service):
         """测试：获取可用工具"""
-        tools = await tool_service.get_available_tools()
+        tools = tool_service.get_available_tools()  # 注意：get_available_tools不是async方法
         assert isinstance(tools, list)
     
     @pytest.mark.asyncio
     async def test_get_tool_by_name(self, tool_service):
         """测试：根据名称获取工具"""
-        # 测试获取不存在的工具
-        tool = await tool_service.get_tool_by_name("non_existent_tool")
-        assert tool is None
+        # 注意：ToolService没有get_tool_by_name方法，只有validate_tool_call
+        # 测试验证工具调用
+        result = await tool_service.validate_tool_call("non_existent_tool", {})
+        assert isinstance(result, dict)
+        assert "valid" in result
 
 
 # ============================================================================

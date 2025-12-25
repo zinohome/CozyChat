@@ -55,27 +55,33 @@ class TestChatFlowIntegration:
         }
         
         # Mock认证和编排器
-        with patch('app.api.deps.get_current_active_user_async', return_value=mock_user), \
-             patch('app.api.deps.get_chat_orchestrator') as mock_get_orchestrator:
-            
-            mock_orchestrator = AsyncMock()
-            mock_orchestrator.process_request = AsyncMock(return_value={
-                "id": "test-id",
-                "created": 1234567890,
-                "model": "gpt-3.5-turbo",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "Hello! How can I help you?"},
-                    "finish_reason": "stop"
-                }],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 5,
-                    "total_tokens": 15
-                }
-            })
-            mock_get_orchestrator.return_value = mock_orchestrator
-            
+        from app.api.deps import get_current_active_user_async, get_chat_orchestrator
+        from app.main import app
+        
+        async def get_user():
+            return mock_user
+        
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_request = AsyncMock(return_value={
+            "id": "test-id",
+            "created": 1234567890,
+            "model": "gpt-3.5-turbo",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Hello! How can I help you?"},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        })
+        
+        app.dependency_overrides[get_current_active_user_async] = get_user
+        app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
+        
+        try:
             # Act
             response = client.post(
                 "/v1/chat/completions",
@@ -88,6 +94,8 @@ class TestChatFlowIntegration:
             data = response.json()
             assert "choices" in data
             assert len(data["choices"]) > 0
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
     async def test_stream_chat_flow(
@@ -111,13 +119,19 @@ class TestChatFlowIntegration:
             yield b'data: [DONE]\n\n'
         
         # Mock认证和编排器
-        with patch('app.api.deps.get_current_active_user_async', return_value=mock_user), \
-             patch('app.api.deps.get_chat_orchestrator') as mock_get_orchestrator:
-            
-            mock_orchestrator = AsyncMock()
-            mock_orchestrator.process_request = AsyncMock(return_value=mock_stream())
-            mock_get_orchestrator.return_value = mock_orchestrator
-            
+        from app.api.deps import get_current_active_user_async, get_chat_orchestrator
+        from app.main import app
+        
+        async def get_user():
+            return mock_user
+        
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_request = AsyncMock(return_value=mock_stream())
+        
+        app.dependency_overrides[get_current_active_user_async] = get_user
+        app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
+        
+        try:
             # Act
             response = client.post(
                 "/v1/chat/completions",
@@ -128,6 +142,8 @@ class TestChatFlowIntegration:
             # Assert
             assert response.status_code == 200
             assert response.headers["content-type"] == "text/event-stream"
+        finally:
+            app.dependency_overrides.clear()
     
     @pytest.mark.asyncio
     async def test_chat_with_memory(
@@ -146,27 +162,33 @@ class TestChatFlowIntegration:
         }
         
         # Mock认证和编排器
-        with patch('app.api.deps.get_current_active_user_async', return_value=mock_user), \
-             patch('app.api.deps.get_chat_orchestrator') as mock_get_orchestrator:
-            
-            mock_orchestrator = AsyncMock()
-            mock_orchestrator.process_request = AsyncMock(return_value={
-                "id": "test-id",
-                "created": 1234567890,
-                "model": "gpt-3.5-turbo",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "We talked about Python."},
-                    "finish_reason": "stop"
-                }],
-                "usage": {
-                    "prompt_tokens": 20,
-                    "completion_tokens": 10,
-                    "total_tokens": 30
-                }
-            })
-            mock_get_orchestrator.return_value = mock_orchestrator
-            
+        from app.api.deps import get_current_active_user_async, get_chat_orchestrator
+        from app.main import app
+        
+        async def get_user():
+            return mock_user
+        
+        mock_orchestrator = AsyncMock()
+        mock_orchestrator.process_request = AsyncMock(return_value={
+            "id": "test-id",
+            "created": 1234567890,
+            "model": "gpt-3.5-turbo",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "We talked about Python."},
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 10,
+                "total_tokens": 30
+            }
+        })
+        
+        app.dependency_overrides[get_current_active_user_async] = get_user
+        app.dependency_overrides[get_chat_orchestrator] = lambda: mock_orchestrator
+        
+        try:
             # Act
             response = client.post(
                 "/v1/chat/completions",
@@ -178,3 +200,5 @@ class TestChatFlowIntegration:
             assert response.status_code == 200
             data = response.json()
             assert "choices" in data
+        finally:
+            app.dependency_overrides.clear()

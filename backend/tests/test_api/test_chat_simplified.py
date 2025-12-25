@@ -26,14 +26,15 @@ class TestChatAPISimplified:
         return TestClient(app)
     
     @pytest.fixture
-    def async_client(self):
+    async def async_client(self):
         """创建异步测试客户端"""
         # AsyncClient的正确初始化方式（使用ASGITransport）
-        # 注意：不能使用async fixture，因为测试函数需要直接使用client
-        return AsyncClient(
+        # 使用async fixture确保正确的上下文管理
+        async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://testserver"
-        )
+        ) as client:
+            yield client
     
     @pytest.fixture
     def mock_user(self):

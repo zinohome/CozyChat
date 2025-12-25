@@ -331,17 +331,22 @@ personality:
         os.environ["PERSONALITY_CONFIG_DIR"] = str(temp_personality_dir)
         
         try:
-            response = client.put(
-                "/v1/personalities/test_personality",
-                json={
-                    "name": "Updated Test Personality",
-                    "description": "Updated description"
-                },
-                headers={"Authorization": f"Bearer {auth_token}"}
-            )
-            
-            # 如果端点存在，应该返回200
-            assert response.status_code in [200, 404, 422], f"Expected 200, 404, or 422, got {response.status_code}: {response.json() if response.status_code not in [200, 404, 422] else ''}"
+            # Mock PersonalityManager
+            from app.core.personality.manager import PersonalityManager
+            with patch.object(PersonalityManager, 'update_personality') as mock_update:
+                mock_update.return_value = mock_personality
+                
+                response = client.put(
+                    "/v1/personalities/test_personality",
+                    json={
+                        "name": "Updated Test Personality",
+                        "description": "Updated description"
+                    },
+                    headers={"Authorization": f"Bearer {auth_token}"}
+                )
+                
+                # 如果端点存在，应该返回200
+                assert response.status_code in [200, 404, 422], f"Expected 200, 404, or 422, got {response.status_code}: {response.json() if response.status_code not in [200, 404, 422] else ''}"
         finally:
             app.dependency_overrides.clear()
             if original_personality_dir:

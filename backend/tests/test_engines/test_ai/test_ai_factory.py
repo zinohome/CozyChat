@@ -93,9 +93,9 @@ class TestAIEngineFactory:
         assert isinstance(engines, dict)
         assert "openai" in engines
         assert "ollama" in engines
-        # 引擎描述可能是类名或描述字符串
-        assert "openai" in str(engines["openai"]).lower() or "OpenAI" in str(engines["openai"])
-        assert "ollama" in str(engines["ollama"]).lower() or "Ollama" in str(engines["ollama"])
+        # 引擎描述格式为 "{engine.capitalize()} Engine"
+        assert engines["openai"] == "Openai Engine" or "openai" in engines["openai"].lower()
+        assert engines["ollama"] == "Ollama Engine" or "ollama" in engines["ollama"].lower()
     
     def test_create_engine_with_default_config(self, factory):
         """测试：使用默认配置创建引擎"""

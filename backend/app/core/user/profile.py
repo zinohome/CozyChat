@@ -55,13 +55,21 @@ class UserProfileManager:
         """获取用户画像（异步版本）
         
         Args:
-            user_id: 用户ID
+            user_id: 用户ID（字符串格式，可以是UUID字符串）
             
         Returns:
             Optional[UserProfile]: 用户画像对象，如果不存在返回None
         """
         try:
-            stmt = select(UserProfile).where(UserProfile.user_id == user_id)
+            import uuid
+            # 将user_id转换为UUID对象（如果它是字符串）
+            try:
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except ValueError:
+                logger.warning(f"Invalid user_id format: {user_id}")
+                return None
+            
+            stmt = select(UserProfile).where(UserProfile.user_id == user_uuid)
             result = await self.db.execute(stmt)
             return result.scalar_one_or_none()
         except Exception as e:
@@ -89,11 +97,19 @@ class UserProfileManager:
             UserProfile: 用户画像对象
         """
         try:
+            import uuid
+            # 将user_id转换为UUID对象（如果它是字符串）
+            try:
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+            except ValueError:
+                logger.error(f"Invalid user_id format: {user_id}")
+                raise ValueError(f"Invalid user_id format: {user_id}")
+            
             profile = await self.get_profile(user_id)
             
             if not profile:
                 # 创建新画像
-                profile = UserProfile(user_id=user_id)
+                profile = UserProfile(user_id=user_uuid)  # type: ignore[assignment]
                 self.db.add(profile)
             
             # 更新字段

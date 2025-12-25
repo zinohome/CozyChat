@@ -292,15 +292,16 @@ class TestUsersAPI:
         app.dependency_overrides[get_db] = get_async_db
         
         try:
+            # UserUpdateRequest不包含email字段，所以传递无效的email会被忽略
+            # 测试传递一个无效的display_name（超过最大长度）来触发验证错误
             response = client.put(
                 "/v1/users/me",
                 json={
-                    "email": "invalid_email"  # 无效邮箱格式
+                    "display_name": "a" * 200  # 超过最大长度100
                 },
                 headers={"Authorization": f"Bearer {auth_token}"}
             )
             
-            # 注意：update_current_user可能不会验证email格式，或者验证是宽松的
             # 如果返回200，说明验证通过（可能是宽松验证）
             # 如果返回400或422，说明验证失败
             assert response.status_code in [200, 400, 422], f"Expected 200, 400, or 422, got {response.status_code}: {response.json() if response.status_code not in [200, 400, 422] else ''}"

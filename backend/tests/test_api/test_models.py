@@ -219,15 +219,16 @@ class TestModelsAPI:
         
         try:
             # Mock AI引擎注册表和工厂
-            with patch('app.api.v1.models.AIEngineRegistry') as mock_registry:
-                with patch('app.api.v1.models.AIEngineFactory') as mock_factory:
-                    mock_registry.list_engines.return_value = ["openai"]
-                    
+            from app.engines.ai.factory import AIEngineFactory
+            from app.engines.ai.registry import AIEngineRegistry
+            
+            with patch.object(AIEngineRegistry, 'list_engines', return_value=["openai"]):
+                with patch.object(AIEngineFactory, 'create_engine') as mock_factory:
                     # Mock引擎实例
                     mock_engine = MagicMock()
                     mock_engine.model = None
                     mock_engine.list_models = MagicMock(return_value=[])
-                    mock_factory.create_engine.return_value = mock_engine
+                    mock_factory.return_value = mock_engine
                     
                     response = client.get(
                         "/v1/models",

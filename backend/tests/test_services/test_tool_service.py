@@ -37,8 +37,7 @@ class TestToolService:
         """创建ToolService实例"""
         return ToolService(tool_factory=mock_tool_manager_factory)
     
-    @pytest.mark.asyncio
-    async def test_prepare_tools_success(
+    def test_prepare_tools_success(
         self,
         tool_service
     ):
@@ -85,8 +84,7 @@ class TestToolService:
         assert result is not None
         tool_service.tool_handler.execute_tool_calls.assert_called_once()
     
-    @pytest.mark.asyncio
-    async def test_get_available_tools(
+    def test_get_available_tools(
         self,
         tool_service,
         mock_tool_manager_factory

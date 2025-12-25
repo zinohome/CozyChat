@@ -2,16 +2,28 @@
 MemoryScoringService单元测试
 
 测试记忆评分服务的各种场景
+
+注意：MemoryScoringService已废弃，旧的memory引擎已移除。
+此测试保留用于向后兼容，但建议迁移到新的三大引擎系统。
 """
 
 import pytest
+import warnings
 from unittest.mock import Mock
 from datetime import datetime, timedelta, timezone
 
-from app.services.memory.scoring_service import MemoryScoringService
-from app.core.personality.models import IntelligentScoring, ScoringWeights
+# 过滤废弃警告
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    try:
+        from app.services.memory.scoring_service import MemoryScoringService
+        from app.core.personality.models import IntelligentScoring, ScoringWeights
+        HAS_SCORING_SERVICE = True
+    except ImportError:
+        HAS_SCORING_SERVICE = False
 
 
+@pytest.mark.skipif(not HAS_SCORING_SERVICE, reason="MemoryScoringService已废弃")
 class TestMemoryScoringService:
     """MemoryScoringService单元测试类"""
     

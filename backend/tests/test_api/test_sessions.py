@@ -266,39 +266,27 @@ personality:
         user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
         assert user is not None, "User should exist in database"
         
-        # 创建测试会话（在同步会话中创建）
+        # 创建测试会话（直接在异步会话中创建，因为API使用异步会话）
         test_session = SessionModel(
+            id=uuid.uuid4(),
             user_id=user.id,
             personality_id="test_personality",
             title="测试会话"
         )
-        sync_db_session.add(test_session)
-        sync_db_session.commit()
-        sync_db_session.refresh(test_session)
-        
-        # 同时在异步会话中创建（因为get_session使用await db.execute）
-        from sqlalchemy import select
-        stmt = select(SessionModel).where(SessionModel.id == test_session.id)
-        result = await db_session.execute(stmt)
-        async_session = result.scalar_one_or_none()
-        if not async_session:
-            db_session.add(test_session)
-            await db_session.commit()
-            await db_session.refresh(test_session)
+        db_session.add(test_session)
+        await db_session.commit()
+        await db_session.refresh(test_session)
         
         # 覆盖依赖
-        # 注意：get_session的签名使用get_sync_session，但代码中使用了await db.execute
-        # 所以实际上需要覆盖get_sync_session返回AsyncSession
+        # 注意：get_session已修复为使用AsyncSession
         async def get_user():
             return user
         
-        # 由于代码使用了await db.execute，实际上需要AsyncSession
-        # 但签名声明是Session，所以我们需要覆盖get_sync_session返回AsyncSession
-        async def get_async_db_for_sync():
+        async def get_async_db():
             yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
-        app.dependency_overrides[get_sync_session] = get_async_db_for_sync  # 覆盖为异步会话
+        app.dependency_overrides[get_db] = get_async_db  # 使用异步会话
         
         try:
             response = client.get(
@@ -322,9 +310,9 @@ personality:
                 sync_db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_update_session_success(self, client, auth_token, sync_db_session, db_session):
+    async def test_update_session_success(self, async_client, auth_token, sync_db_session, db_session):
         """测试：更新会话成功"""
-        from app.api.deps import get_current_active_user_async, get_sync_session
+        from app.api.deps import get_current_active_user_async, get_db
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
         
@@ -332,67 +320,56 @@ personality:
         token_payload = decode_token(auth_token)
         user_id = token_payload.get("sub")
         
-        # 从数据库获取用户
+        # 从数据库获取用户（使用同步会话查询，因为用户已在同步会话中创建）
         user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
         assert user is not None, "User should exist in database"
         
-        # 创建测试会话（在同步会话中创建）
+        # 创建测试会话（直接在异步会话中创建，因为API使用异步会话）
         test_session = SessionModel(
+            id=uuid.uuid4(),
             user_id=user.id,
             personality_id="test_personality",
             title="测试会话"
         )
-        sync_db_session.add(test_session)
-        sync_db_session.commit()
-        sync_db_session.refresh(test_session)
-        
-        # 同时在异步会话中创建
-        from sqlalchemy import select
-        stmt = select(SessionModel).where(SessionModel.id == test_session.id)
-        result = await db_session.execute(stmt)
-        async_session = result.scalar_one_or_none()
-        if not async_session:
-            db_session.add(test_session)
-            await db_session.commit()
-            await db_session.refresh(test_session)
+        db_session.add(test_session)
+        await db_session.commit()
+        await db_session.refresh(test_session)
         
         # 覆盖依赖
-        # 注意：update_session的签名使用get_sync_session，但代码中使用了await db.commit
+        # 注意：update_session已修复为使用AsyncSession和异步查询
         async def get_user():
             return user
         
-        # 由于代码使用了await db.commit，实际上需要AsyncSession
-        async def get_async_db_for_sync():
+        async def get_async_db():
             yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
-        app.dependency_overrides[get_sync_session] = get_async_db_for_sync  # 覆盖为异步会话
+        app.dependency_overrides[get_db] = get_async_db  # 使用异步会话
         
         try:
-            response = client.put(
+            response = await async_client.put(
                 f"/v1/sessions/{test_session.id}",
                 json={"title": "更新后的标题"},
                 headers={"Authorization": f"Bearer {auth_token}"}
             )
             
-            # 由于代码bug（同步会话但使用异步操作），可能返回500
-            assert response.status_code in [200, 500], f"Expected 200 or 500, got {response.status_code}: {response.json() if response.status_code not in [200, 500] else ''}"
-            if response.status_code == 200:
-                data = response.json()
-                assert isinstance(data, dict)
+            assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json() if response.status_code != 200 else ''}"
+            data = response.json()
+            assert isinstance(data, dict)
+            assert data["title"] == "更新后的标题"
         finally:
             app.dependency_overrides.clear()
             # 清理
             try:
-                sync_db_session.delete(test_session)
-                sync_db_session.commit()
+                await db_session.delete(test_session)
+                await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
     
     @pytest.mark.asyncio
-    async def test_delete_session_success(self, client, auth_token, sync_db_session, db_session):
+    async def test_delete_session_success(self, async_client, auth_token, sync_db_session, db_session):
         """测试：删除会话成功"""
-        from app.api.deps import get_current_active_user_async, get_sync_session
+        from app.api.deps import get_current_active_user_async, get_db
         from app.utils.security import decode_token
         from app.models.user import User as UserModel
         
@@ -400,56 +377,51 @@ personality:
         token_payload = decode_token(auth_token)
         user_id = token_payload.get("sub")
         
-        # 从数据库获取用户
+        # 从数据库获取用户（使用同步会话查询，因为用户已在同步会话中创建）
         user = sync_db_session.query(UserModel).filter(UserModel.id == user_id).first()
         assert user is not None, "User should exist in database"
         
-        # 创建测试会话（在同步会话中创建）
+        # 创建测试会话（直接在异步会话中创建，因为API使用异步会话）
         test_session = SessionModel(
+            id=uuid.uuid4(),
             user_id=user.id,
             personality_id="test_personality",
             title="测试会话"
         )
-        sync_db_session.add(test_session)
-        sync_db_session.commit()
-        sync_db_session.refresh(test_session)
-        
-        # 同时在异步会话中创建
-        from sqlalchemy import select
-        stmt = select(SessionModel).where(SessionModel.id == test_session.id)
-        result = await db_session.execute(stmt)
-        async_session = result.scalar_one_or_none()
-        if not async_session:
-            db_session.add(test_session)
-            await db_session.commit()
-            await db_session.refresh(test_session)
+        db_session.add(test_session)
+        await db_session.commit()
+        await db_session.refresh(test_session)
         
         # 覆盖依赖
-        # 注意：delete_session的签名使用get_sync_session，但代码中使用了await db.commit
+        # 注意：delete_session已修复为使用AsyncSession
         async def get_user():
             return user
         
-        # 由于代码使用了await db.commit，实际上需要AsyncSession
-        async def get_async_db_for_sync():
+        async def get_async_db():
             yield db_session
         
         app.dependency_overrides[get_current_active_user_async] = get_user
-        app.dependency_overrides[get_sync_session] = get_async_db_for_sync  # 覆盖为异步会话
+        app.dependency_overrides[get_db] = get_async_db  # 使用异步会话
         
         try:
-            response = client.delete(
+            response = await async_client.delete(
                 f"/v1/sessions/{test_session.id}",
                 headers={"Authorization": f"Bearer {auth_token}"}
             )
             
-            # 由于代码bug（同步会话但使用异步操作），可能返回500
-            assert response.status_code in [200, 204, 500], f"Expected 200, 204, or 500, got {response.status_code}: {response.json() if response.status_code not in [200, 204, 500] else ''}"
+            assert response.status_code in [200, 204], f"Expected 200 or 204, got {response.status_code}: {response.json() if response.status_code not in [200, 204] else ''}"
         finally:
             app.dependency_overrides.clear()
             # 清理（如果删除失败）
             try:
-                sync_db_session.delete(test_session)
-                sync_db_session.commit()
+                # 检查会话是否还存在
+                from sqlalchemy import select
+                stmt = select(SessionModel).where(SessionModel.id == test_session.id)
+                result = await db_session.execute(stmt)
+                existing_session = result.scalar_one_or_none()
+                if existing_session:
+                    await db_session.delete(existing_session)
+                    await db_session.commit()
             except Exception:
-                sync_db_session.rollback()
+                await db_session.rollback()
 

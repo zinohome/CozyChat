@@ -20,12 +20,12 @@ class TestSessionTitleGenerator:
     """测试会话标题生成器"""
     
     @pytest.fixture
-    def title_generator(self, sync_db_session):
+    def title_generator(self, db_session):
         """标题生成器实例"""
-        return SessionTitleGenerator(sync_db_session)
+        return SessionTitleGenerator(db_session)
     
     @pytest.fixture
-    def test_session(self, sync_db_session):
+    async def test_session(self, db_session):
         """测试会话"""
         from app.models.user import User as UserModel
         
@@ -38,8 +38,9 @@ class TestSessionTitleGenerator:
             role="user",
             status="active"
         )
-        sync_db_session.add(test_user)
-        sync_db_session.commit()
+        db_session.add(test_user)
+        await db_session.commit()
+        await db_session.refresh(test_user)
         
         # 创建会话
         session = SessionModel(
@@ -50,9 +51,9 @@ class TestSessionTitleGenerator:
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
-        sync_db_session.add(session)
-        sync_db_session.commit()
-        sync_db_session.refresh(session)
+        db_session.add(session)
+        await db_session.commit()
+        await db_session.refresh(session)
         return session
     
     def test_initialization(self, title_generator):
@@ -107,7 +108,7 @@ class TestSessionTitleGenerator:
         assert result is None
     
     @pytest.mark.asyncio
-    async def test_generate_title_no_messages(self, title_generator, test_session):
+    async def test_generate_title_no_messages(self, title_generator, test_session, db_session):
         """测试：没有消息"""
         result = await title_generator.generate_title(str(test_session.id))
         assert result is None
@@ -180,12 +181,17 @@ class TestSessionTitleGenerator:
                 created_at=datetime.utcnow()
             )
             db_session.add(message)
-        db_session.commit()
+        await db_session.commit()
         
         # Mock AI引擎响应
-        mock_response = MagicMock()
-        mock_response.message = MagicMock()
-        mock_response.message.content = "测试标题"
+        from app.engines.ai.base import ChatResponse, ChatMessage
+        mock_response = ChatResponse(
+            id="chatcmpl-123",
+            message=ChatMessage(role="assistant", content="测试标题"),
+            model="gpt-3.5-turbo",
+            finish_reason="stop",
+            usage={"total_tokens": 50}
+        )
         
         with patch.object(
             title_generator.config_loader,
@@ -212,9 +218,9 @@ class TestSessionTitleGenerator:
             assert result == "测试标题"
     
     @pytest.mark.asyncio
-    async def test_update_session_title_if_needed_no_update(self, title_generator, test_session):
+    async def test_update_session_title_if_needed_no_update(self, title_generator, test_session, db_session):
         """测试：不需要更新标题"""
-        # 消息数量不足
+        # 消息数量不足（test_session没有消息）
         result = await title_generator.update_session_title_if_needed(str(test_session.id))
         assert result is False
     
@@ -231,12 +237,17 @@ class TestSessionTitleGenerator:
                 created_at=datetime.utcnow()
             )
             db_session.add(message)
-        db_session.commit()
+        await db_session.commit()
         
         # Mock AI引擎响应
-        mock_response = MagicMock()
-        mock_response.message = MagicMock()
-        mock_response.message.content = "新标题"
+        from app.engines.ai.base import ChatResponse, ChatMessage
+        mock_response = ChatResponse(
+            id="chatcmpl-123",
+            message=ChatMessage(role="assistant", content="新标题"),
+            model="gpt-3.5-turbo",
+            finish_reason="stop",
+            usage={"total_tokens": 50}
+        )
         
         with patch.object(
             title_generator.config_loader,
@@ -262,6 +273,6 @@ class TestSessionTitleGenerator:
             assert result is True
             
             # 验证标题已更新
-            db_session.refresh(test_session)
+            await db_session.refresh(test_session)
             assert test_session.title == "新标题"
 
