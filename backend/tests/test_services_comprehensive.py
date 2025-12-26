@@ -292,7 +292,7 @@ class TestIntentAnalyzerComprehensive:
             ("什么是Python？", QueryIntent.KNOWLEDGE_QUERY),
             ("帮我计算", QueryIntent.TASK_EXECUTION),
             ("我很难过", QueryIntent.EMOTIONAL_SUPPORT),
-            ("告诉我关于Python的信息", QueryIntent.TASK_EXECUTION),  # "告诉我"匹配"帮我"关键词，实际返回TASK_EXECUTION
+            ("告诉我关于Python的信息", QueryIntent.CHITCHAT),  # "告诉我"不在task_keywords中，且不匹配其他关键词，返回CHITCHAT
             ("学习Python", QueryIntent.LEARNING),
         ]
         

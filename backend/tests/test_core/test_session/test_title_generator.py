@@ -122,6 +122,7 @@ class TestSessionTitleGenerator:
             message = MessageModel(
                 id=uuid.uuid4(),
                 session_id=test_session.id,
+                user_id=test_session.user_id,  # 添加user_id
                 role="user" if i % 2 == 0 else "assistant",
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
@@ -159,6 +160,7 @@ class TestSessionTitleGenerator:
             message = MessageModel(
                 id=uuid.uuid4(),
                 session_id=test_session.id,
+                user_id=test_session.user_id,  # 添加user_id
                 role="user" if i % 2 == 0 else "assistant",
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
@@ -177,6 +179,7 @@ class TestSessionTitleGenerator:
             message = MessageModel(
                 id=uuid.uuid4(),
                 session_id=test_session.id,
+                user_id=test_session.user_id,  # 添加user_id
                 role="user" if i % 2 == 0 else "assistant",
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
@@ -233,6 +236,7 @@ class TestSessionTitleGenerator:
             message = MessageModel(
                 id=uuid.uuid4(),
                 session_id=test_session.id,
+                user_id=test_session.user_id,  # 添加user_id
                 role="user" if i % 2 == 0 else "assistant",
                 content=f"Message {i}",
                 created_at=datetime.utcnow()
