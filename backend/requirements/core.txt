@@ -37,7 +37,17 @@ qdrant-client==1.11.3
 # 注意：qdrant-client 1.11.3 要求 numpy>=1.21
 numpy>=1.22.0,<2.0
 
+# PyTorch CPU版本（必须在sentence-transformers之前安装）
+# ⚠️ 重要：明确指定CPU版本，避免下载CUDA库（节省~1GB空间）
+# 安装方式：pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 注意：由于pip requirements.txt不支持--index-url，需要手动先安装：
+#   1. pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   2. pip install -r requirements/core.txt
+# 或者使用安装脚本：scripts/install_core_deps.sh
+torch>=2.0.0  # 版本约束，实际安装时使用CPU版本
+
 # Embedding模型
+# 注意：sentence-transformers 依赖 torch，如果已安装CPU版本的torch，将使用CPU版本
 sentence-transformers==2.3.1
 
 # 缓存
