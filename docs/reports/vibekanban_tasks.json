@@ -1,0 +1,220 @@
+{
+  "project_name": "CozyChat - 三大人格化引擎系统重构",
+  "tasks": [
+    {
+      "title": "T-501: Knowledge Engine单元测试",
+      "description": "创建`test_engines/test_knowledge/`目录，测试Cognee引擎的所有方法，覆盖率≥85%。使用Mock避免外部依赖，测试正常流程、异常流程、边界条件。",
+      "priority": "P0",
+      "estimated_time": "0.5天",
+      "category": "阶段五：测试验证 - 单元测试"
+    },
+    {
+      "title": "T-502: UserProfile Engine单元测试",
+      "description": "创建`test_engines/test_userprofile/`目录，测试Memobase引擎的所有方法，覆盖率≥85%。测试UUID转换逻辑、用户不存在场景等。",
+      "priority": "P0",
+      "estimated_time": "0.5天",
+      "category": "阶段五：测试验证 - 单元测试"
+    },
+    {
+      "title": "T-503: ChatMemory Engine单元测试",
+      "description": "创建`test_engines/test_chatmemory/`目录，测试Mem0引擎的所有方法，覆盖率≥85%。测试并发搜索、添加记忆等场景。",
+      "priority": "P0",
+      "estimated_time": "0.5天",
+      "category": "阶段五：测试验证 - 单元测试"
+    },
+    {
+      "title": "T-504: ContextServiceNew单元测试",
+      "description": "测试ContextServiceNew的所有方法，包括三大引擎集成、超时控制、降级策略。Mock三大引擎，测试各种意图场景。",
+      "priority": "P0",
+      "estimated_time": "0.5天",
+      "category": "阶段五：测试验证 - 单元测试"
+    },
+    {
+      "title": "T-505: IntentAnalyzer单元测试",
+      "description": "测试意图分析器的6种意图识别和引擎配置生成。测试各种查询场景的意图识别准确性。",
+      "priority": "P0",
+      "estimated_time": "0.5天",
+      "category": "阶段五：测试验证 - 单元测试"
+    },
+    {
+      "title": "T-511: 端到端聊天流程测试",
+      "description": "测试完整的聊天流程，验证三大引擎在真实场景中的集成。使用真实的外部服务或Mock服务。",
+      "priority": "P0",
+      "estimated_time": "0.3天",
+      "category": "阶段五：测试验证 - 集成测试"
+    },
+    {
+      "title": "T-512: 三大引擎并发调用测试",
+      "description": "测试ContextServiceNew中三大引擎的并发调用，验证并行执行和结果合并。确保并发安全。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段五：测试验证 - 集成测试"
+    },
+    {
+      "title": "T-513: 超时和降级策略测试",
+      "description": "测试引擎超时时的降级策略，验证系统稳定性。测试各种超时场景和降级行为。",
+      "priority": "P0",
+      "estimated_time": "0.3天",
+      "category": "阶段五：测试验证 - 集成测试"
+    },
+    {
+      "title": "T-514: 意图分析器集成测试",
+      "description": "测试意图分析器与ContextServiceNew的集成，验证意图识别和引擎配置的正确性。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段五：测试验证 - 集成测试"
+    },
+    {
+      "title": "T-521: QPS测试",
+      "description": "测试系统QPS，目标≥20。使用压力测试工具，验证系统性能。",
+      "priority": "P1",
+      "estimated_time": "0.2天",
+      "category": "阶段五：测试验证 - 性能测试"
+    },
+    {
+      "title": "T-522: 延迟测试",
+      "description": "测试P50延迟<200ms，P95延迟<500ms。使用性能监控工具收集延迟数据。",
+      "priority": "P1",
+      "estimated_time": "0.2天",
+      "category": "阶段五：测试验证 - 性能测试"
+    },
+    {
+      "title": "T-523: 缓存命中率测试",
+      "description": "测试缓存命中率，目标≥60%。验证多级缓存系统的有效性。",
+      "priority": "P1",
+      "estimated_time": "0.1天",
+      "category": "阶段五：测试验证 - 性能测试"
+    },
+    {
+      "title": "T-531: 现有功能回归测试",
+      "description": "运行所有现有测试，确保没有功能退化。验证新实现不影响现有功能。",
+      "priority": "P0",
+      "estimated_time": "0.3天",
+      "category": "阶段五：测试验证 - 回归测试"
+    },
+    {
+      "title": "T-532: 新实现vs旧实现对比测试",
+      "description": "对比新实现和旧实现的输出结果，确保一致性。验证功能等价性。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段五：测试验证 - 回归测试"
+    },
+    {
+      "title": "T-601: 更新ContextBuilder",
+      "description": "更新`backend/app/core/context/builder.py`，移除MemoryManager引用或标记为废弃。确保没有其他文件使用ContextBuilder。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段六：清理旧代码 - 迁移旧代码引用"
+    },
+    {
+      "title": "T-602: 更新ChatOrchestrator",
+      "description": "更新`backend/app/services/orchestration/chat_orchestrator.py`，移除memory_manager参数。确保只使用ContextService。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段六：清理旧代码 - 迁移旧代码引用"
+    },
+    {
+      "title": "T-603: 更新API依赖",
+      "description": "更新`backend/app/api/deps.py`，移除get_memory_manager依赖（如果不再需要）。更新类型注解。",
+      "priority": "P0",
+      "estimated_time": "0.1天",
+      "category": "阶段六：清理旧代码 - 迁移旧代码引用"
+    },
+    {
+      "title": "T-611: 删除memory引擎目录",
+      "description": "删除`backend/app/engines/memory/`整个目录（14个文件），测试通过后执行。删除前创建Git备份，确保没有其他文件引用。",
+      "priority": "P0",
+      "estimated_time": "0.2天",
+      "category": "阶段六：清理旧代码 - 删除废弃文件"
+    },
+    {
+      "title": "T-612: 删除memory_service.py",
+      "description": "删除`backend/app/services/memory_service.py`，测试通过后执行。确保没有其他文件引用。",
+      "priority": "P0",
+      "estimated_time": "0.1天",
+      "category": "阶段六：清理旧代码 - 删除废弃文件"
+    },
+    {
+      "title": "T-613: 删除memory_retriever.py",
+      "description": "删除`backend/app/services/context/memory_retriever.py`，测试通过后执行。确保没有其他文件引用。",
+      "priority": "P0",
+      "estimated_time": "0.1天",
+      "category": "阶段六：清理旧代码 - 删除废弃文件"
+    },
+    {
+      "title": "T-614: 标记memory API为废弃",
+      "description": "标记`backend/app/api/v1/memory.py`为废弃（保留兼容），添加废弃警告。用于向后兼容。",
+      "priority": "P0",
+      "estimated_time": "0.1天",
+      "category": "阶段六：清理旧代码 - 删除废弃文件"
+    },
+    {
+      "title": "T-621: 删除废弃测试文件",
+      "description": "删除`backend/tests/deprecated/test_memory.py`、`test_memory_old/`、`test_memory_service.py`。清理废弃的测试代码。",
+      "priority": "P1",
+      "estimated_time": "0.2天",
+      "category": "阶段六：清理旧代码 - 清理测试文件"
+    },
+    {
+      "title": "T-701: 更新后端架构设计文档",
+      "description": "更新`docs/core/02-后端架构设计-续.md`，添加三大引擎详细说明，移除旧memory引擎说明。保持文档准确性。",
+      "priority": "P1",
+      "estimated_time": "0.3天",
+      "category": "阶段七：文档更新 - 架构文档更新"
+    },
+    {
+      "title": "T-702: 更新架构重构方案文档",
+      "description": "更新`docs/reports/三大人格化引擎系统架构重构方案.md`，更新迁移状态和清理步骤。记录完成情况。",
+      "priority": "P1",
+      "estimated_time": "0.2天",
+      "category": "阶段七：文档更新 - 架构文档更新"
+    },
+    {
+      "title": "T-711: 更新API接口设计文档",
+      "description": "更新`docs/core/04-API接口设计.md`，标记废弃的API端点。说明替代方案。",
+      "priority": "P1",
+      "estimated_time": "0.3天",
+      "category": "阶段七：文档更新 - API文档更新"
+    },
+    {
+      "title": "T-721: 更新backend README",
+      "description": "更新`backend/README.md`，添加三大引擎说明。更新环境变量说明和使用指南。",
+      "priority": "P2",
+      "estimated_time": "0.1天",
+      "category": "阶段七：文档更新 - README和配置文档更新"
+    },
+    {
+      "title": "T-722: 更新环境变量文档",
+      "description": "更新`.env.example`和`docs/setup/CONFIG.md`，添加三大引擎配置说明。确保配置完整。",
+      "priority": "P2",
+      "estimated_time": "0.1天",
+      "category": "阶段七：文档更新 - README和配置文档更新"
+    },
+    {
+      "title": "T-723: 更新Docker配置文档",
+      "description": "更新`docker-compose.yml`和部署文档，确保包含三大引擎服务。更新部署说明。",
+      "priority": "P2",
+      "estimated_time": "0.1天",
+      "category": "阶段七：文档更新 - README和配置文档更新"
+    }
+  ],
+  "summary": {
+    "total_tasks": 26,
+    "p0_tasks": 18,
+    "p1_tasks": 5,
+    "p2_tasks": 3,
+    "estimated_total_time": "6.8-7.8天",
+    "categories": [
+      "阶段五：测试验证 - 单元测试 (5个)",
+      "阶段五：测试验证 - 集成测试 (4个)",
+      "阶段五：测试验证 - 性能测试 (3个)",
+      "阶段五：测试验证 - 回归测试 (2个)",
+      "阶段六：清理旧代码 - 迁移旧代码引用 (3个)",
+      "阶段六：清理旧代码 - 删除废弃文件 (4个)",
+      "阶段六：清理旧代码 - 清理测试文件 (1个)",
+      "阶段七：文档更新 - 架构文档更新 (2个)",
+      "阶段七：文档更新 - API文档更新 (1个)",
+      "阶段七：文档更新 - README和配置文档更新 (3个)"
+    ]
+  }
+}
