@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vibe_kanban": {
+      "command": "/home/zhangjun/.nvm/versions/node/v24.12.0/bin/npx",
+      "args": ["-y", "vibe-kanban@latest", "--mcp"]
+    }
+  }
+}
