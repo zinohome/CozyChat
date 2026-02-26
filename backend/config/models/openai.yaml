@@ -9,7 +9,7 @@ engine:
     model: "gpt-4.1"
     temperature: 0.7
     max_tokens: 2048
-    base_url: "https://oneapi.naivehero.top/v1"  # 使用默认，或自定义如 "https://api.openai.com/v1"
+    base_url: "https://oaiapi.naivehero.top/v1"  # 使用默认，或自定义如 "https://api.openai.com/v1"
   
   # 支持的模型列表
   models:

@@ -85,7 +85,7 @@ services:
 
       # OpenAI
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://oaiapi.naivehero.top/v1}
       OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-4o-realtime-preview-2024-12-17}
 
       # 可选第三方
