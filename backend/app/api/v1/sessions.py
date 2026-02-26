@@ -551,13 +551,15 @@ async def generate_session_title(
         session_uuid = uuid.UUID(session_id)
         
         # 查询会话并验证权限
-        session = db.query(SessionModel).filter(
+        stmt = select(SessionModel).where(
             and_(
                 SessionModel.id == session_uuid,
                 SessionModel.user_id == user.id,
                 SessionModel.deleted_at.is_(None)
             )
-        ).first()
+        )
+        result = await db.execute(stmt)
+        session = result.scalar_one_or_none()
         
         if not session:
             raise HTTPException(
