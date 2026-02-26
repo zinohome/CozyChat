@@ -1,0 +1,84 @@
+# ============================================================
+# CozyChat - OpenAI API 代理（简化版）
+# 域名: oneapi.naivehero.top
+# 功能: 绕过 GFW 访问 OpenAI + Key 替换保护 + CORS
+#
+# 需要在启动 Caddy 时设置环境变量：
+#   export OPENAI_API_KEY=sk-你的真实OpenAI-Key
+# ============================================================
+
+oneapi.naivehero.top {
+    tls ibmzhangjun@139.com
+
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+
+    # ── 1. CORS 预检请求 ─────────────────────────────────────
+    @preflight method OPTIONS
+    handle @preflight {
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK, Sec-WebSocket-Protocol"
+        header Access-Control-Max-Age "86400"
+        respond 204
+    }
+
+    # ── 2. WebSocket（Realtime API：ephemeral key 通过子协议传递）──
+    @websocket {
+        header Connection "Upgrade"
+        header Upgrade "websocket"
+    }
+    handle @websocket {
+        reverse_proxy https://api.openai.com {
+            header_up Host {upstream_hostport}
+            # 转发 WebSocket 协商头（ephemeral key 在子协议里）
+            header_up Sec-WebSocket-Protocol {http.request.header.Sec-WebSocket-Protocol}
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Sec-WebSocket-Key {http.request.header.Sec-WebSocket-Key}
+            header_up Sec-WebSocket-Version {http.request.header.Sec-WebSocket-Version}
+            transport http { versions 1.1 2 }
+            flush_interval -1
+        }
+        header Access-Control-Allow-Origin "*"
+    }
+
+    # ── 3. Realtime HTTP 端点（/v1/realtime/*）────────────────
+    # 包括 client_secrets、calls 等，使用 ephemeral key 直接透传
+    @realtime path /v1/realtime/*
+    handle @realtime {
+        reverse_proxy https://api.openai.com {
+            header_up Host {upstream_hostport}
+            header_up X-Real-IP {remote_host}
+            header_down -Access-Control-Allow-Origin
+            transport http { versions 1.1 2 }
+            flush_interval -1
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # ── 4. 普通 API 请求（自定义 Key → 替换为真实 OpenAI Key）──
+    @custom_key header Authorization "Bearer sk-1s98FFGBvUwEs0uH5yKQDxsxLuv9qNa4P1WadrANek8hh8TH"
+    handle @custom_key {
+        reverse_proxy https://api.openai.com {
+            header_up Host {upstream_hostport}
+            header_up Authorization "Bearer {$OPENAI_API_KEY}"
+            header_up X-Real-IP {remote_host}
+            header_down -Access-Control-Allow-Origin
+            transport http { versions 1.1 2 }
+            flush_interval -1
+        }
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, X-OpenAI-Agents-SDK"
+    }
+
+    # ── 5. 其他请求一律拒绝 ──────────────────────────────────
+    handle {
+        respond "Unauthorized: Invalid or missing API key." 401
+    }
+}
