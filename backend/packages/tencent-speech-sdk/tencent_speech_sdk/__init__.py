@@ -8,19 +8,29 @@ import os
 from pathlib import Path
 
 # 获取SDK路径（相对于项目根目录）
-# 从当前文件位置计算：backend/packages/tencent-speech-sdk/tencent_speech_sdk/__init__.py
-# 到：backend/vendor/tencentcloud-speech-sdk-python
 _current_file = Path(__file__).resolve()
-_package_dir = _current_file.parent
-_packages_dir = _package_dir.parent.parent
-_project_root = _packages_dir.parent
-_sdk_path = _project_root / "vendor" / "tencentcloud-speech-sdk-python"
+
+# 尝试多个可能的路径
+# 1. 相对路径（开发模式/源码模式）
+_sdk_path_relative = _current_file.parent.parent.parent.parent / "vendor" / "tencentcloud-speech-sdk-python"
+# 2. Docker 容器中的绝对路径
+_sdk_path_docker = Path("/opt/cozychat/backend/vendor/tencentcloud-speech-sdk-python")
+# 3. 备选项目根目录路径
+_sdk_path_alt = Path("/app/vendor/tencentcloud-speech-sdk-python")
+
+_sdk_path = None
+for p in [_sdk_path_relative, _sdk_path_docker, _sdk_path_alt]:
+    if p.exists():
+        _sdk_path = p
+        break
 
 # 检查SDK是否存在
-if not _sdk_path.exists():
+if _sdk_path is None:
     raise ImportError(
-        f"Tencent Speech SDK not found at {_sdk_path}.\n"
-        "Please run: git submodule update --init --recursive"
+        f"Tencent Speech SDK not found. Checked paths:\n"
+        f"  - {_sdk_path_relative}\n"
+        f"  - {_sdk_path_docker}\n"
+        "Please ensure the SDK is properly installed via git submodule or manual clone into backend/vendor/."
     )
 
 # 添加SDK路径到sys.path（如果还没有添加）

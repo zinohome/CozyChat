@@ -51,7 +51,7 @@ COPY backend/ .
 
 # 安装腾讯语音 SDK（可选，语音功能需要）
 RUN if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
-        pip install --no-cache-dir -e packages/tencent-speech-sdk; \
+        pip install --no-cache-dir packages/tencent-speech-sdk; \
     fi
 
 

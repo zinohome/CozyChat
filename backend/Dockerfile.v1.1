@@ -62,6 +62,13 @@ COPY config ./config
 COPY alembic ./alembic
 COPY alembic.ini .
 COPY scripts ./scripts
+COPY packages ./packages
+COPY vendor ./vendor
+
+# 安装腾讯语音 SDK（本地打包安装）
+RUN if [ -f "packages/tencent-speech-sdk/setup.py" ]; then \
+        pip install --no-cache-dir -e packages/tencent-speech-sdk; \
+    fi
 
 # 创建必要的目录
 RUN mkdir -p logs data && \
