@@ -363,11 +363,15 @@ class ChatOrchestrator:
                 
                 # 使用ContextService构建上下文（统一使用新实现）
                 if self.context_service:
+                    # 获取最近几条消息以维持上下文连贯性
+                    recent_messages = request.messages[:-1][-5:] if len(request.messages) > 1 else []
+                    
                     context_bundle = await self.context_service.build_context(
                         user_id=user_id,
                         session_id=session_id,
                         current_message=current_message_content,
                         personality_config=personality,
+                        recent_messages=recent_messages,
                         max_tokens=getattr(settings, 'context_max_tokens', 4096)
                     )
                 elif self.context_builder:

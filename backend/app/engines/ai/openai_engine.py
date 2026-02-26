@@ -278,7 +278,9 @@ class OpenAIEngine(AIEngineBase):
             )
             
             # 调用OpenAI流式API
+            logger.info(f"Sending request to OpenAI: model={self.model}, base_url={self.base_url}")
             stream = await self.client.chat.completions.create(**request_params)
+            logger.info("OpenAI stream connection established")
             
             async for chunk in stream:
                 if chunk.choices:

@@ -187,7 +187,7 @@ class ContextServiceNew:
                             dataset_names=dataset_names,
                             top_k=engine_config["knowledge"].get("top_k", 3)
                         ),
-                        timeout=0.5
+                        timeout=3.0  # 增加到3秒
                     )
                 )
                 task_names.append("knowledge")
@@ -200,7 +200,7 @@ class ContextServiceNew:
                         user_id=normalized_user_id,  # 使用标准化的user_id
                         max_token_size=engine_config["userprofile"].get("max_tokens", 300)
                     ),
-                    timeout=0.3
+                    timeout=2.0  # 增加到2秒
                 )
             )
             task_names.append("userprofile")
@@ -215,7 +215,7 @@ class ContextServiceNew:
                         session_id=session_id,
                         top_k=engine_config["chatmemory"].get("top_k", 5)
                     ),
-                    timeout=0.4
+                    timeout=2.0  # 增加到2秒
                 )
             )
             task_names.append("chatmemory")
@@ -351,9 +351,19 @@ class ContextServiceNew:
         # 转换为兼容的ContextBundle格式
         from app.schemas.context import ContextBundle
         
+        # 获取个性化主系统提示词
+        system_prompts = []
+        if hasattr(personality_config, 'ai') and personality_config.ai.system_prompt:
+            system_prompts.append(personality_config.ai.system_prompt)
+        
+        # 获取最近历史消息（为了更好的上下文连贯性，这里可以传入最近的几条消息）
+        # 如果调用方没有处理 recent_messages，我们可以尝试在这里补全
+        recent_messages = kwargs.get("recent_messages", [])
+        
         return ContextBundle(
-            recent_messages=[],  # 由调用方处理
-            summarized_history=[],  # 暂不支持
+            system_prompts=system_prompts,
+            recent_messages=recent_messages,
+            summarized_history=[],  # 暂不支持多段摘要
             retrieved_memories=context.get("memories", []),
             user_profile=context.get("profile", {}),
             total_tokens=0,  # 后续计算
