@@ -169,8 +169,9 @@ personality:
       filter_dirty: 1        # 过滤脏词（0: 不过滤, 1: 过滤）
     
     tts:
-      provider: "openai"    # openai / tencent / custom
-      voice: "alloy"      # OpenAI 默认音色
+      provider: "tencent"    # openai / tencent / custom
+      voice: "ai_female"      # AI女声
+      voice_type: 01
       speed: 1.0
     
     realtime:
