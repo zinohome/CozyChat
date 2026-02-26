@@ -144,6 +144,9 @@ class ChatOrchestrator:
             tool_handler = ToolCallHandler(self.tool_factory)
             
             # 6. 生成响应
+            # 提取最原始的用户输入，用来存数据库，避免存了带有 [指令: xxxx] 的被污染的文本
+            raw_user_message = request.messages[-1].content if request.messages else ""
+
             if request.stream:
                 stream_service = StreamChatService(
                     tool_handler,
@@ -163,7 +166,8 @@ class ChatOrchestrator:
                         user_id=prepared.user_id,
                         session_id=prepared.session_id,
                         use_memory=request.use_memory,
-                        memory_manager=self.memory_manager
+                        memory_manager=self.memory_manager,
+                        raw_user_message=raw_user_message
                     ),
                     media_type="text/event-stream",
                     headers={
@@ -184,7 +188,8 @@ class ChatOrchestrator:
                     user_id=prepared.user_id,
                     session_id=prepared.session_id,
                     use_memory=request.use_memory,
-                    memory_manager=self.memory_manager
+                    memory_manager=self.memory_manager,
+                    raw_user_message=raw_user_message
                 )
                 
                 # 7. 构建响应

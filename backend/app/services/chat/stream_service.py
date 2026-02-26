@@ -60,7 +60,8 @@ class StreamChatService:
         user_id: Optional[str],
         session_id: Optional[str],
         use_memory: bool,
-        memory_manager: Optional[Any] = None
+        memory_manager: Optional[Any] = None,
+        raw_user_message: Optional[str] = None
     ) -> AsyncIterator[str]:
         """生成SSE流,支持工具调用
         
@@ -77,6 +78,7 @@ class StreamChatService:
             session_id: 会话ID
             use_memory: 是否使用记忆
             memory_manager: 记忆管理器
+            raw_user_message: 原始用户消息内容（未混入偏好指令的前端原文字）
             
         Yields:
             str: SSE格式的流数据
@@ -206,12 +208,14 @@ class StreamChatService:
                 
                 # 保存记忆(完全异步执行,不阻塞响应)
                 if user_id and session_id and accumulated_content:
-                    # 获取最后一条用户消息
-                    last_user_message = None
-                    for msg in reversed(current_messages):
-                        if msg.role == "user" and msg.content:
-                            last_user_message = msg.content
-                            break
+                    # 优先使用传入的未污染的原信息
+                    last_user_message = raw_user_message
+                    if not last_user_message:
+                        # 退化方案
+                        for msg in reversed(current_messages):
+                            if msg.role == "user" and msg.content:
+                                last_user_message = msg.content
+                                break
                     
                     if last_user_message:
                         await self.message_saver.save_conversation_turn(
