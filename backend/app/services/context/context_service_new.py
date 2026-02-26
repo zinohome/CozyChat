@@ -353,10 +353,10 @@ class ContextServiceNew:
         
         return ContextBundle(
             recent_messages=[],  # 由调用方处理
-            history_summaries=[],  # 暂不支持
-            memories=context.get("memories", []),
+            summarized_history=[],  # 暂不支持
+            retrieved_memories=context.get("memories", []),
             user_profile=context.get("profile", {}),
-            token_usage={"total": 0},  # 后续计算
+            total_tokens=0,  # 后续计算
             metadata={
                 "intent": context.get("intent"),
                 "knowledge": context.get("knowledge", [])
