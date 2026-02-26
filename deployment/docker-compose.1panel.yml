@@ -145,11 +145,11 @@ services:
     volumes:
       - /data/CozyChat/data/qdrant:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/health || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     networks:
       - 1panel-network
 
