@@ -243,8 +243,8 @@ personality:
     
     tts:
       provider: "tencent"    # openai / tencent / custom
-      voice: "ai_female"      # AI女声
-      voice_type: 101001
+      voice: "female"        # 标准女声
+      voice_type: 0          # 标准音色 (0-5 通常有免费额度)
       speed: 1.0
     
     realtime:
