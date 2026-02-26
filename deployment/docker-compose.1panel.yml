@@ -145,7 +145,7 @@ services:
     volumes:
       - /data/CozyChat/data/qdrant:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/health || exit 1"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' 2>/dev/null"]
       interval: 20s
       timeout: 10s
       retries: 5
