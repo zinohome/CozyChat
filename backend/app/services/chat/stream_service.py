@@ -214,17 +214,15 @@ class StreamChatService:
                             break
                     
                     if last_user_message:
-                        asyncio.create_task(
-                            self.message_saver.save_conversation_turn(
-                                session_id=session_id,
-                                user_id=user_id,
-                                user_message=last_user_message,
-                                assistant_message=accumulated_content,
-                                assistant_model=actual_model,
-                                memory_manager=memory_manager,
-                                personality=personality,
-                                use_memory=use_memory
-                            )
+                        await self.message_saver.save_conversation_turn(
+                            session_id=session_id,
+                            user_id=user_id,
+                            user_message=last_user_message,
+                            assistant_message=accumulated_content,
+                            assistant_model=actual_model,
+                            memory_manager=memory_manager,
+                            personality=personality,
+                            use_memory=use_memory
                         )
                 
                 break
