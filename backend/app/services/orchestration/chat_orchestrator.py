@@ -259,11 +259,8 @@ class ChatOrchestrator:
         if request.session_id:
             try:
                 session_uuid = uuid.UUID(request.session_id)
-                # 使用selectinload优化，避免后续访问session属性时的额外查询
-                from sqlalchemy.orm import selectinload
-                stmt = select(SessionModel).options(
-                    selectinload(SessionModel.user)  # 预加载用户信息（如果需要）
-                ).where(
+                # 使用select进行查询
+                stmt = select(SessionModel).where(
                     and_(
                         SessionModel.id == session_uuid,
                         SessionModel.user_id == user.id,  # 确保只能访问自己的会话
