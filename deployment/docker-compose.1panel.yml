@@ -30,7 +30,7 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - cozychat-network
+      - 1panel-network
 
   # ── 后端 ─────────────────────────────────────────────
   backend:
@@ -77,8 +77,8 @@ services:
       LOG_FILE: logs/app.log
 
     volumes:
-      - /opt/1panel/apps/cozychat/data/backend/logs:/opt/cozychat/backend/logs
-      - /opt/1panel/apps/cozychat/data/backend/data:/opt/cozychat/backend/data
+      - /data/CozyChat/data/backend/logs:/opt/cozychat/backend/logs
+      - /data/CozyChat/data/backend/data:/opt/cozychat/backend/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,7 +93,7 @@ services:
       retries: 5
       start_period: 90s
     networks:
-      - cozychat-network
+      - 1panel-network
 
   # ── PostgreSQL ────────────────────────────────────────
   postgres:
@@ -106,7 +106,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cozychat}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - /opt/1panel/apps/cozychat/data/postgres:/var/lib/postgresql/data
+      - /data/CozyChat/data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cozychat} -d ${POSTGRES_DB:-cozychat}"]
       interval: 10s
@@ -114,7 +114,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - cozychat-network
+      - 1panel-network
 
   # ── Redis ─────────────────────────────────────────────
   redis:
@@ -127,7 +127,7 @@ services:
              else redis-server;
              fi"
     volumes:
-      - /opt/1panel/apps/cozychat/data/redis:/data
+      - /data/CozyChat/data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -135,7 +135,7 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - cozychat-network
+      - 1panel-network
 
   # ── Qdrant ────────────────────────────────────────────
   qdrant:
@@ -143,7 +143,7 @@ services:
     container_name: cozychat-qdrant
     restart: unless-stopped
     volumes:
-      - /opt/1panel/apps/cozychat/data/qdrant:/qdrant/storage
+      - /data/CozyChat/data/qdrant:/qdrant/storage
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
       interval: 20s
@@ -151,10 +151,9 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - cozychat-network
+      - 1panel-network
 
-# ── 内部网络 ──────────────────────────────────────────
+# ── 网络（使用 1Panel 默认外部网络）──────────────────
 networks:
-  cozychat-network:
-    name: cozychat-network
-    driver: bridge
+  1panel-network:
+    external: true
