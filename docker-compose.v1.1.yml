@@ -129,6 +129,11 @@ services:
       # Qdrant配置（旧引擎兼容）
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+
+      # Tencent Cloud (for TTS/STT)
+      TENCENT_APP_ID: ${TENCENT_APP_ID:-}
+      TENCENT_SECRET_ID: ${TENCENT_SECRET_ID:-}
+      TENCENT_SECRET_KEY: ${TENCENT_SECRET_KEY:-}
     volumes:
       - backend-logs:/app/logs
       - backend-data:/app/data
