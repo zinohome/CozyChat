@@ -71,22 +71,6 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
         >
           开启禅定
         </Button>
-        <Button
-          type="text"
-          icon={<UserOutlined />}
-          onClick={handleProfile}
-          className={styles.toolbarButton}
-        >
-          个人资料
-        </Button>
-        <Button
-          type="text"
-          icon={<SettingOutlined />}
-          onClick={handleSettings}
-          className={styles.toolbarButton}
-        >
-          偏好设置
-        </Button>
       </Space>
     </div>
   );

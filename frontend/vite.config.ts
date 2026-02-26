@@ -33,12 +33,14 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/v1': {
-        target: 'http://192.168.32.155:8000',
+        target: 'https://cozychatbj.naivehero.top:8443',
         changeOrigin: true,
+        secure: false,
       },
       '/ws': {
-        target: 'ws://192.168.32.155:8000',
+        target: 'wss://cozychatbj.naivehero.top:8443',
         ws: true,
+        secure: false,
       },
     },
   },

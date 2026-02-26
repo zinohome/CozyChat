@@ -3,15 +3,31 @@ import { Space } from 'antd';
 import {
     ArrowLeftOutlined,
     PlayCircleFilled,
-    PauseCircleFilled
+    PauseCircleFilled,
+    StepBackwardOutlined,
+    StepForwardOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import styles from './ZenPlayer.module.css';
 
+const TRACKS = [
+    { title: "自然: 溪流晨语", url: "/audio/zen/1.mp3" },
+    { title: "自然: 鸟鸣幽谷", url: "/audio/zen/2.mp3" },
+    { title: "自然: 晚风海浪", url: "/audio/zen/3.mp3" },
+    { title: "轻音乐: 颂钵冥想", url: "/audio/zen/4.mp3" },
+    { title: "轻音乐: 星空畅想", url: "/audio/zen/5.mp3" },
+    { title: "白噪音: 深度助眠", url: "/audio/zen/6.mp3" },
+    { title: "轻音乐: 云端漫步", url: "/audio/zen/7.mp3" },
+    { title: "自然: 悠然时光", url: "/audio/zen/8.mp3" },
+    { title: "白噪音: 极光闪烁", url: "/audio/zen/9.mp3" },
+    { title: "白噪音: 远山回音", url: "/audio/zen/10.mp3" },
+];
+
 export const ZenPlayer: React.FC = () => {
     const navigate = useNavigate();
     const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
     const audioRef = useRef<HTMLAudioElement>(null);
     const [breathText, setBreathText] = useState('准备呼吸');
 
@@ -41,13 +57,28 @@ export const ZenPlayer: React.FC = () => {
             if (isPlaying) {
                 audioRef.current.pause();
             } else {
-                // 使用一个免责声明或公开的白噪音资源。此处提供一个稳定的公开自然声音作为演示。
-                // 如果资源失效，也不会阻塞UI动画
-                audioRef.current.play().catch(e => console.log('Audio play failed, playing animation only', e));
+                audioRef.current.play().catch(e => console.log('Audio play failed', e));
             }
             setIsPlaying(!isPlaying);
         }
     };
+
+    const handlePrev = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentTrackIndex((prev) => (prev === 0 ? TRACKS.length - 1 : prev - 1));
+    };
+
+    const handleNext = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentTrackIndex((prev) => (prev === TRACKS.length - 1 ? 0 : prev + 1));
+    };
+
+    // 切换曲目时自动播放
+    useEffect(() => {
+        if (isPlaying && audioRef.current) {
+            audioRef.current.play().catch(e => console.log('Audio play failed', e));
+        }
+    }, [currentTrackIndex]);
 
     try {
         return (
@@ -69,27 +100,38 @@ export const ZenPlayer: React.FC = () => {
                         >
                             <div className={styles.breathingCircle}></div>
                             {isPlaying ? (
-                                <PauseCircleFilled className={styles.playIcon} style={{ opacity: 0.2 }} />
+                                <PauseCircleFilled className={styles.playIcon} />
                             ) : (
                                 <PlayCircleFilled className={styles.playIcon} />
                             )}
                         </div>
 
-                        <div className={styles.controlText}>
-                            {isPlaying ? '静心聆听' : '点击开始'}
-                        </div>
+                        <Space size="large" style={{ marginTop: '20px', marginBottom: '20px' }}>
+                            <StepBackwardOutlined
+                                style={{ fontSize: 24, color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
+                                onClick={handlePrev}
+                            />
+                            <div className={styles.controlText} style={{ margin: 0, width: '120px' }}>
+                                {isPlaying ? '静心聆听' : '点击开始'}
+                            </div>
+                            <StepForwardOutlined
+                                style={{ fontSize: 24, color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }}
+                                onClick={handleNext}
+                            />
+                        </Space>
+
                         <div className={styles.subText}>
-                            晚风海浪 · 10 分钟
+                            {TRACKS[currentTrackIndex].title}
                         </div>
 
                         <div className={styles.instructions} style={{ opacity: isPlaying ? 1 : 0 }}>
                             {breathText}
                         </div>
 
-                        {/* 音频标签，循环播放 */}
+                        {/* 音频标签，循环播放，使用Apple高质量音频 */}
                         <audio
                             ref={audioRef}
-                            src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3"
+                            src={TRACKS[currentTrackIndex].url}
                             loop
                         />
                     </div>

@@ -65,7 +65,7 @@ export const HealthRecord: React.FC = () => {
               </span>
               <span className={styles.userDetail}>男</span>
             </Space>
-            <span className={styles.userAge}>65岁</span>
+            <span className={styles.userAge}>45岁</span>
             <div className={styles.userIdCard}>
               <span className={styles.idLabel}>身份证：</span>
               <span className={styles.userDetail}>320***********1234</span>

@@ -22,7 +22,7 @@ interface TreeholePost {
 
 export const HealingTreehole: React.FC = () => {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('my_hugs');
+    const [activeTab, setActiveTab] = useState('world');
 
     // 模拟数据：温暖的帖子
     const [posts, setPosts] = useState<TreeholePost[]>([
