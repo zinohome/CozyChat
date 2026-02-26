@@ -1,0 +1,160 @@
+# ============================================================
+# CozyChat 一体化部署 - 1Panel 版
+#
+# 使用方法：
+#   1. 在服务器上先构建镜像（见 README）：
+#      docker build -f deployment/Dockerfile.backend.simple -t cozychat-backend:latest .
+#      docker build -f deployment/Dockerfile.frontend.simple -t cozychat-frontend:latest .
+#   2. 复制并编辑环境变量：
+#      cp deployment/simple.env.example deployment/.env
+#   3. 在 1Panel > 应用 > 自定义应用 中导入本文件，或直接：
+#      docker compose -f deployment/docker-compose.1panel.yml --env-file deployment/.env up -d
+# ============================================================
+
+services:
+
+  # ── 前端（唯一对外入口）────────────────────────────────
+  # ⚠️  VITE_* 变量是 Vite 编译期注入，运行时无法修改。
+  #    请在 docker build 时通过 --build-arg 传入，例如：
+  #    docker build -f deployment/Dockerfile.frontend.simple \
+  #      --build-arg VITE_AMAP_MAPS_API_KEY=xxx \
+  #      --build-arg VITE_DEMO_MODE=false \
+  #      -t cozychat-frontend:latest .
+  frontend:
+    image: cozychat-frontend:latest
+    container_name: cozychat-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cozychat-network
+
+  # ── 后端 ─────────────────────────────────────────────
+  backend:
+    image: cozychat-backend:latest
+    container_name: cozychat-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: CozyChat
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_SECRET_KEY: ${APP_SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+
+      DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_USERNAME: ${DEMO_USERNAME:-demo}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-demo123}
+      DEMO_EMAIL: ${DEMO_EMAIL:-demo@cozychat.ai}
+
+      CORS_ORIGINS: '["*"]'
+
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cozychat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cozychat}
+      POSTGRES_USER: ${POSTGRES_USER:-cozychat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cozychat}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-4o-realtime-preview-2024-12-17}
+
+      AMAP_MAPS_API_KEY: ${AMAP_MAPS_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: logs/app.log
+
+    volumes:
+      - /opt/1panel/apps/cozychat/data/backend/logs:/opt/cozychat/backend/logs
+      - /opt/1panel/apps/cozychat/data/backend/data:/opt/cozychat/backend/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - cozychat-network
+
+  # ── PostgreSQL ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cozychat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cozychat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cozychat}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /opt/1panel/apps/cozychat/data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cozychat} -d ${POSTGRES_DB:-cozychat}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - cozychat-network
+
+  # ── Redis ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: cozychat-redis
+    restart: unless-stopped
+    command: >
+      sh -c "if [ -n '${REDIS_PASSWORD:-}' ];
+             then redis-server --requirepass '${REDIS_PASSWORD}';
+             else redis-server;
+             fi"
+    volumes:
+      - /opt/1panel/apps/cozychat/data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cozychat-network
+
+  # ── Qdrant ────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.15
+    container_name: cozychat-qdrant
+    restart: unless-stopped
+    volumes:
+      - /opt/1panel/apps/cozychat/data/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - cozychat-network
+
+# ── 内部网络 ──────────────────────────────────────────
+networks:
+  cozychat-network:
+    name: cozychat-network
+    driver: bridge
