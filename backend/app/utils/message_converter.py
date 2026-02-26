@@ -134,11 +134,16 @@ def convert_context_bundle_to_messages(
     
     # 6. 用户偏好指令和当前消息
     if user_preferences:
-        preference_text = build_user_message_with_preferences(
+        content, instructions = build_user_message_with_preferences(
             current_message_content,
             user_preferences
         )
-        messages.append(EngineChatMessage(role="user", content=preference_text))
+        if instructions:
+            # 合并当前消息和偏好指令
+            final_content = f"{content}\n\n[指令: {instructions}]"
+            messages.append(EngineChatMessage(role="user", content=final_content))
+        else:
+            messages.append(EngineChatMessage(role="user", content=content))
     else:
         # 7. 当前用户消息
         messages.append(EngineChatMessage(role="user", content=current_message_content))
