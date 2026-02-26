@@ -12,6 +12,9 @@ const SettingsPage = lazy(() => import('@/features/user/pages/SettingsPage'));
 const ProfilePage = lazy(() => import('@/features/user/pages/ProfilePage'));
 const HealthRecordPage = lazy(() => import('@/pages/HealthRecord/HealthRecord'));
 const HealthCirclePage = lazy(() => import('@/pages/HealthCircle/HealthCircle'));
+const StressProfilePage = lazy(() => import('@/pages/StressProfile/StressProfile'));
+const HealingTreeholePage = lazy(() => import('@/pages/HealingTreehole/HealingTreehole'));
+const ZenPlayerPage = lazy(() => import('@/pages/ZenPlayer/ZenPlayer'));
 
 /**
  * 加载中组件
@@ -106,6 +109,30 @@ export const AppRouter: React.FC = () => {
             element={
               <ProtectedRoute>
                 <HealthCirclePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stress-profile"
+            element={
+              <ProtectedRoute>
+                <StressProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/healing-treehole"
+            element={
+              <ProtectedRoute>
+                <HealingTreeholePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/zen-player"
+            element={
+              <ProtectedRoute>
+                <ZenPlayerPage />
               </ProtectedRoute>
             }
           />

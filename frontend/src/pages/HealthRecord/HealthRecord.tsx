@@ -50,8 +50,8 @@ export const HealthRecord: React.FC = () => {
       <Row gutter={24} align="middle" wrap={false}>
         <Col flex="none">
           <div className={styles.avatarContainer}>
-            <img 
-              src="/images/health/man.png" 
+            <img
+              src="/images/health/man.png"
               alt="用户头像"
               className={styles.avatar}
             />
@@ -108,9 +108,9 @@ export const HealthRecord: React.FC = () => {
           </Card>
         ))}
       </div>
-      <Button 
-        type="primary" 
-        block 
+      <Button
+        type="primary"
+        block
         size="large"
         icon={<PlusOutlined />}
         className={styles.addButton}
@@ -221,7 +221,7 @@ export const HealthRecord: React.FC = () => {
   // 健康报告Tab
   const renderHealthReportTab = () => (
     <div className={styles.tabContent}>
-      <Empty 
+      <Empty
         description="暂无健康报告"
         image={Empty.PRESENTED_IMAGE_SIMPLE}
       >
@@ -235,7 +235,7 @@ export const HealthRecord: React.FC = () => {
   // 健康计划Tab
   const renderHealthPlanTab = () => (
     <div className={styles.tabContent}>
-      <Empty 
+      <Empty
         description="暂无健康计划"
         image={Empty.PRESENTED_IMAGE_SIMPLE}
       >
@@ -269,9 +269,9 @@ export const HealthRecord: React.FC = () => {
         </div>
       </Card>
 
-      <Button 
-        type="primary" 
-        block 
+      <Button
+        type="primary"
+        block
         size="large"
         icon={<PlusOutlined />}
         className={styles.addButton}
@@ -308,9 +308,9 @@ export const HealthRecord: React.FC = () => {
         </div>
       </Card>
 
-      <Button 
-        type="primary" 
-        block 
+      <Button
+        type="primary"
+        block
         size="large"
         icon={<PlusOutlined />}
         className={styles.addButton}
@@ -351,9 +351,9 @@ export const HealthRecord: React.FC = () => {
         </div>
       </Card>
 
-      <Button 
-        type="primary" 
-        block 
+      <Button
+        type="primary"
+        block
         size="large"
         icon={<PlusOutlined />}
         className={styles.addButton}
@@ -498,7 +498,7 @@ export const HealthRecord: React.FC = () => {
               <span className={styles.title}>健康档案</span>
             </Space>
           </div>
-          
+
           <div className={styles.content}>
             {renderUserHeader()}
             <Card className={styles.tabsCard}>

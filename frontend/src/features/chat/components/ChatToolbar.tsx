@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Space } from 'antd';
-import { HeartOutlined, UserOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons';
+import { HeartOutlined, UserOutlined, SettingOutlined, TeamOutlined, AudioOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import styles from './ChatToolbar.module.css';
@@ -23,12 +23,16 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
   const isMobileHook = useIsMobile();
   const isMobile = isMobileProp ?? isMobileHook;
 
-  const handleHealthRecord = () => {
-    navigate('/health-record');
+  const handleStressProfile = () => {
+    navigate('/stress-profile');
   };
 
-  const handleHealthCircle = () => {
-    navigate('/health-circle');
+  const handleHealingTreehole = () => {
+    navigate('/healing-treehole');
+  };
+
+  const handleZenPlayer = () => {
+    navigate('/zen-player');
   };
 
   const handleProfile = () => {
@@ -45,18 +49,27 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
         <Button
           type="text"
           icon={<HeartOutlined />}
-          onClick={handleHealthRecord}
+          onClick={handleStressProfile}
           className={styles.toolbarButton}
         >
-          健康档案
+          压力档案
         </Button>
         <Button
           type="text"
           icon={<TeamOutlined />}
-          onClick={handleHealthCircle}
+          onClick={handleHealingTreehole}
           className={styles.toolbarButton}
         >
-          健康圈
+          疗愈树洞
+        </Button>
+        <Button
+          type="text"
+          icon={<AudioOutlined style={{ color: '#e56b82' }} />}
+          onClick={handleZenPlayer}
+          className={styles.toolbarButton}
+          style={{ color: '#e56b82', fontWeight: 500 }}
+        >
+          开启禅定
         </Button>
         <Button
           type="text"

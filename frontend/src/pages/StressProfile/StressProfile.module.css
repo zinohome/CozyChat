@@ -1,0 +1,317 @@
+.container {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.header {
+  padding: 16px 24px;
+  background-color: #f7aab7; /* Soft peach pink for head */
+  border-bottom-color: #f7aab7;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  height: 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  box-sizing: border-box;
+}
+
+.backButton {
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-right: 8px;
+}
+
+.backButton:hover {
+  opacity: 0.8;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-left: 8px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.userCard {
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: linear-gradient(135deg, #fff 0%, #fff8fa 100%);
+}
+
+.avatarContainer {
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: visible;
+  border-radius: 8px;
+  background-color: var(--bg-secondary);
+  padding-top: 0;
+}
+
+.avatar {
+  width: 100%;
+  height: auto;
+  max-width: 140px;
+  max-height: 140px;
+  object-fit: contain;
+  object-position: top center;
+  display: block;
+  border-radius: 8px;
+}
+
+.userInfo {
+  width: 100%;
+}
+
+.userName {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.userAge {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.userIdCard {
+  font-size: 14px;
+}
+
+.idLabel {
+  color: var(--text-secondary);
+}
+
+.userDetail {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.tabsCard {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Tab激活状态样式 */
+.tabsCard :global(.ant-tabs-tab-active) {
+  color: #f7aab7 !important;
+}
+
+.tabsCard :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: #f7aab7 !important;
+}
+
+.tabsCard :global(.ant-tabs-ink-bar) {
+  background: #f7aab7 !important;
+}
+
+.tabsCard :global(.ant-tabs-tab:hover) {
+  color: #f7aab7 !important;
+}
+
+.tabContent {
+  padding: 16px 0;
+}
+
+.recordList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.recordCard {
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  background: #fdfbfb;
+}
+
+.recordCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #f7aab7;
+}
+
+.recordTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recordValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e56b82; /* slightly darker pink for emphasis */
+}
+
+.recordTime {
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.sectionCard {
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.description {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.timelineContainer {
+  width: 100%;
+}
+
+.customTimeline {
+  width: 100%;
+}
+
+.timelineItem {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.timelineLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  order: 1;
+}
+
+.timelineContent {
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  order: 2;
+}
+
+.statsContainer {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.statItem {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.statLabel {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .content {
+    padding: 12px;
+  }
+
+  .header {
+    padding: 12px 16px;
+  }
+
+  .userCard {
+    padding: 12px;
+  }
+
+  .userName {
+    font-size: 16px;
+  }
+
+  .userAge {
+    font-size: 13px;
+  }
+
+  .userDetail {
+    font-size: 12px;
+  }
+
+  .statsContainer {
+    flex-wrap: wrap;
+  }
+
+  .statItem {
+    flex: 0 0 50%;
+    margin-bottom: 16px;
+  }
+
+  .statValue {
+    font-size: 24px;
+  }
+
+  .timelineItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .timelineLabel {
+    order: 1;
+    font-size: 13px;
+  }
+
+  .timelineContent {
+    order: 2;
+    font-size: 14px;
+    width: 100%;
+  }
+
+  .customTimeline :global(.ant-timeline-item-content) {
+    margin-left: 24px;
+    padding-left: 0;
+    width: calc(100% - 24px);
+    min-width: 0;
+  }
+
+  .customTimeline :global(.ant-timeline-item-tail) {
+    left: 6px;
+  }
+
+  .customTimeline :global(.ant-timeline-item-head) {
+    left: 0;
+    width: 12px;
+    height: 12px;
+  }
+}
