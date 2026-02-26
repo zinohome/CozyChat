@@ -121,7 +121,7 @@ async def list_personalities(
         
         # 排序：优先级人格按优先级顺序，其他人格按ID排序
         priority_personalities.sort(key=lambda x: x[0])
-        other_personalities.sort(key=lambda x: x[1])
+        other_personalities.sort(key=lambda x: x[0])
         
         items = [item for _, item in priority_personalities] + [item for _, item in other_personalities]
         

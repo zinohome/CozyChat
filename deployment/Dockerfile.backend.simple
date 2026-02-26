@@ -38,7 +38,9 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 # 复制并安装 Python 依赖
 COPY backend/requirements/core.txt requirements/core.txt
+COPY backend/requirements/cognee.txt requirements/cognee.txt
 RUN pip install --no-cache-dir -r requirements/core.txt && \
+    pip install --no-cache-dir -r requirements/cognee.txt && \
     # 固定 bcrypt 版本以兼容 passlib 1.7.4
     pip install --force-reinstall --no-cache-dir bcrypt==3.2.2
 
