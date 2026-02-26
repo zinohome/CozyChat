@@ -50,7 +50,7 @@ services:
       DEMO_PASSWORD: ${DEMO_PASSWORD:-demo123}
       DEMO_EMAIL: ${DEMO_EMAIL:-demo@cozychat.ai}
 
-      CORS_ORIGINS: '["*"]'
+      CORS_ORIGINS: "*"
 
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cozychat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cozychat}
       POSTGRES_USER: ${POSTGRES_USER:-cozychat}
