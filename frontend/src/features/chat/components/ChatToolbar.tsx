@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Space } from 'antd';
-import { HeartOutlined, UserOutlined, SettingOutlined, TeamOutlined, AudioOutlined } from '@ant-design/icons';
+import { HeartOutlined, UserOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import styles from './ChatToolbar.module.css';
@@ -64,10 +64,9 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
         </Button>
         <Button
           type="text"
-          icon={<AudioOutlined style={{ color: '#e56b82' }} />}
+          icon={<ThunderboltOutlined />}
           onClick={handleEnergyRhythm}
           className={styles.toolbarButton}
-          style={{ color: '#e56b82', fontWeight: 500 }}
         >
           能量节律
         </Button>
