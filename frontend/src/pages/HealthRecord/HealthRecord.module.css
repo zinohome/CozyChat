@@ -3,30 +3,28 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-primary);
+  background-color: #f7faf9;
 }
 
 .header {
   padding: 16px 24px;
-  background-color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
-  box-shadow: var(--shadow-md);
+  background-color: #f6fbf9;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
-  height: 48px;
+  height: 60px;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
-  border-radius: 8px 8px 0 0;
   box-sizing: border-box;
 }
 
 .backButton {
-  color: #fff;
-  font-size: 18px;
+  color: var(--primary-color);
+  font-size: 20px;
   cursor: pointer;
   transition: opacity 0.2s;
-  margin-right: 8px;
+  margin-right: 12px;
 }
 
 .backButton:hover {
@@ -34,10 +32,28 @@
 }
 
 .title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: #fff;
-  margin-left: 8px;
+  color: var(--text-primary);
+}
+
+.greetingHeader {
+  padding: 16px 24px 8px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.greetingText {
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.subGreetingText {
+  font-size: 14px;
+  color: #666;
 }
 
 .content {
@@ -51,20 +67,23 @@
 }
 
 .userCard {
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .avatarContainer {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  overflow: visible;
-  border-radius: 8px;
-  background-color: var(--bg-secondary);
-  padding-top: 0;
+  border-radius: 50%;
+  background-color: #e8f5e9;
+  overflow: hidden;
 }
 
 .avatar {
@@ -107,7 +126,77 @@
 }
 
 .tabsCard {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tabsCard :global(.ant-tabs-nav) {
+  margin-bottom: 20px !important;
+}
+
+.healthMetricCard {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.metricHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.metricTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.metricValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.metricSubValue {
+  font-size: 13px;
+  color: #888;
+}
+
+.chartContainer {
+  height: 120px;
+  width: 100%;
+  margin-top: 16px;
+  position: relative;
+  background: linear-gradient(180deg, rgba(76, 175, 80, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 12px;
+}
+
+.mockChartLine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.metricStatus {
+  background: #f0fdf4;
+  color: #16a34a;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 /* Tab激活状态样式 */
@@ -190,6 +279,98 @@
 .infoLabel {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.adviceCard {
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  height: 100%;
+}
+
+.adviceIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.adviceTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.adviceContent {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.subCard {
+  background: #fff;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+}
+
+.mediaCard {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  margin-bottom: 16px;
+  height: 180px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+}
+
+.mediaInfo {
+  position: relative;
+  z-index: 1;
+}
+
+.mediaTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.mediaAction {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.audioCard {
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  margin-bottom: 24px;
+}
+
+.audioCover {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
 }
 
 .timelineContainer {
@@ -392,4 +573,3 @@
     height: 12px;
   }
 }
-

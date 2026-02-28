@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Row, Col, Button, Space, Divider, Tag, Timeline, Empty } from 'antd';
+import { Card, Row, Col, Button, Space, Progress, Tag } from 'antd';
 import {
-  UserOutlined,
   HeartOutlined,
   FileTextOutlined,
   CalendarOutlined,
@@ -11,10 +10,11 @@ import {
   FolderOpenOutlined,
   EditOutlined,
   PlusOutlined,
-  FilePdfOutlined,
-  FileImageOutlined,
-  FileWordOutlined,
   ArrowLeftOutlined,
+  ClockCircleOutlined,
+  PlayCircleFilled,
+  VideoCameraOutlined,
+  SoundOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -24,508 +24,175 @@ import { userApi } from '@/services/user';
 import styles from './HealthRecord.module.css';
 
 /**
- * 健康档案页面
+ * 健康档案页面 (Health Record)
  * 
- * 参考 yyAsistant 设计，提供健康自测、健康史、健康报告等功能
+ * 修改说明：
+ * 1. 响应用户需求，将原有的 8 个标签简化集成至 3 个核心页面
+ * 2. 视觉风格参考「我在」App 焕新设计，采用轻量化、卡片式布局
+ * 3. 强化手机端体验，集成图表化概览
  */
 export const HealthRecord: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState('health_history');
-
-  // 获取用户资料（包含 display_name）
-  const { data: profile } = useQuery({
-    queryKey: ['user', 'profile', user?.id],
-    queryFn: () => userApi.getCurrentUserProfile(),
-    enabled: !!user?.id,
-  });
-
   const handleBack = () => {
     navigate('/chat');
   };
 
-  // 顶部用户信息区域
-  const renderUserHeader = () => (
-    <Card className={styles.userCard}>
-      <Row gutter={24} align="middle" wrap={false}>
-        <Col flex="none">
-          <div className={styles.avatarContainer}>
-            <img
-              src="/images/health/man.png"
-              alt="用户头像"
-              className={styles.avatar}
-            />
+  // 渲染更专业的折线图 (带网格线、数据点、发光效果和坐标系)
+  const renderProfessionalChart = () => (
+    <div className={styles.chartContainer} style={{ height: '150px', marginTop: '20px', marginLeft: '0px' }}>
+      <svg className={styles.mockChartLine} viewBox="-10 0 115 55" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="proGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style={{ stopColor: '#4caf50', stopOpacity: 0.4 }} />
+            <stop offset="100%" style={{ stopColor: '#4caf50', stopOpacity: 0.0 }} />
+          </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.8" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* 背景网格虚线 */}
+        <line x1="0" y1="10" x2="100" y2="10" stroke="#f0f0f0" strokeWidth="0.5" strokeDasharray="2,2" />
+        <line x1="0" y1="25" x2="100" y2="25" stroke="#f0f0f0" strokeWidth="0.5" strokeDasharray="2,2" />
+        <line x1="0" y1="40" x2="100" y2="40" stroke="#f0f0f0" strokeWidth="0.5" strokeDasharray="2,2" />
+
+        {/* 坐标轴文字 (Y轴) */}
+        <text x="-3" y="11" fontSize="4.5" fill="#999" textAnchor="end">100</text>
+        <text x="-3" y="26" fontSize="4.5" fill="#999" textAnchor="end">80</text>
+        <text x="-3" y="41" fontSize="4.5" fill="#999" textAnchor="end">60</text>
+
+        {/* 渐变填充区域 */}
+        <path
+          d="M0,35 C15,35 15,18 30,18 C45,18 45,28 60,28 C75,28 75,12 90,12 C95,12 100,16 100,16 L100,50 L0,50 Z"
+          fill="url(#proGrad)"
+        />
+
+        {/* 核心折线 */}
+        <path
+          d="M0,35 C15,35 15,18 30,18 C45,18 45,28 60,28 C75,28 75,12 90,12 C95,12 100,16 100,16"
+          fill="none"
+          stroke="#4caf50"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          filter="url(#glow)"
+        />
+
+        {/* 数据散点 */}
+        <circle cx="0" cy="35" r="1.5" fill="#fff" stroke="#4caf50" strokeWidth="1" />
+        <circle cx="30" cy="18" r="1.5" fill="#fff" stroke="#4caf50" strokeWidth="1" />
+        <circle cx="60" cy="28" r="1.5" fill="#fff" stroke="#4caf50" strokeWidth="1" />
+        <circle cx="90" cy="12" r="1.5" fill="#fff" stroke="#4caf50" strokeWidth="1" />
+        <circle cx="100" cy="16" r="1.5" fill="#fff" stroke="#4caf50" strokeWidth="1" />
+
+        {/* X轴文字 */}
+        <text x="0" y="52" fontSize="4.5" fill="#999" textAnchor="middle">周一</text>
+        <text x="30" y="52" fontSize="4.5" fill="#999" textAnchor="middle">周三</text>
+        <text x="60" y="52" fontSize="4.5" fill="#999" textAnchor="middle">周五</text>
+        <text x="90" y="52" fontSize="4.5" fill="#999" textAnchor="middle">周日</text>
+      </svg>
+    </div>
+  );
+
+  // ================= 页面主体 =================
+  return (
+    <MainLayout>
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <Space>
+            <ArrowLeftOutlined onClick={handleBack} className={styles.backButton} />
+            <span className={styles.title}>身体节律</span>
+          </Space>
+        </div>
+
+        <div className={styles.greetingHeader}>
+          <div className={styles.greetingText}>
+            您好，{user?.username || '杜亦南'}!
           </div>
-        </Col>
-        <Col flex="auto">
-          <Space direction="vertical" size={8} className={styles.userInfo}>
-            <Space size={12} wrap>
-              <span className={styles.userName}>
-                {profile?.display_name || user?.username || '用户'}
-              </span>
-              <span className={styles.userDetail}>男</span>
-            </Space>
-            <span className={styles.userAge}>45岁</span>
-            <div className={styles.userIdCard}>
-              <span className={styles.idLabel}>身份证：</span>
-              <span className={styles.userDetail}>320***********1234</span>
+          <div className={styles.subGreetingText}>倾听身体，回归自然稳态。</div>
+        </div>
+
+        <div className={styles.content}>
+          {/* 1. 当前状态 (趋势图) */}
+          <div className={styles.healthMetricCard} style={{ padding: '20px', paddingBottom: '10px' }}>
+            <div className={styles.metricHeader}>
+              <div className={styles.metricTitle}>
+                <HeartOutlined style={{ color: '#4caf50' }} />
+                当前状态
+              </div>
+              <span className={styles.metricStatus}>分数 85 (良好)</span>
             </div>
-            <Button type="link" size="small" icon={<EditOutlined />} style={{ padding: 0 }}>
-              编辑资料
-            </Button>
-          </Space>
-        </Col>
-      </Row>
-    </Card>
-  );
-
-  // 健康自测Tab
-  const renderHealthCheckTab = () => (
-    <div className={styles.tabContent}>
-      <div className={styles.recordList}>
-        {[
-          { title: '血压自测', value: '125/80 mmHg', status: '正常', color: 'green', time: '2024-03-20 08:30' },
-          { title: '血糖自测', value: '5.8 mmol/L', status: '正常', color: 'green', time: '2024-03-20 07:00' },
-          { title: '体重测量', value: '72.5 kg', status: '正常', color: 'blue', time: '2024-03-19 19:00' },
-          { title: '体温测量', value: '36.5°C', status: '正常', color: 'green', time: '2024-03-19 18:00' },
-          { title: '心率测量', value: '78 bpm', status: '正常', color: 'green', time: '2024-03-19 18:00' },
-        ].map((item, index) => (
-          <Card key={index} size="small" className={styles.recordCard}>
-            <Row align="middle">
-              <Col flex="auto">
-                <Space direction="horizontal" style={{ width: '100%', alignItems: 'center' }} wrap>
-                  <span className={styles.recordTitle}>{item.title}</span>
-                  <Divider type="vertical" />
-                  <span className={styles.recordValue}>{item.value}</span>
-                  <Tag color={item.color}>{item.status}</Tag>
-                  <span className={styles.recordTime}>{item.time}</span>
-                </Space>
-              </Col>
-              <Col flex="none">
-                <Button type="link" size="small">查看详情</Button>
-              </Col>
-            </Row>
-          </Card>
-        ))}
-      </div>
-      <Button
-        type="primary"
-        block
-        size="large"
-        icon={<PlusOutlined />}
-        className={styles.addButton}
-      >
-        添加自测记录
-      </Button>
-    </div>
-  );
-
-  // 健康史Tab
-  const renderHealthHistoryTab = () => (
-    <div className={styles.tabContent}>
-      {/* 家族史 */}
-      <Card size="small" className={styles.sectionCard}>
-        <Row align="middle">
-          <Col flex="auto">
-            <span className={styles.sectionTitle}>家族史</span>
-          </Col>
-          <Col flex="none">
-            <Button type="link" size="small">编辑</Button>
-          </Col>
-        </Row>
-        <Divider style={{ margin: '12px 0' }} />
-        <Space style={{ marginBottom: '8px' }} wrap>
-          <Tag color="red">高血压</Tag>
-          <Tag color="orange">糖尿病</Tag>
-          <Tag color="purple">心脏病</Tag>
-        </Space>
-        <div className={styles.description}>父亲患有高血压和糖尿病，母亲有心脏病病史</div>
-      </Card>
-
-      {/* 个人史 */}
-      <Card size="small" className={styles.sectionCard}>
-        <Row align="middle">
-          <Col flex="auto">
-            <span className={styles.sectionTitle}>个人史</span>
-          </Col>
-          <Col flex="none">
-            <Button type="link" size="small">编辑</Button>
-          </Col>
-        </Row>
-        <Divider style={{ margin: '12px 0' }} />
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Space>
-            <FileTextOutlined style={{ color: 'var(--primary-color)' }} />
-            <span className={styles.infoLabel}>饮酒情况：</span>
-            <span>偶尔饮酒，每周1-2次</span>
-          </Space>
-          <Space>
-            <FileTextOutlined style={{ color: 'var(--primary-color)' }} />
-            <span className={styles.infoLabel}>吸烟情况：</span>
-            <span>已戒烟3年</span>
-          </Space>
-          <Space>
-            <FileTextOutlined style={{ color: 'var(--primary-color)' }} />
-            <span className={styles.infoLabel}>过敏史：</span>
-            <span>青霉素过敏</span>
-          </Space>
-        </Space>
-      </Card>
-
-      {/* 既往病史 */}
-      <Card size="small" className={styles.sectionCard}>
-        <Row align="middle">
-          <Col flex="auto">
-            <span className={styles.sectionTitle}>既往病史</span>
-          </Col>
-          <Col flex="none">
-            <Button type="link" size="small">编辑</Button>
-          </Col>
-        </Row>
-        <Divider style={{ margin: '12px 0' }} />
-        <div className={styles.timelineContainer}>
-          <Timeline
-            className={styles.customTimeline}
-            items={[
-              {
-                children: (
-                  <div className={styles.timelineItem}>
-                    <span className={styles.timelineContent}>急性胃炎，已治愈</span>
-                    <span className={styles.timelineLabel}>2023年6月</span>
-                  </div>
-                ),
-              },
-              {
-                children: (
-                  <div className={styles.timelineItem}>
-                    <span className={styles.timelineContent}>阑尾炎手术</span>
-                    <span className={styles.timelineLabel}>2022年3月</span>
-                  </div>
-                ),
-              },
-              {
-                children: (
-                  <div className={styles.timelineItem}>
-                    <span className={styles.timelineContent}>感冒发烧</span>
-                    <span className={styles.timelineLabel}>2021年1月</span>
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </div>
-      </Card>
-    </div>
-  );
-
-  // 健康报告Tab
-  const renderHealthReportTab = () => (
-    <div className={styles.tabContent}>
-      <Empty
-        description="暂无健康报告"
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      >
-        <Button type="primary" icon={<FileTextOutlined />}>
-          生成健康报告
-        </Button>
-      </Empty>
-    </div>
-  );
-
-  // 健康计划Tab
-  const renderHealthPlanTab = () => (
-    <div className={styles.tabContent}>
-      <Empty
-        description="暂无健康计划"
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      >
-        <Button type="primary" icon={<CalendarOutlined />}>
-          生成专属健康计划
-        </Button>
-      </Empty>
-    </div>
-  );
-
-  // 饮食健康Tab
-  const renderDietHealthTab = () => (
-    <div className={styles.tabContent}>
-      {/* 今日饮食统计 */}
-      <Card size="small" className={styles.sectionCard}>
-        <div className={styles.sectionTitle} style={{ marginBottom: '12px' }}>今日饮食</div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div className={styles.statsContainer}>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>摄入卡路里</div>
-            <div className={styles.statValue} style={{ color: 'var(--primary-color)' }}>1,856</div>
+            <div className={styles.metricSubValue}>基于近期睡眠、运动与静息心率评估</div>
+            {renderProfessionalChart()}
           </div>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>目标卡路里</div>
-            <div className={styles.statValue} style={{ color: '#52c41a' }}>2,000</div>
-          </div>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>剩余</div>
-            <div className={styles.statValue} style={{ color: '#faad14' }}>144</div>
-          </div>
-        </div>
-      </Card>
 
-      <Button
-        type="primary"
-        block
-        size="large"
-        icon={<PlusOutlined />}
-        className={styles.addButton}
-      >
-        添加饮食记录
-      </Button>
-    </div>
-  );
+          {/* 2. 今日建议 (营养与运动) */}
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>今日建议</div>
+          </div>
+          <Row gutter={16} style={{ marginBottom: '24px' }}>
+            <Col span={12}>
+              <div className={styles.adviceCard}>
+                <div className={styles.adviceIcon} style={{ background: '#fff3e0', color: '#ff9800' }}>
+                  <AppleOutlined />
+                </div>
+                <div className={styles.adviceTitle}>营养建议</div>
+                <div className={styles.adviceContent}>今日代谢平稳，建议多摄入高纤维抗氧化蔬菜。</div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className={styles.adviceCard}>
+                <div className={styles.adviceIcon} style={{ background: '#e3f2fd', color: '#2196f3' }}>
+                  <ThunderboltOutlined />
+                </div>
+                <div className={styles.adviceTitle}>运动建议</div>
+                <div className={styles.adviceContent}>昨晚睡眠充足，适合进行心率 130 左右的有氧训练。</div>
+              </div>
+            </Col>
+          </Row>
 
-  // 运动健康Tab
-  const renderExerciseHealthTab = () => (
-    <div className={styles.tabContent}>
-      {/* 今日运动数据 */}
-      <Card size="small" className={styles.sectionCard}>
-        <div className={styles.sectionTitle} style={{ marginBottom: '12px' }}>今日运动</div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div className={styles.statsContainer}>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>步数</div>
-            <div className={styles.statValue} style={{ color: 'var(--primary-color)' }}>8,234</div>
+          {/* 3. 健身教练 (数据与教程) */}
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>健康教练</div>
           </div>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>距离</div>
-            <div className={styles.statValue} style={{ color: '#52c41a' }}>5.8 km</div>
-          </div>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>卡路里</div>
-            <div className={styles.statValue} style={{ color: '#faad14' }}>456</div>
-          </div>
-          <div className={styles.statItem}>
-            <div className={styles.statLabel}>运动时长</div>
-            <div className={styles.statValue} style={{ color: '#722ed1' }}>45分钟</div>
-          </div>
-        </div>
-      </Card>
 
-      <Button
-        type="primary"
-        block
-        size="large"
-        icon={<PlusOutlined />}
-        className={styles.addButton}
-      >
-        添加运动记录
-      </Button>
-    </div>
-  );
-
-  // 药物记录Tab
-  const renderMedicationRecordTab = () => (
-    <div className={styles.tabContent}>
-      {/* 当前用药 */}
-      <Card size="small" className={styles.sectionCard}>
-        <div className={styles.sectionTitle} style={{ marginBottom: '12px' }}>当前用药</div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div className={styles.medicationList}>
-          {[
-            { name: '阿司匹林肠溶片', dose: '100mg', freq: '每日1次，饭后服用', duration: '长期服用' },
-            { name: '氨氯地平片', dose: '5mg', freq: '每日1次，早饭后服用', duration: '长期服用' },
-          ].map((item, index) => (
-            <div key={index} className={styles.medicationItem}>
-              <Space direction="horizontal" style={{ width: '100%' }} wrap>
-                <span className={styles.medicationName}>{item.name}</span>
-                <Tag color="blue">进行中</Tag>
-                <span className={styles.medicationDetail}>剂量：{item.dose}</span>
-                <Divider type="vertical" />
-                <span className={styles.medicationDetail}>{item.freq}</span>
-                <Divider type="vertical" />
-                <span className={styles.medicationDetail}>{item.duration}</span>
-                <Space style={{ marginLeft: 'auto' }}>
-                  <Button type="link" size="small">详情</Button>
-                  <Button type="link" size="small" danger>暂停</Button>
-                </Space>
-              </Space>
+          {/* 跑步数据卡片 */}
+          <div className={styles.subCard} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: '#666' }}>今日步数</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#333' }}>8,240 <span style={{ fontSize: '12px', fontWeight: 400, color: '#999' }}>/ 10,000步</span></div>
             </div>
-          ))}
-        </div>
-      </Card>
-
-      <Button
-        type="primary"
-        block
-        size="large"
-        icon={<PlusOutlined />}
-        className={styles.addButton}
-      >
-        添加用药记录
-      </Button>
-    </div>
-  );
-
-  // 就医资料夹Tab
-  const renderMedicalFolderTab = () => (
-    <div className={styles.tabContent}>
-      <Space style={{ marginBottom: '16px', justifyContent: 'flex-end', width: '100%' }}>
-        <Button type="primary" icon={<PlusOutlined />}>上传资料</Button>
-        <Button icon={<FolderOpenOutlined />}>新建文件夹</Button>
-      </Space>
-
-      <div className={styles.fileList}>
-        {[
-          { name: '2024年体检报告.pdf', type: 'pdf', icon: <FilePdfOutlined />, tag: '体检报告', date: '2024-03-15', size: '2.3MB' },
-          { name: 'X光片-胸部检查.jpg', type: 'image', icon: <FileImageOutlined />, tag: '影像资料', date: '2024-02-20', size: '5.6MB' },
-          { name: '血常规检查报告.pdf', type: 'pdf', icon: <FilePdfOutlined />, tag: '检查报告', date: '2024-01-10', size: '856KB' },
-          { name: '病历记录.docx', type: 'word', icon: <FileWordOutlined />, tag: '病历', date: '2023-12-05', size: '1.2MB' },
-        ].map((item, index) => (
-          <div key={index} className={styles.fileItem}>
-            <Row align="middle">
-              <Col flex="none">
-                <div className={styles.fileIcon}>{item.icon}</div>
-              </Col>
-              <Col flex="auto">
-                <Space direction="horizontal" style={{ width: '100%' }} wrap>
-                  <span className={styles.fileName}>{item.name}</span>
-                  <Tag color="blue">{item.tag}</Tag>
-                  <span className={styles.fileDetail}>检查日期：{item.date} | 大小：{item.size}</span>
-                  <Space style={{ marginLeft: 'auto' }}>
-                    <Button type="link" size="small">查看</Button>
-                    <Button type="link" size="small">下载</Button>
-                    <Button type="link" size="small" danger>删除</Button>
-                  </Space>
-                </Space>
-              </Col>
-            </Row>
+            <Progress type="circle" percent={82} size={50} strokeColor="#4caf50" strokeWidth={10} />
           </div>
-        ))}
+
+          {/* 瑜伽/普拉提 视频卡片 */}
+          <div className={styles.mediaCard} style={{ backgroundImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%), url(/images/yoga-cover.jpg)' }}>
+            <div className={styles.mediaInfo}>
+              <Tag color="magenta" style={{ border: 'none', marginBottom: '8px' }}>瑜伽跟练</Tag>
+              <div className={styles.mediaTitle}>肩颈舒缓流瑜伽 (15分钟)</div>
+            </div>
+            <div className={styles.mediaAction}>
+              <PlayCircleFilled style={{ fontSize: '40px', color: '#fff', opacity: 0.9 }} />
+            </div>
+          </div>
+
+          {/* 太极/五禽戏 视频卡片 */}
+          <div className={styles.mediaCard} style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%), url('/images/taichi-cover.jpg')` }}>
+            <div className={styles.mediaInfo}>
+              <Tag color="cyan" style={{ border: 'none', marginBottom: '8px' }}>太极养生</Tag>
+              <div className={styles.mediaTitle}>八式太极拳</div>
+            </div>
+            <div className={styles.mediaAction}>
+              <PlayCircleFilled style={{ fontSize: '40px', color: '#fff', opacity: 0.9 }} />
+            </div>
+          </div>
+
+        </div>
       </div>
-    </div>
+    </MainLayout>
   );
-
-  const tabItems = [
-    {
-      key: 'health_history',
-      label: (
-        <span>
-          <FileTextOutlined />
-          健康史
-        </span>
-      ),
-      children: renderHealthHistoryTab(),
-    },
-    {
-      key: 'health_check',
-      label: (
-        <span>
-          <HeartOutlined />
-          健康自测
-        </span>
-      ),
-      children: renderHealthCheckTab(),
-    },
-    {
-      key: 'health_report',
-      label: (
-        <span>
-          <FileTextOutlined />
-          健康报告
-        </span>
-      ),
-      children: renderHealthReportTab(),
-    },
-    {
-      key: 'health_plan',
-      label: (
-        <span>
-          <CalendarOutlined />
-          健康计划
-        </span>
-      ),
-      children: renderHealthPlanTab(),
-    },
-    {
-      key: 'diet_health',
-      label: (
-        <span>
-          <AppleOutlined />
-          饮食健康
-        </span>
-      ),
-      children: renderDietHealthTab(),
-    },
-    {
-      key: 'exercise_health',
-      label: (
-        <span>
-          <ThunderboltOutlined />
-          运动健康
-        </span>
-      ),
-      children: renderExerciseHealthTab(),
-    },
-    {
-      key: 'medication_record',
-      label: (
-        <span>
-          <MedicineBoxOutlined />
-          药物记录
-        </span>
-      ),
-      children: renderMedicationRecordTab(),
-    },
-    {
-      key: 'medical_folder',
-      label: (
-        <span>
-          <FolderOpenOutlined />
-          就医资料夹
-        </span>
-      ),
-      children: renderMedicalFolderTab(),
-    },
-  ];
-
-  try {
-    return (
-      <MainLayout>
-        <div className={styles.container}>
-          <div className={styles.header}>
-            <Space>
-              <ArrowLeftOutlined
-                onClick={handleBack}
-                className={styles.backButton}
-              />
-              <span className={styles.title}>健康档案</span>
-            </Space>
-          </div>
-
-          <div className={styles.content}>
-            {renderUserHeader()}
-            <Card className={styles.tabsCard}>
-              <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                items={tabItems}
-                tabPosition="top"
-              />
-            </Card>
-          </div>
-        </div>
-      </MainLayout>
-    );
-  } catch (error) {
-    console.error('HealthRecord render error:', error);
-    return (
-      <MainLayout>
-        <div style={{ padding: '24px' }}>
-          <div>页面加载出错，请刷新重试</div>
-          <div style={{ marginTop: '16px', color: '#999' }}>
-            {error instanceof Error ? error.message : String(error)}
-          </div>
-        </div>
-      </MainLayout>
-    );
-  }
 };
 
 export default HealthRecord;

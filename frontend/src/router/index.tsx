@@ -15,6 +15,7 @@ const HealthCirclePage = lazy(() => import('@/pages/HealthCircle/HealthCircle'))
 const StressProfilePage = lazy(() => import('@/pages/StressProfile/StressProfile'));
 const HealingTreeholePage = lazy(() => import('@/pages/HealingTreehole/HealingTreehole'));
 const ZenPlayerPage = lazy(() => import('@/pages/ZenPlayer/ZenPlayer'));
+const EnergyRhythmPage = lazy(() => import('@/pages/EnergyRhythm/EnergyRhythm'));
 
 /**
  * 加载中组件
@@ -133,6 +134,14 @@ export const AppRouter: React.FC = () => {
             element={
               <ProtectedRoute>
                 <ZenPlayerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/energy-rhythm"
+            element={
+              <ProtectedRoute>
+                <EnergyRhythmPage />
               </ProtectedRoute>
             }
           />

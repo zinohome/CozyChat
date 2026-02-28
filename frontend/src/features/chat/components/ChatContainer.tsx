@@ -55,7 +55,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     enabled: !!sessionId && sessionId !== 'default',
     staleTime: 5 * 60 * 1000, // 5分钟
   });
-  
+
   // 合并加载状态（已移除，ChatUI 不支持 loading prop）
 
   /**
@@ -74,10 +74,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
    * 转换消息格式为ChatUI格式
    */
   const chatUIMessages = messages.map((msg) => {
-    const content = typeof msg.content === 'string' 
-      ? msg.content 
+    const content = typeof msg.content === 'string'
+      ? msg.content
       : (msg.content as any)?.text || '';
-    
+
     return {
       _id: msg.id,
       type: 'text' as const,
@@ -86,10 +86,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         id: msg.role === 'user' ? 'user' : 'assistant',
         avatar: msg.role === 'user' ? '👤' : '🤖',
       },
-      createdAt: typeof msg.timestamp === 'string' 
-        ? new Date(msg.timestamp).getTime() 
-        : msg.timestamp instanceof Date 
-          ? msg.timestamp.getTime() 
+      createdAt: typeof msg.timestamp === 'string'
+        ? new Date(msg.timestamp).getTime()
+        : msg.timestamp instanceof Date
+          ? msg.timestamp.getTime()
           : Date.now(),
     };
   });
@@ -107,7 +107,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       )}
       <Chat
         navbar={{
-          title: 'CozyChat',
+          title: '「我在」身心调频',
         }}
         messages={chatUIMessages}
         onSend={handleSend}

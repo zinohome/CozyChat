@@ -16,7 +16,7 @@ interface ChatToolbarProps {
 /**
  * 聊天工具栏组件
  * 
- * 提供健康档案、个人资料、偏好设置的快速入口
+ * 提供状态档案、个人资料、偏好设置的快速入口
  */
 export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp }) => {
   const navigate = useNavigate();
@@ -27,12 +27,12 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
     navigate('/stress-profile');
   };
 
-  const handleHealingTreehole = () => {
-    navigate('/healing-treehole');
+  const handleHealthRecord = () => {
+    navigate('/health-record');
   };
 
-  const handleZenPlayer = () => {
-    navigate('/zen-player');
+  const handleEnergyRhythm = () => {
+    navigate('/energy-rhythm');
   };
 
   const handleProfile = () => {
@@ -52,24 +52,24 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({ isMobile: isMobileProp
           onClick={handleStressProfile}
           className={styles.toolbarButton}
         >
-          压力档案
+          情绪节律
         </Button>
         <Button
           type="text"
           icon={<TeamOutlined />}
-          onClick={handleHealingTreehole}
+          onClick={handleHealthRecord}
           className={styles.toolbarButton}
         >
-          疗愈树洞
+          身体节律
         </Button>
         <Button
           type="text"
           icon={<AudioOutlined style={{ color: '#e56b82' }} />}
-          onClick={handleZenPlayer}
+          onClick={handleEnergyRhythm}
           className={styles.toolbarButton}
           style={{ color: '#e56b82', fontWeight: 500 }}
         >
-          开启禅定
+          能量节律
         </Button>
       </Space>
     </div>

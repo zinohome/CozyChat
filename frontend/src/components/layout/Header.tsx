@@ -30,14 +30,14 @@ export const Header: React.FC = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  
+
   // 获取用户资料（包含 display_name）
   const { data: profile } = useQuery({
     queryKey: ['user', 'profile', user?.id],
     queryFn: () => userApi.getCurrentUserProfile(),
     enabled: !!user?.id,
   });
-  
+
   // 在窄屏幕下，只有当侧边栏打开时才显示切换按钮
   const shouldShowMenuButton = !isMobile || (isMobile && sidebarOpen);
 
@@ -53,16 +53,22 @@ export const Header: React.FC = () => {
   const userMenu = {
     items: [
       {
-        key: 'health-record',
+        key: 'stress-profile',
         icon: <HeartOutlined />,
-        label: '健康档案',
+        label: '情绪节律',
+        onClick: () => navigate('/stress-profile'),
+      },
+      {
+        key: 'health-record',
+        icon: <TeamOutlined />,
+        label: '身体节律',
         onClick: () => navigate('/health-record'),
       },
       {
-        key: 'health-circle',
-        icon: <TeamOutlined />,
-        label: '健康圈',
-        onClick: () => navigate('/health-circle'),
+        key: 'energy-rhythm',
+        icon: <UserOutlined />,
+        label: '能量节律',
+        onClick: () => navigate('/energy-rhythm'),
       },
       {
         key: 'profile',
@@ -104,15 +110,15 @@ export const Header: React.FC = () => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
         {shouldShowMenuButton && (
-        <Button
-          type="text"
-          icon={<MenuOutlined />}
-          onClick={toggleSidebar}
+          <Button
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={toggleSidebar}
             style={{
               color: '#fff',
               fontSize: '18px',
             }}
-        />
+          />
         )}
         <div style={{ marginRight: '4px' }}>
           <Logo size={40} />
@@ -126,7 +132,7 @@ export const Header: React.FC = () => {
             textShadow: '0 1px 2px rgba(0,0,0,0.1)',
           }}
         >
-          CozyChat
+          「我在」身心调频
         </h1>
       </div>
 
@@ -142,7 +148,7 @@ export const Header: React.FC = () => {
                 }}
               />
               <span style={{ color: '#fff', fontWeight: 500 }}>
-                {profile?.display_name || user.username}
+                {profile?.display_name || user.username || '杜亦南'}
               </span>
             </Space>
           </Dropdown>
