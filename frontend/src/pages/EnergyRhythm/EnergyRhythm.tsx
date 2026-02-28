@@ -195,7 +195,7 @@ export const EnergyRhythm: React.FC = () => {
                         {currentHour >= 18 && currentHour < 22 ? (
                             <div className={styles.adviceCard} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
                                 <div className={styles.adviceTitle} style={{ color: '#64748b', fontSize: '14px', marginBottom: '12px' }}>
-                                    高压职场人晚间管理核心原则 (18:00-22:00)
+                                    晚间能量管理核心原则 (18:00-22:00)
                                 </div>
                                 <div className={styles.adviceItem} style={{ color: '#64748b' }}>
                                     <span style={{ marginRight: '8px' }}>1️⃣</span>
