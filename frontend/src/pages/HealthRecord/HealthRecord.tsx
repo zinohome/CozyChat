@@ -34,6 +34,14 @@ import styles from './HealthRecord.module.css';
 export const HealthRecord: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+
+  // 获取用户资料
+  const { data: profile } = useQuery({
+    queryKey: ['user', 'profile', user?.id],
+    queryFn: () => userApi.getCurrentUserProfile(),
+    enabled: !!user?.id,
+  });
+
   const handleBack = () => {
     navigate('/chat');
   };
@@ -109,7 +117,7 @@ export const HealthRecord: React.FC = () => {
 
         <div className={styles.greetingHeader}>
           <div className={styles.greetingText}>
-            您好，{user?.username || '杜亦南'}!
+            您好，{profile?.display_name || user?.username || '杜亦南'}!
           </div>
           <div className={styles.subGreetingText}>倾听身体，回归自然稳态。</div>
         </div>

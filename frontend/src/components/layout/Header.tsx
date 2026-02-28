@@ -132,7 +132,7 @@ export const Header: React.FC = () => {
             textShadow: '0 1px 2px rgba(0,0,0,0.1)',
           }}
         >
-          「我在」身心调频
+          SelfCEO
         </h1>
       </div>
 
