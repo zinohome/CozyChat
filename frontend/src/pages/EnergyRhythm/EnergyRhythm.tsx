@@ -28,7 +28,11 @@ function getCurrentPhaseConfig(h: number): PhaseConfig {
     if (h >= 10 && h < 13) return { name: '认知高峰', x: 25, y: 10, desc: '精力最充沛的黄金时段，适合深度脑力工作', title: '认知顶峰 (10:00 - 13:00)', items: ['专注解决复杂难题，不查看邮件。', '进行深度思考和创意产出。', '控制咖啡因的摄入量。'] };
     if (h >= 13 && h < 15) return { name: '午后回落', x: 37.5, y: 25, desc: '生理节律自然回落，能量逐渐缓冲', title: '午后调整 (13:00 - 15:00)', items: ['进行20分钟的闭目养神或午休。', '起身散步，让血液重新循环。', '处理简单回复类的机械性任务。'] };
     if (h >= 15 && h < 18) return { name: '第二活力期', x: 50, y: 18, desc: '能量小幅回升，适合沟通与协作', title: '高价值沟通 (15:00 - 18:00)', items: ['安排团队会议或外部沟通。', '清理收件箱和待办事项。', '为明天的重点任务做铺垫。'] };
-    if (h >= 18 && h < 22) return { name: '晚间恢复', x: 65, y: 30, desc: '身体准备进入休息态，适合轻度复盘', title: '卸下负担 (18:00 - 22:00)', items: ['进行舒缓的有氧或瑜伽。', '陪伴家人，放松心情。', '尽量远离具有刺激性的屏幕光线。'] };
+    // 高压人群晚间能量细化管理
+    if (h >= 18 && h < 19) return { name: '晚间过渡', x: 56, y: 25, desc: '交感神经仍活跃，需要人为降载', title: '工作向恢复过渡 (18:00 - 19:00)', items: ['当前进入节律过渡阶段。', '建议减少高压沟通。', '可以安排 10 分钟轻度步行。', '不再开启新的复杂任务。', '为今晚的恢复预留空间。'] };
+    if (h >= 19 && h < 20) return { name: '疲劳显现', x: 62, y: 28, desc: '前额叶疲劳，决策质量下降', title: '认知控制力下降 (19:00 - 20:00)', items: ['当前不适合重大决策。', '建议停止战略性思考。', '可以整理已完成事项。', '将未完成事项留给明日上午。', '降低信息输入强度。'] };
+    if (h >= 20 && h < 21) return { name: '恢复启动', x: 68, y: 32, desc: '褪黑素开始分泌，蓝光会延迟入睡', title: '恢复窗口启动 (20:00 - 21:00)', items: ['当前进入恢复窗口。', '建议减少屏幕暴露。', '可以进行 3 分钟缓慢呼吸。', '不再处理冲突性沟通。', '允许今天停止推进。'] };
+    if (h >= 21 && h < 22) return { name: '神经下行', x: 74, y: 35, desc: '神经系统建立明确结束信号', title: '神经系统下行 (21:00 - 22:00)', items: ['当前属于夜间恢复区间。', '建议关闭主要工作通道。', '不再进行复杂讨论。', '可以写下明日三件最重要事项。', '让节律自然下行。'] };
     return { name: '深度休眠', x: 80, y: 38, desc: '机体深度自我修复和排毒时间', title: '绝对休息 (22:00 - 06:00)', items: ['保持卧室完全黑暗，调节适宜温度。', '睡前听一段平静的白噪音。', '顺应自然规律，切忌熬夜。'] };
 }
 
@@ -187,20 +191,40 @@ export const EnergyRhythm: React.FC = () => {
                             ))}
                         </div>
 
-                        {/* 全天候核心提示静态卡片 */}
-                        <div className={styles.adviceCard} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
-                            <div className={styles.adviceTitle} style={{ color: '#64748b', fontSize: '14px', marginBottom: '12px' }}>
-                                全天候核心原则
+                        {/* 动态核心原则 */}
+                        {currentHour >= 18 && currentHour < 22 ? (
+                            <div className={styles.adviceCard} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+                                <div className={styles.adviceTitle} style={{ color: '#64748b', fontSize: '14px', marginBottom: '12px' }}>
+                                    高压职场人晚间管理核心原则 (18:00-22:00)
+                                </div>
+                                <div className={styles.adviceItem} style={{ color: '#64748b' }}>
+                                    <span style={{ marginRight: '8px' }}>1️⃣</span>
+                                    <span style={{ fontWeight: 500 }}>不做重大决策</span>
+                                </div>
+                                <div className={styles.adviceItem} style={{ color: '#64748b' }}>
+                                    <span style={{ marginRight: '8px' }}>2️⃣</span>
+                                    <span style={{ fontWeight: 500 }}>不开启新任务</span>
+                                </div>
+                                <div className={styles.adviceItem} style={{ color: '#64748b' }}>
+                                    <span style={{ marginRight: '8px' }}>3️⃣</span>
+                                    <span style={{ fontWeight: 500 }}>保护睡眠窗口</span>
+                                </div>
                             </div>
-                            <div className={styles.adviceItem} style={{ color: '#64748b' }}>
-                                <span style={{ marginRight: '6px' }}>•</span>
-                                <span>避免在深陷低谷时强迫自己进行高强度脑力工作。</span>
+                        ) : (
+                            <div className={styles.adviceCard} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+                                <div className={styles.adviceTitle} style={{ color: '#64748b', fontSize: '14px', marginBottom: '12px' }}>
+                                    全天候核心原则
+                                </div>
+                                <div className={styles.adviceItem} style={{ color: '#64748b' }}>
+                                    <span style={{ marginRight: '6px' }}>•</span>
+                                    <span>避免在深陷低谷时强迫自己进行高强度脑力工作。</span>
+                                </div>
+                                <div className={styles.adviceItem} style={{ color: '#64748b' }}>
+                                    <span style={{ marginRight: '6px' }}>•</span>
+                                    <span>适当的放空和散步，是脑力劳动者最好的休息。</span>
+                                </div>
                             </div>
-                            <div className={styles.adviceItem} style={{ color: '#64748b' }}>
-                                <span style={{ marginRight: '6px' }}>•</span>
-                                <span>适当的放空和散步，是脑力劳动者最好的休息。</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
