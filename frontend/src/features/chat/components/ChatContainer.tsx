@@ -107,7 +107,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       )}
       <Chat
         navbar={{
-          title: 'SelfCEO',
+          title: '「我在」身心调频',
         }}
         messages={chatUIMessages}
         onSend={handleSend}
