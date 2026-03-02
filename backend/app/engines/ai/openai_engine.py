@@ -130,7 +130,10 @@ class OpenAIEngine(AIEngineBase):
             }
             
             if max_tokens:
-                request_params["max_tokens"] = max_tokens
+                if "gpt-5" in self.model or self.model.startswith("o1") or self.model.startswith("o3"):
+                    request_params["max_completion_tokens"] = max_tokens
+                else:
+                    request_params["max_tokens"] = max_tokens
             
             if tools:
                 request_params["tools"] = tools
@@ -245,7 +248,10 @@ class OpenAIEngine(AIEngineBase):
             }
             
             if max_tokens:
-                request_params["max_tokens"] = max_tokens
+                if "gpt-5" in self.model or self.model.startswith("o1") or self.model.startswith("o3"):
+                    request_params["max_completion_tokens"] = max_tokens
+                else:
+                    request_params["max_tokens"] = max_tokens
             
             if tools:
                 request_params["tools"] = tools
