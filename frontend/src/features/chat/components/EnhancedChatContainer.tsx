@@ -1213,14 +1213,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               onMouseLeave={usePressMode ? handlePressCancel : undefined}
               // Chrome移动端也需要React事件处理器作为备用
               onTouchStart={usePressMode ? (e) => {
-                e.preventDefault();
-                e.stopPropagation();
                 log.debug('React onTouchStart 事件触发');
                 handlePressStart(e);
               } : undefined}
               onTouchEnd={usePressMode ? (e) => {
-                e.preventDefault();
-                e.stopPropagation();
                 log.debug('React onTouchEnd 事件触发');
                 handlePressEnd(e);
               } : undefined}
