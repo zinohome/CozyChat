@@ -49,10 +49,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   sessionId,
   personalityId,
 }) => {
-  const { 
-    isLoading: isLoadingStore, 
-    error, 
-    setError, 
+  const {
+    isLoading: isLoadingStore,
+    error,
+    setError,
     setCurrentSessionId,
     isVoiceCallActive,
     voiceCallMessages,
@@ -79,22 +79,22 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const isAutoPlayingRef = useRef<boolean>(false); // 防止重复播放
   const autoPlayingAudioRef = useRef<HTMLAudioElement | null>(null); // 当前自动播放的音频对象
   const [autoPlayingMessageId, setAutoPlayingMessageId] = React.useState<string | null>(null); // 当前正在自动播放的消息ID
-  
+
   // 语音输入模式状态（仅在小屏幕下可用）
   const [isVoiceInputMode, setIsVoiceInputMode] = useState(false);
   const { isRecording, isTranscribing, recordingDuration, startRecording, stopRecording, transcribe } = useVoiceRecorder();
-  
+
   // 按住说话相关状态
   const [isPressing, setIsPressing] = useState(false); // 是否正在按下
   const isPressingRef = useRef(false); // 防止重复触发
   const recordingStartTimeRef = useRef<number | null>(null); // 录音开始时间（用于计算时长）
   const MIN_RECORDING_DURATION = 300; // 最小录音时长（毫秒），防止误触
-  
+
   // 上划取消相关状态
   const touchStartYRef = useRef<number | null>(null); // 触摸开始的 Y 坐标
   const [isCanceling, setIsCanceling] = useState(false); // 是否正在取消（上划）
   const CANCEL_THRESHOLD = 50; // 上划取消的阈值（像素），向上移动超过此距离则取消
-  
+
   // 语音通话Hook
   const {
     isCalling,
@@ -154,10 +154,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       },
     }
   );
-  
+
   // 跟踪用户是否已经有过交互（发送过消息）
   const hasUserInteractedRef = useRef(false);
-  
+
   // 获取用户偏好（用于自动播放语音和传递给子组件）
   const { data: preferences } = useQuery({
     queryKey: ['user', 'preferences'],
@@ -165,7 +165,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
     gcTime: 10 * 60 * 1000, // 10分钟内保留缓存（原 cacheTime，React Query v5 已重命名）
   });
-  
+
   // 使用动态的 sessionId 创建 sendStreamMessage
   const { sendStreamMessage, isStreaming } = useStreamChat(currentSessionId || '', personalityId);
 
@@ -196,7 +196,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     refetchOnMount: 'always', // 组件挂载时总是重新查询（确保刷新页面后能获取最新数据）
     refetchOnWindowFocus: false, // 窗口聚焦时不重新查询（避免不必要的请求）
   });
-  
+
   // 当 currentSessionId 变化时，显式触发重新查询（确保切换会话时能获取最新数据）
   // 使用 useRef 避免重复查询
   const lastSessionIdRef = useRef<string | null>(null);
@@ -206,7 +206,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       lastSessionIdRef.current = currentSessionId;
       // 安全检查：确保refetchMessages是函数
       if (typeof refetchMessages === 'function') {
-      refetchMessages();
+        refetchMessages();
       }
     }
   }, [currentSessionId, refetchMessages]);
@@ -220,24 +220,24 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       if (!currentSessionId || currentSessionId === 'default') {
         return;
       }
-      
+
       // 如果已经为这个会话生成过标题，不再重复触发
       if (titleGeneratedRef.current.has(currentSessionId)) {
         return;
       }
-      
+
       // 检查消息数量是否达到阈值
       const messageCount = messages.length;
       if (messageCount >= TITLE_TRIGGER_LENGTH) {
         try {
           log.debug('Triggering title generation for session:', currentSessionId, 'with', messageCount, 'messages');
-          
+
           // 调用标题生成API
           await sessionApi.generateTitle(currentSessionId);
-          
+
           // 标记为已生成
           titleGeneratedRef.current.add(currentSessionId);
-          
+
           // 刷新会话列表以显示新标题（使用正确的queryKey，包含userId）
           // 使用 refetchQueries 立即刷新，而不是 invalidateQueries（可能因为 staleTime 不会立即刷新）
           if (userId) {
@@ -246,7 +246,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
             // 如果没有userId，使用通配符匹配所有sessions查询
             await queryClient.refetchQueries({ queryKey: ['sessions'] });
           }
-          
+
           log.info('Session title generated successfully:', currentSessionId);
         } catch (error: any) {
           // 如果是400错误（消息数不足或已有标题），静默处理，不记录为错误
@@ -264,40 +264,40 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         }
       }
     };
-    
+
     shouldGenerateTitle();
   }, [currentSessionId, messages.length, queryClient, userId]);
-  
+
   // 合并加载状态
   const isLoading = isLoadingStore || isLoadingHistory;
-  
+
   // 合并普通消息和语音通话消息（去重）
   const allMessages = React.useMemo(() => {
     const normalMessages = messages || [];
     const voiceMessages = isVoiceCallActive ? voiceCallMessages : [];
-    
+
     // 使用 Map 去重，以消息 ID 为 key，保留最新的消息
     const messageMap = new Map<string, Message>();
-    
+
     // 先添加普通消息
     normalMessages.forEach(msg => {
       messageMap.set(msg.id, msg);
     });
-    
+
     // 再添加语音通话消息（如果 ID 已存在，会被覆盖，但语音通话消息通常更新）
     voiceMessages.forEach(msg => {
       messageMap.set(msg.id, msg);
     });
-    
+
     // 转换为数组并排序（按时间戳）
     const combined = Array.from(messageMap.values());
     return combined.sort((a, b) => {
-      const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
-                     typeof a.timestamp === 'number' ? a.timestamp : 
-                     a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-      const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
-                     typeof b.timestamp === 'number' ? b.timestamp : 
-                     b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+      const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() :
+        typeof a.timestamp === 'number' ? a.timestamp :
+          a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+      const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() :
+        typeof b.timestamp === 'number' ? b.timestamp :
+          b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
       return timeA - timeB;
     });
   }, [messages, voiceCallMessages, isVoiceCallActive]);
@@ -318,12 +318,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         setMessagesContainerHeight(rect.height);
       }
     };
-    
+
     updateHeight();
     window.addEventListener('resize', updateHeight);
     return () => window.removeEventListener('resize', updateHeight);
   }, []);
-  
+
   // 停止自动播放回调（使用 useCallback 优化）
   const handleStopAutoPlay = useCallback(() => {
     if (autoPlayingAudioRef.current) {
@@ -362,7 +362,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
 
     // 获取最新的助手消息
     const latestMessage = assistantMessages[assistantMessages.length - 1];
-    
+
     // 如果这条消息已经自动播放过，跳过
     if (lastAutoPlayedMessageIdRef.current === latestMessage.id) {
       return;
@@ -377,7 +377,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     const content = typeof latestMessage.content === 'string'
       ? latestMessage.content
       : (latestMessage.content as any)?.text || '';
-    
+
     if (!content.trim() || content.length < 3) {
       // 内容太短，可能是占位符，跳过
       return;
@@ -401,10 +401,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         return;
       }
       const currentLatestMessage = currentAssistantMessages[currentAssistantMessages.length - 1];
-      
+
       // 如果消息ID已变化或已播放过，跳过
-      if (currentLatestMessage.id !== latestMessage.id || 
-          lastAutoPlayedMessageIdRef.current === currentLatestMessage.id) {
+      if (currentLatestMessage.id !== latestMessage.id ||
+        lastAutoPlayedMessageIdRef.current === currentLatestMessage.id) {
         return;
       }
 
@@ -447,7 +447,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           log.warn('自动播放语音失败:', error);
         }
       });
-      
+
       // 延迟刷新会话列表，等待后端标题生成完成（标题生成是异步的，通常需要2-3秒）
       setTimeout(() => {
         if (userId) {
@@ -466,7 +466,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
     // 更新 Zustand 中的 currentSessionId
     const actualSessionId = sessionId === 'default' ? null : sessionId;
     setCurrentSessionId(actualSessionId);
-    
+
     // 重置自动播放相关状态（切换会话时）
     hasUserInteractedRef.current = false;
     isAutoPlayingRef.current = false;
@@ -500,13 +500,13 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         // 移除消息缓存，然后显式触发重新查询（确保获取到欢迎消息）
         queryClient.removeQueries({ queryKey: ['chat', 'messages', actualSessionId] });
         setCurrentSessionId(actualSessionId);
-        
+
         // 显式触发消息查询（确保欢迎消息能够显示）
-        await queryClient.refetchQueries({ 
+        await queryClient.refetchQueries({
           queryKey: ['chat', 'messages', actualSessionId],
-          exact: true 
+          exact: true
         });
-        
+
         // 更新 URL
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, '', `/chat/${actualSessionId}`);
@@ -521,7 +521,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         return;
       }
     }
-    
+
     // 确保 actualSessionId 不为 undefined
     if (!actualSessionId) {
       showError(new Error('会话ID不存在'), '发送消息失败');
@@ -530,7 +530,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
 
     const content = inputValue.trim();
     setInputValue('');
-    
+
     // 如果会话ID已更改，更新 Zustand 中的 currentSessionId
     if (actualSessionId !== currentSessionId) {
       setCurrentSessionId(actualSessionId);
@@ -539,10 +539,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         window.history.replaceState(null, '', `/chat/${actualSessionId}`);
       }
     }
-    
+
     // 使用 sendStreamMessage 发送消息
     await sendStreamMessage(content);
-    
+
     // 聚焦输入框
     setTimeout(() => {
       inputRef.current?.focus();
@@ -570,7 +570,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       e.preventDefault();
       e.stopPropagation();
     }
-    
+
     // 防止重复触发
     if (isPressingRef.current || isRecording || isTranscribing || isLoading || isStreaming) {
       log.debug('忽略重复触发，当前状态:', {
@@ -582,20 +582,20 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       });
       return;
     }
-    
+
     // 记录触摸开始的 Y 坐标（用于检测上划取消）
     if (e && 'touches' in e && e.touches && e.touches.length > 0) {
       touchStartYRef.current = e.touches[0].clientY;
     } else {
       touchStartYRef.current = null;
     }
-    
+
     // 立即更新状态，让用户看到"松开发送，上划取消"的提示
     isPressingRef.current = true;
     setIsPressing(true);
     setIsCanceling(false);
     recordingStartTimeRef.current = Date.now();
-    
+
     try {
       // 异步启动录音，但不等待完成（状态已经更新，UI会立即显示）
       startRecording().catch((error) => {
@@ -625,12 +625,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       e.preventDefault();
       e.stopPropagation();
     }
-    
+
     if (!isPressingRef.current) {
       touchStartYRef.current = null;
       return;
     }
-    
+
     // 如果正在取消（上划），直接取消录音
     if (isCanceling) {
       log.debug('上划取消录音');
@@ -642,36 +642,38 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       touchStartYRef.current = null;
       return;
     }
-    
-    if (!isRecording) {
-      isPressingRef.current = false;
-      setIsPressing(false);
-      setIsCanceling(false);
-      touchStartYRef.current = null;
-      return;
-    }
-    
+
+    // 无论 isRecording 当前状态如何，都必须退出按压状态
+    // 因为 startRecording 是异步的，手指离开时可能底层还没来得及把 isRecording 设为 true
+    // 如果这里直接 return 就会导致底层录音启动后无法被停止，造成 UI 永远卡死在“松开发送”
+    const wasRecording = isRecording;
     isPressingRef.current = false;
     setIsPressing(false);
     setIsCanceling(false);
-    
-    // 检查最小录音时长
-    const duration = recordingStartTimeRef.current 
-      ? Date.now() - recordingStartTimeRef.current 
+
+    // 检查录音时长
+    const duration = recordingStartTimeRef.current
+      ? Date.now() - recordingStartTimeRef.current
       : 0;
-    
-    // 停止录音
+
+    // 强制调用停止，拦截任何正在挂起的录音进程
     stopRecording();
     const actualDuration = duration;
     recordingStartTimeRef.current = null;
     touchStartYRef.current = null;
-    
+
+    // 如果录音实际并未开始，或时长太短（防止误触），不进行后续的识别
+    if (!wasRecording || actualDuration < MIN_RECORDING_DURATION) {
+      log.debug('录音未能启动或时长太短，可能是误触，取消识别:', actualDuration, 'ms');
+      return;
+    }
+
     // 如果录音时长太短，可能是误触，不进行识别也不显示错误
     if (actualDuration < MIN_RECORDING_DURATION) {
       log.debug('录音时长太短，可能是误触，取消处理:', actualDuration, 'ms');
       return;
     }
-    
+
     // 等待一小段时间确保录音数据已收集
     setTimeout(async () => {
       try {
@@ -760,19 +762,19 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const getVoiceInputMode = useCallback((): 'press' | 'click' => {
     // 1. 优先使用用户偏好
     const userPreference = preferences?.voice_input_mode;
-    
+
     if (userPreference === 'press') {
       return 'press';
     }
     if (userPreference === 'click') {
       return 'click';
     }
-    
+
     // 2. 自动模式或未设置：根据设备类型
     // 'auto' 或 undefined/null 都使用自动模式
     return isMobile ? 'press' : 'click';
   }, [preferences?.voice_input_mode, isMobile]);
-  
+
   const usePressMode = getVoiceInputMode() === 'press';
 
   // 处理页面失去焦点时取消录音
@@ -783,7 +785,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         handlePressCancel();
       }
     };
-    
+
     window.addEventListener('blur', handleBlur);
     return () => {
       window.removeEventListener('blur', handleBlur);
@@ -795,7 +797,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
   const handlePressStartRef = useRef(handlePressStart);
   const handlePressEndRef = useRef(handlePressEnd);
   const handlePressCancelRef = useRef(handlePressCancel);
-  
+
   // 更新 ref 值
   useEffect(() => {
     handlePressStartRef.current = handlePressStart;
@@ -834,12 +836,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
         if (isPressingRef.current || isRecording) {
           e.preventDefault();
           e.stopPropagation();
-          
+
           // 检测上划取消：如果手指向上移动超过阈值，则取消录音
           if (touchStartYRef.current !== null && e.touches && e.touches.length > 0) {
             const currentY = e.touches[0].clientY;
             const deltaY = touchStartYRef.current - currentY; // 向上移动为正值
-            
+
             if (deltaY > CANCEL_THRESHOLD) {
               // 上划超过阈值，标记为取消状态
               setIsCanceling((prev) => {
@@ -900,10 +902,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 使用 capture: true 在捕获阶段处理，确保在其他监听器之前执行
       // 注意：必须在捕获阶段阻止，否则系统默认行为会先执行
       const options = { passive: false, capture: true };
-      
+
       // 同时添加冒泡阶段的监听器（Chrome可能需要）
       const bubbleOptions = { passive: false, capture: false };
-      
+
       pressButtonElement.addEventListener('touchstart', handleTouchStart, options);
       pressButtonElement.addEventListener('touchstart', handleTouchStart, bubbleOptions);
       pressButtonElement.addEventListener('touchmove', handleTouchMove, options);
@@ -915,7 +917,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       pressButtonElement.addEventListener('contextmenu', handleContextMenu, options);
       pressButtonElement.addEventListener('selectstart', handleSelectStart, options);
       pressButtonElement.addEventListener('dragstart', handleDragStart, options);
-      
+
       // 额外：在元素上设置属性，进一步阻止默认行为
       pressButtonElement.setAttribute('draggable', 'false');
       pressButtonElement.setAttribute('contenteditable', 'false');
@@ -953,7 +955,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
       // 从 React Query 缓存获取消息，保存被删除的消息以便恢复
       const currentMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', currentSessionId]) || [];
       const deletedMessage = currentMessages.find((msg) => msg.id === messageId);
-      
+
       // 先更新UI（从 React Query 缓存移除）
       queryClient.setQueryData(
         ['chat', 'messages', currentSessionId],
@@ -1012,7 +1014,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           personalityId={personalityId}
         />
       )}
-      
+
       {/* 消息列表 */}
       <div
         ref={messagesContainerRef}
@@ -1093,10 +1095,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
           boxSizing: 'border-box',
         }}
       >
-        <div 
-          style={{ 
-            display: 'flex', 
-            gap: '8px', 
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
             alignItems: 'flex-end',
             width: '100%',
             maxWidth: '100%',
@@ -1187,7 +1189,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               placeholder="输入消息... (Shift+Enter换行)"
               autoSize={{ minRows: 1, maxRows: 4 }}
               disabled={isLoading || isStreaming}
-              style={{ 
+              style={{
                 flex: 1,
                 minWidth: 0,
                 maxWidth: '100%',
@@ -1247,20 +1249,20 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 pointerEvents: (isLoading || isStreaming || isTranscribing) ? 'none' : 'auto',
                 backgroundColor: isCanceling
                   ? 'var(--text-tertiary)' // 取消状态：灰色
-                  : isPressing || isRecording 
+                  : isPressing || isRecording
                     ? 'var(--error-color)' // 录音状态：红色
                     : isTranscribing
                       ? 'var(--bg-tertiary)'
                       : 'var(--bg-primary)',
                 color: isCanceling
                   ? 'var(--text-inverse)' // 取消状态：白色文字
-                  : isPressing || isRecording 
+                  : isPressing || isRecording
                     ? 'var(--text-inverse)' // 录音状态：白色文字
                     : 'var(--text-primary)',
                 border: `1px solid ${isCanceling
                   ? 'var(--text-tertiary)'
-                  : isPressing || isRecording 
-                    ? 'var(--error-color)' 
+                  : isPressing || isRecording
+                    ? 'var(--error-color)'
                     : 'var(--border-color)'}`,
                 borderRadius: '8px',
                 transform: isPressing ? 'scale(0.98)' : 'scale(1)',
@@ -1275,10 +1277,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 ? '松手取消'
                 : isPressing || isRecording
                   ? '松开发送，上划取消'
-                  : isTranscribing 
-                    ? '识别中...' 
-                    : usePressMode 
-                      ? '按住说话' 
+                  : isTranscribing
+                    ? '识别中...'
+                    : usePressMode
+                      ? '按住说话'
                       : '点击说话'
               }
             </div>
@@ -1286,50 +1288,50 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
 
           {/* 发送按钮 */}
           {!isVoiceCallActive && !isConnecting && (
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!inputValue.trim() || isLoading || isStreaming || isTranscribing}
-            style={{
-              flexShrink: 0,
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              borderRadius: '8px',
-              backgroundColor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
-                ? 'var(--text-tertiary)'
-                : 'var(--primary-color)',
-              cursor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
-                ? 'not-allowed'
-                : 'pointer',
-              color: 'white',
-              transition: 'background-color 0.2s ease, opacity 0.2s ease',
-              padding: 0,
-              outline: 'none',
-              opacity: (!inputValue.trim() || isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (inputValue.trim() && !isLoading && !isStreaming && !isTranscribing) {
-                e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 
-                (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!inputValue.trim() || isLoading || isStreaming || isTranscribing}
+              style={{
+                flexShrink: 0,
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                borderRadius: '8px',
+                backgroundColor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
                   ? 'var(--text-tertiary)'
-                  : 'var(--primary-color)';
-            }}
-            title="发送"
-          >
-            {isLoading || isStreaming ? (
-              <Spin size="small" style={{ color: 'white' }} />
-            ) : (
-              <SendOutlined style={{ fontSize: '18px', color: 'white' }} />
-            )}
-          </button>
+                  : 'var(--primary-color)',
+                cursor: (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+                  ? 'not-allowed'
+                  : 'pointer',
+                color: 'white',
+                transition: 'background-color 0.2s ease, opacity 0.2s ease',
+                padding: 0,
+                outline: 'none',
+                opacity: (!inputValue.trim() || isLoading || isStreaming || isTranscribing) ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (inputValue.trim() && !isLoading && !isStreaming && !isTranscribing) {
+                  e.currentTarget.style.backgroundColor = 'var(--primary-hover)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor =
+                  (!inputValue.trim() || isLoading || isStreaming || isTranscribing)
+                    ? 'var(--text-tertiary)'
+                    : 'var(--primary-color)';
+              }}
+              title="发送"
+            >
+              {isLoading || isStreaming ? (
+                <Spin size="small" style={{ color: 'white' }} />
+              ) : (
+                <SendOutlined style={{ fontSize: '18px', color: 'white' }} />
+              )}
+            </button>
           )}
 
           {/* 语音通话按钮 */}
@@ -1339,12 +1341,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               // ✅ 关键修复：阻止事件冒泡和重复触发
               e.preventDefault();
               e.stopPropagation();
-              
+
               // ✅ 关键修复：使用 ref 锁定按钮状态，防止异步过程中状态变化
               // 在事件处理开始时立即锁定状态，避免异步操作期间状态变化导致重复触发
               const buttonClickedAt = Date.now();
               const wasActive = isVoiceCallActive;
-              
+
               // 添加防抖：如果距离上次点击太近（< 500ms），忽略
               const lastClickTime = (window as any).__lastVoiceCallClick || 0;
               if (buttonClickedAt - lastClickTime < 500) {
@@ -1352,12 +1354,12 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                 return;
               }
               (window as any).__lastVoiceCallClick = buttonClickedAt;
-              
+
               if (wasActive) {
                 // 如果正在通话，结束通话
                 try {
                   await endCall();
-                  
+
                   // 保存语音通话消息到数据库，并添加到 React Query 缓存
                   if (voiceCallMessages.length > 0 && currentSessionId) {
                     try {
@@ -1377,24 +1379,24 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                               content = '';
                             }
                           }
-                          
+
                           // 只返回有内容的消息
                           if (!content) {
                             return null;
                           }
-                          
+
                           return {
                             role: msg.role as 'user' | 'assistant',
                             content: content,
-                            timestamp: typeof msg.timestamp === 'string' 
-                              ? msg.timestamp 
-                              : msg.timestamp instanceof Date 
+                            timestamp: typeof msg.timestamp === 'string'
+                              ? msg.timestamp
+                              : msg.timestamp instanceof Date
                                 ? msg.timestamp.toISOString()
                                 : new Date(msg.timestamp).toISOString(),
                           };
                         })
                         .filter((msg): msg is { role: 'user' | 'assistant'; content: string; timestamp: string } => msg !== null);
-                      
+
                       // 只保存有有效消息的情况
                       if (validMessages.length > 0) {
                         await chatApi.saveVoiceCallMessages(currentSessionId, validMessages);
@@ -1403,7 +1405,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                         log.warn('没有有效的语音通话消息需要保存（所有消息内容为空）');
                       }
                       log.debug('语音通话消息已保存到数据库');
-                      
+
                       // 将消息添加到 React Query 缓存，保留在会话历史中
                       queryClient.setQueryData(
                         ['chat', 'messages', currentSessionId],
@@ -1412,17 +1414,17 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                           const existingIds = new Set(old.map(m => m.id));
                           const newMessages = voiceCallMessages.filter(msg => !existingIds.has(msg.id));
                           return [...old, ...newMessages].sort((a, b) => {
-                            const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : 
-                                         typeof a.timestamp === 'number' ? a.timestamp : 
-                                         a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
-                            const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : 
-                                         typeof b.timestamp === 'number' ? b.timestamp : 
-                                         b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+                            const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() :
+                              typeof a.timestamp === 'number' ? a.timestamp :
+                                a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+                            const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() :
+                              typeof b.timestamp === 'number' ? b.timestamp :
+                                b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
                             return timeA - timeB;
                           });
                         }
                       );
-                      
+
                       // 语音通话结束后触发标题生成（如果消息数达到阈值）
                       try {
                         const totalMessages = queryClient.getQueryData<Message[]>(['chat', 'messages', currentSessionId]) || [];
@@ -1450,7 +1452,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                       showError(error, '保存语音通话消息失败');
                     }
                   }
-                  
+
                   // 清空状态（不影响已添加到缓存的消息）
                   clearVoiceCallMessages();
                   endVoiceCall();
@@ -1464,10 +1466,10 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
                   // ✅ 关键修复：不立即设置 startVoiceCall()
                   // 让 isConnecting 状态控制UI显示"正在连接"
                   // 在 startCall() 成功后，才设置 startVoiceCall() 显示"可以说话"
-                  
+
                   // 开始实际通话（异步）
                   await startCall();
-                  
+
                   // ✅ 通话启动成功后，才设置UI状态为"可以说话"
                   // 此时 isCalling = true，UI会显示为通话状态
                   startVoiceCall();
@@ -1484,23 +1486,23 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               // 连接中或通话中时，按钮直接变成通话状态大小（无动画）
               // 保持固定高度36px，不会因为内容变化而改变
               ...((isConnecting || isVoiceCallActive)
-                ? { 
-                    flex: 1, 
-                    flexGrow: 1, 
-                    flexBasis: 0,
-                    width: '100%',
-                    height: '36px', // 固定高度
-                    padding: '0 16px', // 只设置左右内边距
-                  }
-                : { 
-                    flex: 'none', 
-                    flexGrow: 0, 
-              flexShrink: 0,
-                    flexBasis: 'auto',
-              width: '36px',
-              height: '36px',
-                    padding: 0,
-                  }
+                ? {
+                  flex: 1,
+                  flexGrow: 1,
+                  flexBasis: 0,
+                  width: '100%',
+                  height: '36px', // 固定高度
+                  padding: '0 16px', // 只设置左右内边距
+                }
+                : {
+                  flex: 'none',
+                  flexGrow: 0,
+                  flexShrink: 0,
+                  flexBasis: 'auto',
+                  width: '36px',
+                  height: '36px',
+                  padding: 0,
+                }
               ),
               display: 'flex',
               alignItems: 'center',
@@ -1526,18 +1528,18 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               e.currentTarget.style.backgroundColor = isVoiceCallActive ? '#ff4d4f' : (isConnecting ? 'var(--primary-color)' : 'var(--primary-color)');
             }}
             title={
-              isConnecting 
-                ? '正在连接...' 
-                : isVoiceCallActive 
-                  ? '结束通话' 
+              isConnecting
+                ? '正在连接...'
+                : isVoiceCallActive
+                  ? '结束通话'
                   : '语音通话'
             }
           >
             {isConnecting ? (
               // 连接中：只显示声纹动画
               <div className="voice-waveforms" style={{ width: '180px', height: '40px' }}>
-                <VoiceWaveform 
-                  frequencyData={null} 
+                <VoiceWaveform
+                  frequencyData={null}
                   color="#ffffff"
                   isActive={true}
                   isConnecting={true}
@@ -1550,7 +1552,7 @@ export const EnhancedChatContainer: React.FC<EnhancedChatContainerProps> = ({
               </svg>
             ) : (
               // 未连接：显示电话图标
-            <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
+              <PhoneOutlined style={{ fontSize: '18px', color: 'white', transform: 'rotate(-90deg)' }} />
             )}
           </button>
         </div>

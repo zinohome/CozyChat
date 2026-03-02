@@ -141,6 +141,16 @@ class OpenAISTTEngine(STTEngineBase):
                 }
             )
             
+            # 过滤常见的Whisper静音幻觉文本
+            hallucination_keywords = [
+                "Amara.org", "社群提供的字幕", "请不吝赐教", 
+                "Subtitles by", "字幕由", "O Subtitles", 
+                "一鞠躬", "Thank you."
+            ]
+            if any(keyword.lower() in text.lower() for keyword in hallucination_keywords):
+                logger.debug(f"Detected and filtered possible STT hallucination: '{text}'")
+                return ""
+            
             return text
             
         except APIError as e:
