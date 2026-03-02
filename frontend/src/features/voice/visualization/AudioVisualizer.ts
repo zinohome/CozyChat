@@ -185,7 +185,9 @@ export class AudioVisualizer {
       this.assistantAnalyser = analyser;
 
       source.connect(analyser);
-      analyser.connect(audioContext.destination);
+      // ✅ 关键修复：千万不要把 analyser 连接到 audioContext.destination！
+      // 如果连接到 destination，会通过 Web Audio API 强制软播放，这会绕过 iOS/Safari 的硬件回声消除（AEC），导致严重的麦克风回音串音！
+      // 声音应当由原生的 <audio> 标签或 WebRTC Session 内部直接播放。
 
       // 保存回调
       this.onAssistantFrequencyData = callback;

@@ -46,19 +46,27 @@ export class WebRTCStrategy implements ITransportStrategy {
         audio: {
           channelCount: 1,
           sampleRate: 24000,
-          echoCancellation: true,
-          noiseSuppression: true,
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
         },
       });
     }
 
     // 2. 创建助手音频元素
-    // 注意：OpenAIRealtimeWebRTC SDK 内部会自动处理音频播放
-    // 我们的 audioElement 仅用于可视化（波形显示），必须静音避免重复播放
+    // ✅ 关键修复：WebRTC 的音频必须通过原生 <audio> 标签播放并解除静音，
+    // 以便触发 iOS WebKit 的回声消除（AEC）引擎阻断死循环！
     if (!this.audioElement) {
       this.audioElement = new Audio();
-      this.audioElement.autoplay = false; // 不自动播放，SDK内部播放
-      this.audioElement.muted = true;     // 必须静音，避免重复播放和回声
+      this.audioElement.autoplay = true;
+      this.audioElement.muted = false; // 不要静音！否则将听不到声音或被迫走WebAudio软解
+      this.audioElement.setAttribute('playsinline', 'true');
+      this.audioElement.style.display = 'none';
+      this.audioElement.id = 'webrtc-audio-playback';
+      // ✅ 强制把原生 audio 插入 DOM。在 iOS Safari 中，不挂载到 DOM 的音频元素往往无法激活硬件回声消除（AEC）。
+      if (!document.getElementById('webrtc-audio-playback')) {
+        document.body.appendChild(this.audioElement);
+      }
     }
 
     // 3. 构建 WebRTC 端点 URL
@@ -234,6 +242,9 @@ export class WebRTCStrategy implements ITransportStrategy {
 
     // 清理音频元素
     if (this.audioElement) {
+      if (this.audioElement.parentNode) {
+        this.audioElement.parentNode.removeChild(this.audioElement);
+      }
       this.audioElement.pause();
       this.audioElement.src = '';
       this.audioElement = null;
