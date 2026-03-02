@@ -128,21 +128,27 @@ export class ConfigManager {
         'You are a helpful assistant.';
 
       // 音频转录配置（从全局配置或personality配置读取）
-      const inputAudioTranscription = 
-        personalityRealtimeConfig.input_audio_transcription || 
-        globalConfig.input_audio_transcription || 
+      const baseTranscriptionConfig =
+        personalityRealtimeConfig.input_audio_transcription ||
+        globalConfig.input_audio_transcription ||
         { model: 'whisper-1' }; // 默认启用 whisper-1
 
+      const inputAudioTranscription = {
+        ...baseTranscriptionConfig,
+        language: baseTranscriptionConfig?.language || 'zh', // 强制中文，防止频繁中英混杂幻觉
+        prompt: baseTranscriptionConfig?.prompt || '这是一段纯中文普通话语音，请完全使用简体中文转录输出，不要输出任何无关的英文单词、英文脏话、拟声词或特殊符号。',
+      };
+
       // 传输层类型（从全局配置或personality配置读取）
-      const transportType = 
-        personalityRealtimeConfig.transport?.type || 
-        globalConfig.transport?.type || 
+      const transportType =
+        personalityRealtimeConfig.transport?.type ||
+        globalConfig.transport?.type ||
         'webrtc'; // 默认使用 WebRTC
 
       // WebSocket配置（从全局配置或personality配置读取）
-      const websocketConfig = 
-        personalityRealtimeConfig.websocket || 
-        globalConfig.websocket || 
+      const websocketConfig =
+        personalityRealtimeConfig.websocket ||
+        globalConfig.websocket ||
         undefined;
 
       log.debug('配置合并完成:', {
