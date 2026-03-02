@@ -109,10 +109,6 @@ class OpenAISTTEngine(STTEngineBase):
             }
             if language_code is not None:
                 create_params["language"] = language_code
-                
-            # 设置一个强引导的 prompt，迫使 Whisper 只在限定的普通话语境下识别
-            if "prompt" not in create_params:
-                create_params["prompt"] = "这是一段纯中文普通话的心理咨询与健康问诊语音，请完全使用简体中文记录，不要出现任何英文单词、脏话或特殊符号。"
             
             response = await self.client.audio.transcriptions.create(**create_params)
             
@@ -149,7 +145,9 @@ class OpenAISTTEngine(STTEngineBase):
             hallucination_keywords = [
                 "Amara.org", "社群提供的字幕", "请不吝赐教", 
                 "Subtitles by", "字幕由", "O Subtitles", 
-                "一鞠躬", "Thank you.", "Thank you", "Bye.", "Bye bye"
+                "一鞠躬", "Thank you.", "Thank you", "Bye.", "Bye bye",
+                "请完全使用简体中文记录", "请完全使用简体中文转录输出", 
+                "心理咨询与健康问诊语音", "完全使用简体中文", "这是一段纯中文"
             ]
             if any(keyword.lower() in text.lower() for keyword in hallucination_keywords):
                 logger.debug(f"Detected and filtered possible STT hallucination: '{text}'")

@@ -20,6 +20,7 @@ export function useVoiceRecorder() {
   const streamRef = useRef<MediaStream | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null); // 录音开始时间
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null); // 时长更新定时器
+  const isRecordingWantedRef = useRef<boolean>(false); // 记录是否期望继续录音（解决权限弹窗时的死锁）
 
   /**
    * 开始录音
@@ -32,17 +33,29 @@ export function useVoiceRecorder() {
         return;
       }
 
+      isRecordingWantedRef.current = true;
+
       // 检查浏览器是否支持 getUserMedia
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const error = new Error('浏览器不支持录音功能，请使用现代浏览器（Chrome、Firefox、Safari等）');
         log.error('getUserMedia 不可用:', error);
         showError(error, '录音功能不可用');
         setIsRecording(false);
+        isRecordingWantedRef.current = false;
         return;
       }
 
       // 请求麦克风权限
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // ✅ 关键修复：如果在等待权限期间，用户已经松开了手（stopRecording被调用）
+      // 则由于 isRecordingWantedRef 变为 false，我们立即截断后续流程并关闭流
+      if (!isRecordingWantedRef.current) {
+        log.warn('权限已获取，但用户已取消录音动作，立即中止');
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       // 创建 MediaRecorder
@@ -62,11 +75,11 @@ export function useVoiceRecorder() {
       // 开始录音
       mediaRecorder.start();
       setIsRecording(true);
-      
+
       // 记录开始时间并启动时长更新
       recordingStartTimeRef.current = Date.now();
       setRecordingDuration(0);
-      
+
       // 每秒更新一次录音时长
       durationIntervalRef.current = setInterval(() => {
         if (recordingStartTimeRef.current) {
@@ -76,13 +89,13 @@ export function useVoiceRecorder() {
       }, 1000);
     } catch (error: any) {
       log.error('开始录音失败:', error);
-      
+
       // 清理资源
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
-      
+
       // 根据错误类型显示不同的提示
       let errorMessage = '无法访问麦克风，请检查权限设置';
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
@@ -92,7 +105,7 @@ export function useVoiceRecorder() {
       } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
         errorMessage = '麦克风被其他应用占用，请关闭其他应用后重试';
       }
-      
+
       showError(error, errorMessage);
       setIsRecording(false);
     }
@@ -102,6 +115,8 @@ export function useVoiceRecorder() {
    * 停止录音
    */
   const stopRecording = useCallback(() => {
+    isRecordingWantedRef.current = false; // 用户已取消或停止录音要求
+
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -112,13 +127,13 @@ export function useVoiceRecorder() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    
+
     // 清除时长更新定时器
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
       durationIntervalRef.current = null;
     }
-    
+
     // 重置录音时长
     recordingStartTimeRef.current = null;
     setRecordingDuration(0);
@@ -131,34 +146,34 @@ export function useVoiceRecorder() {
     return new Promise((resolve, reject) => {
       // 创建音频上下文
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
+
       // 读取 WebM Blob
       const fileReader = new FileReader();
       fileReader.onload = async () => {
         try {
           // 解码音频数据
           const audioBuffer = await audioContext.decodeAudioData(fileReader.result as ArrayBuffer);
-          
+
           // 获取音频参数
           const sampleRate = audioBuffer.sampleRate;
           const numberOfChannels = audioBuffer.numberOfChannels;
           const length = audioBuffer.length;
-          
+
           // 创建 WAV 文件头
           const wavHeader = new ArrayBuffer(44);
           const view = new DataView(wavHeader);
-          
+
           // RIFF chunk descriptor
           const writeString = (offset: number, string: string) => {
             for (let i = 0; i < string.length; i++) {
               view.setUint8(offset + i, string.charCodeAt(i));
             }
           };
-          
+
           writeString(0, 'RIFF');
           view.setUint32(4, 36 + length * numberOfChannels * 2, true); // File size - 8
           writeString(8, 'WAVE');
-          
+
           // FMT sub-chunk
           writeString(12, 'fmt ');
           view.setUint32(16, 16, true); // Sub-chunk size
@@ -168,23 +183,23 @@ export function useVoiceRecorder() {
           view.setUint32(28, sampleRate * numberOfChannels * 2, true); // Byte rate
           view.setUint16(32, numberOfChannels * 2, true); // Block align
           view.setUint16(34, 16, true); // Bits per sample
-          
+
           // Data sub-chunk
           writeString(36, 'data');
           view.setUint32(40, length * numberOfChannels * 2, true);
-          
+
           // 转换音频数据为 PCM16
           const pcmData = new Int16Array(length * numberOfChannels);
           for (let channel = 0; channel < numberOfChannels; channel++) {
             const channelData = audioBuffer.getChannelData(channel);
             for (let i = 0; i < length; i++) {
               const sample = Math.max(-1, Math.min(1, channelData[i]));
-              pcmData[i * numberOfChannels + channel] = sample < 0 
-                ? sample * 0x8000 
+              pcmData[i * numberOfChannels + channel] = sample < 0
+                ? sample * 0x8000
                 : sample * 0x7FFF;
             }
           }
-          
+
           // 合并 WAV 头和数据
           const wavBlob = new Blob([wavHeader, pcmData.buffer], { type: 'audio/wav' });
           resolve(wavBlob);
@@ -192,7 +207,7 @@ export function useVoiceRecorder() {
           reject(error);
         }
       };
-      
+
       fileReader.onerror = reject;
       fileReader.readAsArrayBuffer(webmBlob);
     });
